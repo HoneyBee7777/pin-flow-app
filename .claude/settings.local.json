@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm --version)",
+      "Bash(npx --version)",
+      "Bash(npx *)",
+      "Bash(npm install *)",
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\('supabase-js:', p.dependencies['@supabase/supabase-js']\\); console.log\\('supabase/ssr:', p.dependencies['@supabase/ssr']\\);\")"
+    ]
+  }
+}
