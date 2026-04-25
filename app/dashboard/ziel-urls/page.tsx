@@ -1,15 +1,63 @@
 import { createClient } from '@/lib/supabase-server'
-import ZielUrlsClient, { type ZielUrl } from './ZielUrlsClient'
+import ZielUrlsClient, {
+  type ZielUrl,
+  type ContentOption,
+} from './ZielUrlsClient'
+
+type RawZielUrlRow = {
+  id: string
+  url: string
+  titel: string
+  typ: ZielUrl['typ']
+  prioritaet: ZielUrl['prioritaet']
+  notizen: string | null
+  created_at: string
+  content_urls: Array<{
+    content_id: string
+    content_inhalte: { id: string; titel: string } | null
+  }>
+}
 
 export default async function ZielUrlsPage() {
   const supabase = createClient()
 
-  const { data, error } = await supabase
-    .from('ziel_urls')
-    .select('id, url, titel, typ, prioritaet, notizen, created_at')
-    .order('created_at', { ascending: false })
+  const [urlsRes, contentsRes] = await Promise.all([
+    supabase
+      .from('ziel_urls')
+      .select(
+        `
+        id, url, titel, typ, prioritaet, notizen, created_at,
+        content_urls ( content_id, content_inhalte ( id, titel ) )
+      `
+      )
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('content_inhalte')
+      .select('id, titel')
+      .order('titel', { ascending: true }),
+  ])
 
-  const urls = (data ?? []) as ZielUrl[]
+  const rawRows = (urlsRes.data ?? []) as unknown as RawZielUrlRow[]
+  const urls: ZielUrl[] = rawRows.map((row) => ({
+    id: row.id,
+    url: row.url,
+    titel: row.titel,
+    typ: row.typ,
+    prioritaet: row.prioritaet,
+    notizen: row.notizen,
+    created_at: row.created_at,
+    contents: row.content_urls
+      .filter((cu) => cu.content_inhalte)
+      .map((cu) => ({
+        id: cu.content_inhalte!.id,
+        titel: cu.content_inhalte!.titel,
+      })),
+  }))
+
+  const availableContents = (contentsRes.data ?? []) as ContentOption[]
+
+  const loadError =
+    urlsRes.error?.message ?? contentsRes.error?.message ?? null
 
   return (
     <div className="p-8">
@@ -20,13 +68,13 @@ export default async function ZielUrlsPage() {
         </p>
       </header>
 
-      {error && (
+      {loadError && (
         <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-          Konnte URLs nicht laden: {error.message}
+          Fehler beim Laden: {loadError}
         </div>
       )}
 
-      <ZielUrlsClient urls={urls} />
+      <ZielUrlsClient urls={urls} availableContents={availableContents} />
     </div>
   )
 }

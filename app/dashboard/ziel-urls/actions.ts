@@ -25,6 +25,17 @@ function isPrio(value: string): value is Prioritaet {
   return (ALLOWED_PRIO as readonly string[]).includes(value)
 }
 
+function readContentIds(formData: FormData): string[] {
+  return Array.from(
+    new Set(
+      formData
+        .getAll('content_ids')
+        .map((v) => String(v))
+        .filter(Boolean)
+    )
+  )
+}
+
 export async function addZielUrl(
   formData: FormData
 ): Promise<{ error?: string }> {
@@ -39,6 +50,7 @@ export async function addZielUrl(
   const typ = String(formData.get('typ') ?? '')
   const prioritaet = String(formData.get('prioritaet') ?? '')
   const notizen = String(formData.get('notizen') ?? '').trim() || null
+  const contentIds = readContentIds(formData)
 
   if (!url) return { error: 'URL darf nicht leer sein.' }
   if (!titel) return { error: 'Titel darf nicht leer sein.' }
@@ -46,18 +58,89 @@ export async function addZielUrl(
   if (!isPrio(prioritaet))
     return { error: 'Bitte eine gültige Priorität wählen.' }
 
-  const { error } = await supabase.from('ziel_urls').insert({
-    user_id: user.id,
-    url,
-    titel,
-    typ,
-    prioritaet,
-    notizen,
-  })
+  const { data: inserted, error } = await supabase
+    .from('ziel_urls')
+    .insert({
+      user_id: user.id,
+      url,
+      titel,
+      typ,
+      prioritaet,
+      notizen,
+    })
+    .select('id')
+    .single()
 
-  if (error) return { error: error.message }
+  if (error || !inserted) {
+    return { error: error?.message ?? 'Konnte nicht speichern.' }
+  }
+
+  if (contentIds.length > 0) {
+    const { error: cuError } = await supabase.from('content_urls').insert(
+      contentIds.map((cid) => ({
+        content_id: cid,
+        url_id: inserted.id,
+      }))
+    )
+    if (cuError) {
+      return {
+        error: `URL gespeichert, aber Verknüpfungen konnten nicht angelegt werden: ${cuError.message}`,
+      }
+    }
+  }
 
   revalidatePath('/dashboard/ziel-urls')
+  revalidatePath('/dashboard/content-inhalte')
+  return {}
+}
+
+export async function updateZielUrl(
+  formData: FormData
+): Promise<{ error?: string }> {
+  const supabase = createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: 'Nicht angemeldet.' }
+
+  const id = String(formData.get('id') ?? '')
+  if (!id) return { error: 'ID fehlt.' }
+
+  const url = String(formData.get('url') ?? '').trim()
+  const titel = String(formData.get('titel') ?? '').trim()
+  const typ = String(formData.get('typ') ?? '')
+  const prioritaet = String(formData.get('prioritaet') ?? '')
+  const notizen = String(formData.get('notizen') ?? '').trim() || null
+  const contentIds = readContentIds(formData)
+
+  if (!url) return { error: 'URL darf nicht leer sein.' }
+  if (!titel) return { error: 'Titel darf nicht leer sein.' }
+  if (!isTyp(typ)) return { error: 'Bitte einen gültigen Typ wählen.' }
+  if (!isPrio(prioritaet))
+    return { error: 'Bitte eine gültige Priorität wählen.' }
+
+  const { error: updateError } = await supabase
+    .from('ziel_urls')
+    .update({ url, titel, typ, prioritaet, notizen })
+    .eq('id', id)
+
+  if (updateError) return { error: updateError.message }
+
+  const { error: deleteError } = await supabase
+    .from('content_urls')
+    .delete()
+    .eq('url_id', id)
+  if (deleteError) return { error: deleteError.message }
+
+  if (contentIds.length > 0) {
+    const { error: insertError } = await supabase
+      .from('content_urls')
+      .insert(contentIds.map((cid) => ({ content_id: cid, url_id: id })))
+    if (insertError) return { error: insertError.message }
+  }
+
+  revalidatePath('/dashboard/ziel-urls')
+  revalidatePath('/dashboard/content-inhalte')
   return {}
 }
 
@@ -68,6 +151,7 @@ export async function deleteZielUrl(formData: FormData): Promise<void> {
 
   await supabase.from('ziel_urls').delete().eq('id', id)
   revalidatePath('/dashboard/ziel-urls')
+  revalidatePath('/dashboard/content-inhalte')
 }
 
 export async function importZielUrls(
