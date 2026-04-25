@@ -1,16 +1,13 @@
 'use client'
 
 import { useMemo, useState, useTransition, type FormEvent } from 'react'
-import { addContent, deleteContent, updateContent } from './actions'
+import { addBoard, deleteBoard, updateBoard } from './actions'
 
-export type ContentTyp =
-  | 'blogpost'
-  | 'produkt'
+export type StrategieFokus =
+  | 'blog_content'
   | 'affiliate'
-  | 'landingpage'
-  | 'leadmagnet'
-
-export type StrategieTyp = 'traffic' | 'lead' | 'sales'
+  | 'produkt'
+  | 'gemischt'
 
 export type KeywordOption = {
   id: string
@@ -18,65 +15,65 @@ export type KeywordOption = {
   typ: 'haupt' | 'mid_tail' | 'longtail'
 }
 
-export type UrlOption = {
+export type ContentOption = {
   id: string
   titel: string
-  url: string
 }
 
-export type BoardOption = {
+export type Board = {
   id: string
   name: string
-}
-
-export type ContentItem = {
-  id: string
-  titel: string
-  typ: ContentTyp
-  strategie_typ: StrategieTyp
-  notizen: string | null
+  beschreibung: string | null
+  kategorie: string | null
+  pinterest_url: string | null
+  geheim: boolean
+  strategie_fokus: StrategieFokus | null
+  impressionen: number
+  klicks_auf_pins: number
+  ausgehende_klicks: number
+  saves: number
   created_at: string
   keywords: Array<{ id: string; keyword: string }>
-  urls: Array<{ id: string; titel: string; url: string }>
-  boards: Array<{ id: string; name: string }>
+  contents: Array<{ id: string; titel: string }>
 }
 
-const TYP_OPTIONS: Array<{ value: ContentTyp; label: string }> = [
-  { value: 'blogpost', label: 'Blogpost' },
-  { value: 'produkt', label: 'Produkt' },
+const KATEGORIEN = [
+  'Essen & Trinken',
+  'Reisen',
+  'Beauty & Pflege',
+  'Mode',
+  'Wohnen & Einrichten',
+  'Gesundheit & Fitness',
+  'Yoga & Wellness',
+  'Garten',
+  'DIY & Basteln',
+  'Hochzeit',
+  'Familie & Erziehung',
+  'Finanzen',
+  'Tiere',
+  'Kunst & Design',
+  'Bildung',
+  'Business & Marketing',
+  'Technologie',
+  'Sonstiges',
+] as const
+
+const FOKUS_OPTIONS: Array<{ value: StrategieFokus; label: string }> = [
+  { value: 'blog_content', label: 'Blog-Content' },
   { value: 'affiliate', label: 'Affiliate' },
-  { value: 'landingpage', label: 'Landingpage' },
-  { value: 'leadmagnet', label: 'Lead-Magnet' },
+  { value: 'produkt', label: 'Produkt' },
+  { value: 'gemischt', label: 'Gemischt' },
 ]
 
-const TYP_LABEL: Record<ContentTyp, string> = Object.fromEntries(
-  TYP_OPTIONS.map((o) => [o.value, o.label])
-) as Record<ContentTyp, string>
+const FOKUS_LABEL: Record<StrategieFokus, string> = Object.fromEntries(
+  FOKUS_OPTIONS.map((o) => [o.value, o.label])
+) as Record<StrategieFokus, string>
 
-const TYP_BADGE: Record<ContentTyp, string> = {
-  blogpost: 'bg-blue-100 text-blue-700',
-  produkt: 'bg-purple-100 text-purple-700',
+const FOKUS_BADGE: Record<StrategieFokus, string> = {
+  blog_content: 'bg-blue-100 text-blue-700',
   affiliate: 'bg-pink-100 text-pink-700',
-  landingpage: 'bg-indigo-100 text-indigo-700',
-  leadmagnet: 'bg-amber-100 text-amber-800',
-}
-
-const STRATEGIE_OPTIONS: Array<{ value: StrategieTyp; label: string }> = [
-  { value: 'traffic', label: 'Traffic' },
-  { value: 'lead', label: 'Lead' },
-  { value: 'sales', label: 'Sales' },
-]
-
-const STRATEGIE_LABEL: Record<StrategieTyp, string> = {
-  traffic: 'Traffic',
-  lead: 'Lead',
-  sales: 'Sales',
-}
-
-const STRATEGIE_BADGE: Record<StrategieTyp, string> = {
-  traffic: 'bg-sky-100 text-sky-700',
-  lead: 'bg-amber-100 text-amber-800',
-  sales: 'bg-emerald-100 text-emerald-700',
+  produkt: 'bg-purple-100 text-purple-700',
+  gemischt: 'bg-gray-100 text-gray-700',
 }
 
 const KEYWORD_TYP_LABEL: Record<KeywordOption['typ'], string> = {
@@ -104,28 +101,24 @@ function PencilIcon() {
   )
 }
 
-export default function ContentClient({
-  items,
+export default function BoardsClient({
+  boards,
   availableKeywords,
-  availableUrls,
-  availableBoards,
+  availableContents,
 }: {
-  items: ContentItem[]
+  boards: Board[]
   availableKeywords: KeywordOption[]
-  availableUrls: UrlOption[]
-  availableBoards: BoardOption[]
+  availableContents: ContentOption[]
 }) {
   const [showAddForm, setShowAddForm] = useState(false)
-  const [editing, setEditing] = useState<ContentItem | null>(null)
+  const [editing, setEditing] = useState<Board | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
   const [keywordFilter, setKeywordFilter] = useState('')
-  const [urlFilter, setUrlFilter] = useState('')
-  const [boardFilter, setBoardFilter] = useState('')
+  const [contentFilter, setContentFilter] = useState('')
   const [selectedKeywordIds, setSelectedKeywordIds] = useState<Set<string>>(
     new Set()
   )
-  const [selectedUrlIds, setSelectedUrlIds] = useState<Set<string>>(new Set())
-  const [selectedBoardIds, setSelectedBoardIds] = useState<Set<string>>(
+  const [selectedContentIds, setSelectedContentIds] = useState<Set<string>>(
     new Set()
   )
   const [isPending, startTransition] = useTransition()
@@ -140,42 +133,31 @@ export default function ContentClient({
     )
   }, [keywordFilter, availableKeywords])
 
-  const filteredUrls = useMemo(() => {
-    const q = urlFilter.trim().toLowerCase()
-    if (!q) return availableUrls
-    return availableUrls.filter(
-      (u) =>
-        u.titel.toLowerCase().includes(q) || u.url.toLowerCase().includes(q)
+  const filteredContents = useMemo(() => {
+    const q = contentFilter.trim().toLowerCase()
+    if (!q) return availableContents
+    return availableContents.filter((c) =>
+      c.titel.toLowerCase().includes(q)
     )
-  }, [urlFilter, availableUrls])
-
-  const filteredBoards = useMemo(() => {
-    const q = boardFilter.trim().toLowerCase()
-    if (!q) return availableBoards
-    return availableBoards.filter((b) => b.name.toLowerCase().includes(q))
-  }, [boardFilter, availableBoards])
+  }, [contentFilter, availableContents])
 
   function openAdd() {
     setEditing(null)
     setShowAddForm(true)
     setSelectedKeywordIds(new Set())
-    setSelectedUrlIds(new Set())
-    setSelectedBoardIds(new Set())
+    setSelectedContentIds(new Set())
     setKeywordFilter('')
-    setUrlFilter('')
-    setBoardFilter('')
+    setContentFilter('')
     setFormError(null)
   }
 
-  function openEdit(item: ContentItem) {
-    setEditing(item)
+  function openEdit(board: Board) {
+    setEditing(board)
     setShowAddForm(false)
-    setSelectedKeywordIds(new Set(item.keywords.map((k) => k.id)))
-    setSelectedUrlIds(new Set(item.urls.map((u) => u.id)))
-    setSelectedBoardIds(new Set(item.boards.map((b) => b.id)))
+    setSelectedKeywordIds(new Set(board.keywords.map((k) => k.id)))
+    setSelectedContentIds(new Set(board.contents.map((c) => c.id)))
     setKeywordFilter('')
-    setUrlFilter('')
-    setBoardFilter('')
+    setContentFilter('')
     setFormError(null)
   }
 
@@ -183,8 +165,7 @@ export default function ContentClient({
     setShowAddForm(false)
     setEditing(null)
     setSelectedKeywordIds(new Set())
-    setSelectedUrlIds(new Set())
-    setSelectedBoardIds(new Set())
+    setSelectedContentIds(new Set())
     setFormError(null)
   }
 
@@ -197,17 +178,8 @@ export default function ContentClient({
     })
   }
 
-  function toggleUrl(id: string) {
-    setSelectedUrlIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
-  function toggleBoard(id: string) {
-    setSelectedBoardIds((prev) => {
+  function toggleContent(id: string) {
+    setSelectedContentIds((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
@@ -221,18 +193,16 @@ export default function ContentClient({
     const form = e.currentTarget
     const formData = new FormData(form)
     formData.delete('keyword_ids')
-    formData.delete('url_ids')
-    formData.delete('board_ids')
+    formData.delete('content_ids')
     selectedKeywordIds.forEach((id) => formData.append('keyword_ids', id))
-    selectedUrlIds.forEach((id) => formData.append('url_ids', id))
-    selectedBoardIds.forEach((id) => formData.append('board_ids', id))
+    selectedContentIds.forEach((id) => formData.append('content_ids', id))
 
     const result = editing
       ? await (() => {
           formData.set('id', editing.id)
-          return updateContent(formData)
+          return updateBoard(formData)
         })()
-      : await addContent(formData)
+      : await addBoard(formData)
 
     if (result.error) {
       setFormError(result.error)
@@ -246,7 +216,7 @@ export default function ContentClient({
     startTransition(async () => {
       const formData = new FormData()
       formData.set('id', id)
-      await deleteContent(formData)
+      await deleteBoard(formData)
     })
   }
 
@@ -258,7 +228,7 @@ export default function ContentClient({
           onClick={() => (showAddForm ? closeForm() : openAdd())}
           className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
         >
-          {showAddForm ? 'Abbrechen' : 'Inhalt hinzufügen'}
+          {showAddForm ? 'Abbrechen' : 'Board erstellen'}
         </button>
       </div>
 
@@ -269,76 +239,127 @@ export default function ContentClient({
           className="space-y-4 rounded-lg border border-gray-200 bg-white p-6 shadow-sm"
         >
           <h2 className="text-lg font-semibold text-gray-900">
-            {editing ? 'Inhalt bearbeiten' : 'Neuer Inhalt'}
+            {editing ? 'Board bearbeiten' : 'Neues Board'}
           </h2>
 
           <div>
             <label
-              htmlFor="titel"
+              htmlFor="name"
               className="block text-sm font-medium text-gray-700"
             >
-              Titel <span className="text-red-600">*</span>
+              Name <span className="text-red-600">*</span>
             </label>
             <input
-              id="titel"
-              name="titel"
+              id="name"
+              name="name"
               type="text"
               required
-              defaultValue={editing?.titel ?? ''}
+              defaultValue={editing?.name ?? ''}
               className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
             />
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label
-                htmlFor="typ"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Typ <span className="text-red-600">*</span>
-              </label>
-              <select
-                id="typ"
-                name="typ"
-                required
-                defaultValue={editing?.typ ?? ''}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-              >
-                <option value="" disabled>
-                  Bitte wählen…
-                </option>
-                {TYP_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div>
+            <label
+              htmlFor="beschreibung"
+              className="block text-sm font-medium text-gray-700"
+            >
+              Beschreibung
+            </label>
+            <textarea
+              id="beschreibung"
+              name="beschreibung"
+              rows={3}
+              defaultValue={editing?.beschreibung ?? ''}
+              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+            />
+          </div>
 
-            <div>
-              <label
-                htmlFor="strategie_typ"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Strategie-Typ <span className="text-red-600">*</span>
-              </label>
-              <select
-                id="strategie_typ"
-                name="strategie_typ"
-                required
-                defaultValue={editing?.strategie_typ ?? ''}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-              >
-                <option value="" disabled>
-                  Bitte wählen…
+          <div>
+            <label
+              htmlFor="kategorie"
+              className="block text-sm font-medium text-gray-700"
+            >
+              Kategorie
+            </label>
+            <select
+              id="kategorie"
+              name="kategorie"
+              defaultValue={editing?.kategorie ?? ''}
+              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+            >
+              <option value="">— keine —</option>
+              {KATEGORIEN.map((k) => (
+                <option key={k} value={k}>
+                  {k}
                 </option>
-                {STRATEGIE_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-gray-500">
+              Das ist die Kategorie die du bei Pinterest für dieses Board
+              ausgewählt hast — zu finden unter Board bearbeiten auf Pinterest.
+            </p>
+          </div>
+
+          <div>
+            <label
+              htmlFor="pinterest_url"
+              className="block text-sm font-medium text-gray-700"
+            >
+              Pinterest Board-URL
+            </label>
+            <input
+              id="pinterest_url"
+              name="pinterest_url"
+              type="url"
+              placeholder="https://pinterest.com/deinname/boardname"
+              defaultValue={editing?.pinterest_url ?? ''}
+              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              Direktlink zu diesem Board auf Pinterest — z.B.
+              https://pinterest.com/deinname/boardname
+            </p>
+          </div>
+
+          <div>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                name="geheim"
+                defaultChecked={editing?.geheim ?? false}
+                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
+              />
+              <span>
+                <span className="font-medium text-gray-700">Geheim</span>
+                <span className="mt-0.5 block text-xs text-gray-500">
+                  Geheime Boards sind nur für dich sichtbar und beeinflussen
+                  deinen Algorithmus nicht.
+                </span>
+              </span>
+            </label>
+          </div>
+
+          <div>
+            <label
+              htmlFor="strategie_fokus"
+              className="block text-sm font-medium text-gray-700"
+            >
+              Strategie-Fokus
+            </label>
+            <select
+              id="strategie_fokus"
+              name="strategie_fokus"
+              defaultValue={editing?.strategie_fokus ?? ''}
+              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+            >
+              <option value="">— keiner —</option>
+              {FOKUS_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>
@@ -391,110 +412,45 @@ export default function ContentClient({
           <div>
             <div className="mb-2 flex items-center justify-between gap-3">
               <label className="block text-sm font-medium text-gray-700">
-                Ziel-URLs zuordnen
+                Content-Inhalte zuordnen
               </label>
-              {availableUrls.length > 0 && (
+              {availableContents.length > 0 && (
                 <input
                   type="text"
-                  value={urlFilter}
-                  onChange={(e) => setUrlFilter(e.target.value)}
+                  value={contentFilter}
+                  onChange={(e) => setContentFilter(e.target.value)}
                   placeholder="Filter…"
                   className="w-48 rounded-md border border-gray-300 px-2 py-1 text-xs focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
                 />
               )}
             </div>
             <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border border-gray-300 p-3">
-              {availableUrls.length === 0 ? (
+              {availableContents.length === 0 ? (
                 <p className="text-sm text-gray-500">
-                  Noch keine Ziel-URLs vorhanden — lege erst welche unter
-                  „Ziel-URLs“ an.
+                  Noch keine Content-Inhalte vorhanden — lege erst welche unter
+                  „Content-Inhalte“ an.
                 </p>
-              ) : filteredUrls.length === 0 ? (
+              ) : filteredContents.length === 0 ? (
                 <p className="text-sm text-gray-500">
-                  Keine Treffer für „{urlFilter}“.
-                </p>
-              ) : (
-                filteredUrls.map((u) => (
-                  <label
-                    key={u.id}
-                    className="flex items-start gap-2 rounded px-1 py-1 text-sm hover:bg-gray-50"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedUrlIds.has(u.id)}
-                      onChange={() => toggleUrl(u.id)}
-                      className="mt-0.5 h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
-                    />
-                    <span className="flex-1">
-                      <span className="block text-gray-900">{u.titel}</span>
-                      <span className="block truncate text-xs text-gray-500">
-                        {u.url}
-                      </span>
-                    </span>
-                  </label>
-                ))
-              )}
-            </div>
-          </div>
-
-          <div>
-            <div className="mb-2 flex items-center justify-between gap-3">
-              <label className="block text-sm font-medium text-gray-700">
-                Boards zuordnen
-              </label>
-              {availableBoards.length > 0 && (
-                <input
-                  type="text"
-                  value={boardFilter}
-                  onChange={(e) => setBoardFilter(e.target.value)}
-                  placeholder="Filter…"
-                  className="w-48 rounded-md border border-gray-300 px-2 py-1 text-xs focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-                />
-              )}
-            </div>
-            <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border border-gray-300 p-3">
-              {availableBoards.length === 0 ? (
-                <p className="text-sm text-gray-500">
-                  Noch keine Boards vorhanden — lege erst welche unter „Boards“
-                  an.
-                </p>
-              ) : filteredBoards.length === 0 ? (
-                <p className="text-sm text-gray-500">
-                  Keine Treffer für „{boardFilter}“.
+                  Keine Treffer für „{contentFilter}“.
                 </p>
               ) : (
-                filteredBoards.map((b) => (
+                filteredContents.map((c) => (
                   <label
-                    key={b.id}
+                    key={c.id}
                     className="flex items-center gap-2 rounded px-1 py-1 text-sm hover:bg-gray-50"
                   >
                     <input
                       type="checkbox"
-                      checked={selectedBoardIds.has(b.id)}
-                      onChange={() => toggleBoard(b.id)}
+                      checked={selectedContentIds.has(c.id)}
+                      onChange={() => toggleContent(c.id)}
                       className="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
                     />
-                    <span className="flex-1 text-gray-900">{b.name}</span>
+                    <span className="flex-1 text-gray-900">{c.titel}</span>
                   </label>
                 ))
               )}
             </div>
-          </div>
-
-          <div>
-            <label
-              htmlFor="notizen"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Notizen
-            </label>
-            <textarea
-              id="notizen"
-              name="notizen"
-              rows={3}
-              defaultValue={editing?.notizen ?? ''}
-              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-            />
           </div>
 
           {formError && <p className="text-sm text-red-700">{formError}</p>}
@@ -522,22 +478,25 @@ export default function ContentClient({
           <thead className="bg-gray-50">
             <tr>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Titel
+                Name
               </th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Typ
+                Kategorie
               </th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Strategie
+              </th>
+              <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Geheim
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Pinterest-URL
               </th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Keywords
               </th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Ziel-URLs
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Boards
+                Inhalte
               </th>
               <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Aktion
@@ -545,46 +504,70 @@ export default function ContentClient({
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {items.length === 0 ? (
+            {boards.length === 0 ? (
               <tr>
                 <td
-                  colSpan={7}
+                  colSpan={8}
                   className="px-4 py-8 text-center text-sm text-gray-500"
                 >
-                  Noch keine Inhalte. Lege deinen ersten an.
+                  Noch keine Boards. Erstelle dein erstes.
                 </td>
               </tr>
             ) : (
-              items.map((item) => (
-                <tr key={item.id} className="align-top hover:bg-gray-50">
+              boards.map((board) => (
+                <tr key={board.id} className="align-top hover:bg-gray-50">
                   <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                    {item.titel}
-                    {item.notizen && (
+                    {board.name}
+                    {board.beschreibung && (
                       <p className="mt-1 text-xs font-normal text-gray-500">
-                        {item.notizen}
+                        {board.beschreibung}
                       </p>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-sm">
-                    <span
-                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${TYP_BADGE[item.typ]}`}
-                    >
-                      {TYP_LABEL[item.typ]}
-                    </span>
+                  <td className="px-4 py-3 text-sm text-gray-700">
+                    {board.kategorie ?? '—'}
                   </td>
                   <td className="px-4 py-3 text-sm">
-                    <span
-                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${STRATEGIE_BADGE[item.strategie_typ]}`}
-                    >
-                      {STRATEGIE_LABEL[item.strategie_typ]}
-                    </span>
+                    {board.strategie_fokus ? (
+                      <span
+                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${FOKUS_BADGE[board.strategie_fokus]}`}
+                      >
+                        {FOKUS_LABEL[board.strategie_fokus]}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-center text-sm">
+                    {board.geheim ? (
+                      <span title="Geheimes Board" aria-label="Geheim">
+                        🔒
+                      </span>
+                    ) : (
+                      <span className="text-gray-400">—</span>
+                    )}
+                  </td>
+                  <td className="max-w-xs px-4 py-3 text-sm">
+                    {board.pinterest_url ? (
+                      <a
+                        href={board.pinterest_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block truncate text-red-600 hover:text-red-700 hover:underline"
+                        title={board.pinterest_url}
+                      >
+                        {board.pinterest_url}
+                      </a>
+                    ) : (
+                      <span className="text-gray-400">—</span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-sm">
-                    {item.keywords.length === 0 ? (
+                    {board.keywords.length === 0 ? (
                       <span className="text-gray-400">—</span>
                     ) : (
                       <div className="flex flex-wrap gap-1">
-                        {item.keywords.map((k) => (
+                        {board.keywords.map((k) => (
                           <span
                             key={k.id}
                             className="inline-flex items-center rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-700"
@@ -596,37 +579,16 @@ export default function ContentClient({
                     )}
                   </td>
                   <td className="px-4 py-3 text-sm">
-                    {item.urls.length === 0 ? (
-                      <span className="text-gray-400">—</span>
-                    ) : (
-                      <ul className="space-y-1">
-                        {item.urls.map((u) => (
-                          <li key={u.id}>
-                            <a
-                              href={u.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-red-600 hover:text-red-700 hover:underline"
-                              title={u.url}
-                            >
-                              {u.titel}
-                            </a>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-sm">
-                    {item.boards.length === 0 ? (
+                    {board.contents.length === 0 ? (
                       <span className="text-gray-400">—</span>
                     ) : (
                       <div className="flex flex-wrap gap-1">
-                        {item.boards.map((b) => (
+                        {board.contents.map((c) => (
                           <span
-                            key={b.id}
+                            key={c.id}
                             className="inline-flex items-center rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-700"
                           >
-                            {b.name}
+                            {c.titel}
                           </span>
                         ))}
                       </div>
@@ -636,7 +598,7 @@ export default function ContentClient({
                     <div className="flex items-center justify-end gap-3">
                       <button
                         type="button"
-                        onClick={() => openEdit(item)}
+                        onClick={() => openEdit(board)}
                         className="text-gray-500 hover:text-gray-900"
                         aria-label="Bearbeiten"
                         title="Bearbeiten"
@@ -645,7 +607,7 @@ export default function ContentClient({
                       </button>
                       <button
                         type="button"
-                        onClick={() => onDelete(item.id)}
+                        onClick={() => onDelete(board.id)}
                         disabled={isPending}
                         className="text-sm font-medium text-red-600 hover:text-red-700 disabled:opacity-50"
                       >

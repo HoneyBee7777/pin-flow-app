@@ -23,6 +23,17 @@ function isStrategie(value: string): value is StrategieTyp {
   return (ALLOWED_STRATEGIE as readonly string[]).includes(value)
 }
 
+function readIds(formData: FormData, name: string): string[] {
+  return Array.from(
+    new Set(
+      formData
+        .getAll(name)
+        .map((v) => String(v))
+        .filter(Boolean)
+    )
+  )
+}
+
 export async function addContent(
   formData: FormData
 ): Promise<{ error?: string }> {
@@ -42,22 +53,9 @@ export async function addContent(
   if (!isStrategie(strategie_typ))
     return { error: 'Bitte einen gültigen Strategie-Typ wählen.' }
 
-  const keywordIds = Array.from(
-    new Set(
-      formData
-        .getAll('keyword_ids')
-        .map((v) => String(v))
-        .filter(Boolean)
-    )
-  )
-  const urlIds = Array.from(
-    new Set(
-      formData
-        .getAll('url_ids')
-        .map((v) => String(v))
-        .filter(Boolean)
-    )
-  )
+  const keywordIds = readIds(formData, 'keyword_ids')
+  const urlIds = readIds(formData, 'url_ids')
+  const boardIds = readIds(formData, 'board_ids')
 
   const { data: inserted, error } = await supabase
     .from('content_inhalte')
@@ -97,7 +95,23 @@ export async function addContent(
     }
   }
 
+  if (boardIds.length > 0) {
+    const { error: cbError } = await supabase.from('content_boards').insert(
+      boardIds.map((bid) => ({
+        content_id: inserted.id,
+        board_id: bid,
+        user_id: user.id,
+      }))
+    )
+    if (cbError) {
+      return {
+        error: `Inhalt gespeichert, aber Boards konnten nicht verknüpft werden: ${cbError.message}`,
+      }
+    }
+  }
+
   revalidatePath('/dashboard/content-inhalte')
+  revalidatePath('/dashboard/boards')
   return {}
 }
 
@@ -123,22 +137,9 @@ export async function updateContent(
   if (!isStrategie(strategie_typ))
     return { error: 'Bitte einen gültigen Strategie-Typ wählen.' }
 
-  const keywordIds = Array.from(
-    new Set(
-      formData
-        .getAll('keyword_ids')
-        .map((v) => String(v))
-        .filter(Boolean)
-    )
-  )
-  const urlIds = Array.from(
-    new Set(
-      formData
-        .getAll('url_ids')
-        .map((v) => String(v))
-        .filter(Boolean)
-    )
-  )
+  const keywordIds = readIds(formData, 'keyword_ids')
+  const urlIds = readIds(formData, 'url_ids')
+  const boardIds = readIds(formData, 'board_ids')
 
   const { error: updateError } = await supabase
     .from('content_inhalte')
@@ -159,6 +160,12 @@ export async function updateContent(
     .eq('content_id', id)
   if (urlDeleteError) return { error: urlDeleteError.message }
 
+  const { error: cbDeleteError } = await supabase
+    .from('content_boards')
+    .delete()
+    .eq('content_id', id)
+  if (cbDeleteError) return { error: cbDeleteError.message }
+
   if (keywordIds.length > 0) {
     const { error: kwError } = await supabase.from('content_keywords').insert(
       keywordIds.map((kid) => ({ content_id: id, keyword_id: kid }))
@@ -173,7 +180,19 @@ export async function updateContent(
     if (urlError) return { error: urlError.message }
   }
 
+  if (boardIds.length > 0) {
+    const { error: cbError } = await supabase.from('content_boards').insert(
+      boardIds.map((bid) => ({
+        content_id: id,
+        board_id: bid,
+        user_id: user.id,
+      }))
+    )
+    if (cbError) return { error: cbError.message }
+  }
+
   revalidatePath('/dashboard/content-inhalte')
+  revalidatePath('/dashboard/boards')
   return {}
 }
 
@@ -184,4 +203,5 @@ export async function deleteContent(formData: FormData): Promise<void> {
 
   await supabase.from('content_inhalte').delete().eq('id', id)
   revalidatePath('/dashboard/content-inhalte')
+  revalidatePath('/dashboard/boards')
 }

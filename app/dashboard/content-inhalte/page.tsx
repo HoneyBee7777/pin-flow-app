@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase-server'
 import ContentClient, {
+  type BoardOption,
   type ContentItem,
   type KeywordOption,
   type UrlOption,
@@ -20,19 +21,24 @@ type RawContentRow = {
     url_id: string
     ziel_urls: { id: string; titel: string; url: string } | null
   }>
+  content_boards: Array<{
+    board_id: string
+    boards: { id: string; name: string } | null
+  }>
 }
 
 export default async function ContentInhaltePage() {
   const supabase = createClient()
 
-  const [contentRes, keywordsRes, urlsRes] = await Promise.all([
+  const [contentRes, keywordsRes, urlsRes, boardsRes] = await Promise.all([
     supabase
       .from('content_inhalte')
       .select(
         `
         id, titel, typ, strategie_typ, notizen, created_at,
         content_keywords ( keyword_id, keywords ( id, keyword ) ),
-        content_urls ( url_id, ziel_urls ( id, titel, url ) )
+        content_urls ( url_id, ziel_urls ( id, titel, url ) ),
+        content_boards ( board_id, boards ( id, name ) )
       `
       )
       .order('created_at', { ascending: false }),
@@ -44,6 +50,10 @@ export default async function ContentInhaltePage() {
       .from('ziel_urls')
       .select('id, titel, url')
       .order('titel', { ascending: true }),
+    supabase
+      .from('boards')
+      .select('id, name')
+      .order('name', { ascending: true }),
   ])
 
   const rawRows = (contentRes.data ?? []) as unknown as RawContentRow[]
@@ -64,15 +74,20 @@ export default async function ContentInhaltePage() {
         titel: cu.ziel_urls!.titel,
         url: cu.ziel_urls!.url,
       })),
+    boards: row.content_boards
+      .filter((cb) => cb.boards)
+      .map((cb) => ({ id: cb.boards!.id, name: cb.boards!.name })),
   }))
 
   const keywords = (keywordsRes.data ?? []) as KeywordOption[]
   const urls = (urlsRes.data ?? []) as UrlOption[]
+  const boards = (boardsRes.data ?? []) as BoardOption[]
 
   const loadError =
     contentRes.error?.message ??
     keywordsRes.error?.message ??
     urlsRes.error?.message ??
+    boardsRes.error?.message ??
     null
 
   return (
@@ -80,7 +95,7 @@ export default async function ContentInhaltePage() {
       <header className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Content-Inhalte</h1>
         <p className="mt-1 text-sm text-gray-600">
-          Verknüpfe deine Inhalte mit Keywords und Ziel-URLs.
+          Verknüpfe deine Inhalte mit Keywords, Ziel-URLs und Boards.
         </p>
       </header>
 
@@ -94,6 +109,7 @@ export default async function ContentInhaltePage() {
         items={items}
         availableKeywords={keywords}
         availableUrls={urls}
+        availableBoards={boards}
       />
     </div>
   )
