@@ -10,7 +10,7 @@ export default async function EinstellungenPage() {
 
   const { data, error } = await supabase
     .from('einstellungen')
-    .select('eigene_signalwoerter')
+    .select('eigene_signalwoerter, pinterest_analytics_url')
     .eq('user_id', user.id)
     .maybeSingle()
 
@@ -31,6 +31,7 @@ export default async function EinstellungenPage() {
 
       <EinstellungenClient
         initialEigeneSignalwoerter={data?.eigene_signalwoerter ?? ''}
+        initialPinterestAnalyticsUrl={data?.pinterest_analytics_url ?? ''}
       />
     </div>
   )

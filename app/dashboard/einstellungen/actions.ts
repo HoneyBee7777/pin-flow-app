@@ -12,13 +12,30 @@ export async function saveEinstellungen(
   } = await supabase.auth.getUser()
   if (!user) return { error: 'Nicht angemeldet.' }
 
-  const eigene = String(formData.get('eigene_signalwoerter') ?? '').trim()
-  const eigene_signalwoerter = eigene || null
+  const updates: Record<string, string | null> = {}
+
+  if (formData.has('eigene_signalwoerter')) {
+    const v = String(formData.get('eigene_signalwoerter') ?? '').trim()
+    updates.eigene_signalwoerter = v || null
+  }
+
+  if (formData.has('pinterest_analytics_url')) {
+    const v = String(formData.get('pinterest_analytics_url') ?? '').trim()
+    if (v && !/^https?:\/\//i.test(v))
+      return {
+        error:
+          'Pinterest Analytics URL muss mit http:// oder https:// beginnen.',
+      }
+    updates.pinterest_analytics_url = v || null
+  }
+
+  if (Object.keys(updates).length === 0)
+    return { error: 'Keine Änderungen zum Speichern.' }
 
   const { error } = await supabase
     .from('einstellungen')
     .upsert(
-      { user_id: user.id, eigene_signalwoerter },
+      { user_id: user.id, ...updates },
       { onConflict: 'user_id' }
     )
   if (error) return { error: error.message }
