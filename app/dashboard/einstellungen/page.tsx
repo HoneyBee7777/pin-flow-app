@@ -10,7 +10,11 @@ export default async function EinstellungenPage() {
 
   const { data, error } = await supabase
     .from('einstellungen')
-    .select('eigene_signalwoerter, pinterest_analytics_url')
+    .select(
+      `eigene_signalwoerter, pinterest_analytics_url,
+       schwellwert_beobachtung, schwellwert_min_klicks,
+       schwellwert_alter_recycling, schwellwert_ctr, schwellwert_impressionen`
+    )
     .eq('user_id', user.id)
     .maybeSingle()
 
@@ -32,6 +36,17 @@ export default async function EinstellungenPage() {
       <EinstellungenClient
         initialEigeneSignalwoerter={data?.eigene_signalwoerter ?? ''}
         initialPinterestAnalyticsUrl={data?.pinterest_analytics_url ?? ''}
+        initialSchwellwerte={{
+          beobachtung: data?.schwellwert_beobachtung ?? null,
+          minKlicks: data?.schwellwert_min_klicks ?? null,
+          alterRecycling: data?.schwellwert_alter_recycling ?? null,
+          ctr:
+            data?.schwellwert_ctr === null ||
+            data?.schwellwert_ctr === undefined
+              ? null
+              : Number(data.schwellwert_ctr),
+          impressionen: data?.schwellwert_impressionen ?? null,
+        }}
       />
     </div>
   )

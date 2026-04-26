@@ -1,8 +1,14 @@
 'use client'
 
 import { useState } from 'react'
+import PinsTab from './PinsTab'
 import ProfilTab from './ProfilTab'
-import type { ProfilAnalyticsWithGrowth } from './utils'
+import type {
+  PinAnalyticsRow,
+  PinAnalyticsThresholds,
+  PinOption,
+  ProfilAnalyticsWithGrowth,
+} from './utils'
 
 type Tab = 'profil' | 'pins' | 'boards'
 
@@ -16,10 +22,16 @@ export default function AnalyticsClient({
   profilAnalytics,
   pinterestAnalyticsUrl,
   analyticsUpdateDatum,
+  pins,
+  pinAnalytics,
+  thresholds,
 }: {
   profilAnalytics: ProfilAnalyticsWithGrowth[]
   pinterestAnalyticsUrl: string | null
   analyticsUpdateDatum: string | null
+  pins: PinOption[]
+  pinAnalytics: PinAnalyticsRow[]
+  thresholds: PinAnalyticsThresholds
 }) {
   const [tab, setTab] = useState<Tab>('profil')
 
@@ -56,7 +68,13 @@ export default function AnalyticsClient({
         />
       )}
 
-      {tab === 'pins' && <Placeholder title="Pin-Performance" />}
+      {tab === 'pins' && (
+        <PinsTab
+          pins={pins}
+          pinAnalytics={pinAnalytics}
+          thresholds={thresholds}
+        />
+      )}
       {tab === 'boards' && <Placeholder title="Board-Performance" />}
     </div>
   )

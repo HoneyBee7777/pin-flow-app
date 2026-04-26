@@ -71,3 +71,54 @@ export async function deleteProfilAnalytics(
   await supabase.from('profil_analytics').delete().eq('id', id)
   revalidatePath('/dashboard/analytics')
 }
+
+export async function savePinAnalytics(
+  formData: FormData
+): Promise<{ error?: string }> {
+  const supabase = createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: 'Nicht angemeldet.' }
+
+  const pin_id = String(formData.get('pin_id') ?? '').trim()
+  if (!pin_id) return { error: 'Bitte einen Pin auswählen.' }
+
+  const datum = String(formData.get('datum') ?? '').trim()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(datum))
+    return { error: 'Bitte ein gültiges Datum wählen.' }
+
+  const fields = {
+    impressionen: parseInt0(formData.get('impressionen')),
+    klicks: parseInt0(formData.get('klicks')),
+    saves: parseInt0(formData.get('saves')),
+  }
+
+  for (const [name, val] of Object.entries(fields)) {
+    if (!Number.isInteger(val) || val < 0)
+      return {
+        error: `Feld „${name}" muss eine nicht-negative ganze Zahl sein.`,
+      }
+  }
+
+  const { error } = await supabase
+    .from('pins_analytics')
+    .upsert(
+      { user_id: user.id, pin_id, datum, ...fields },
+      { onConflict: 'pin_id,datum' }
+    )
+  if (error) return { error: error.message }
+
+  revalidatePath('/dashboard/analytics')
+  return {}
+}
+
+export async function deletePinAnalytics(
+  formData: FormData
+): Promise<void> {
+  const supabase = createClient()
+  const id = String(formData.get('id') ?? '')
+  if (!id) return
+  await supabase.from('pins_analytics').delete().eq('id', id)
+  revalidatePath('/dashboard/analytics')
+}

@@ -198,3 +198,181 @@ export function calcUpdateStatus(lastUpdate: string | null): UpdateStatus {
     daysSinceUpdate: diffDays(lastUpdate, today),
   }
 }
+
+// ===========================================================
+// Pin-Analytics
+// ===========================================================
+export const PIN_STATUS_LABEL: Record<string, string> = {
+  entwurf: 'Entwurf',
+  geplant: 'Geplant',
+  veroeffentlicht: 'Veröffentlicht',
+}
+
+export const PIN_STATUS_BADGE: Record<string, string> = {
+  entwurf: 'bg-gray-100 text-gray-700',
+  geplant: 'bg-blue-100 text-blue-700',
+  veroeffentlicht: 'bg-green-100 text-green-700',
+}
+
+export type PinOption = {
+  id: string
+  titel: string | null
+  status: string
+  created_at: string
+  geplante_veroeffentlichung: string | null
+}
+
+export type PinAnalyticsEntry = {
+  id: string
+  pin_id: string
+  datum: string
+  impressionen: number
+  klicks: number
+  saves: number
+  created_at: string
+}
+
+export const PIN_DIAGNOSEN = [
+  'evergreen',
+  'aktiver_top_performer',
+  'eingeschlafener_gewinner',
+  'hidden_gem',
+  'hohe_impressionen_niedrige_ctr',
+  'noch_zu_frueh',
+  'kein_signal_thema_pruefen',
+  'beobachten',
+  'kein_signal_default',
+] as const
+export type PinDiagnose = (typeof PIN_DIAGNOSEN)[number]
+
+export const PIN_DIAGNOSE_LABEL: Record<PinDiagnose, string> = {
+  evergreen: 'Evergreen',
+  aktiver_top_performer: 'Aktiver Top Performer',
+  eingeschlafener_gewinner: 'Eingeschlafener Gewinner',
+  hidden_gem: 'Hidden Gem',
+  hohe_impressionen_niedrige_ctr: 'Optimierungspotenzial',
+  noch_zu_frueh: 'Noch zu früh',
+  kein_signal_thema_pruefen: 'Kein Signal',
+  beobachten: 'Beobachten',
+  kein_signal_default: 'Kein relevantes Signal',
+}
+
+export const PIN_DIAGNOSE_BADGE: Record<PinDiagnose, string> = {
+  evergreen: 'bg-teal-100 text-teal-700',
+  aktiver_top_performer: 'bg-green-100 text-green-700',
+  eingeschlafener_gewinner: 'bg-amber-100 text-amber-800',
+  hidden_gem: 'bg-purple-100 text-purple-700',
+  hohe_impressionen_niedrige_ctr: 'bg-orange-100 text-orange-800',
+  noch_zu_frueh: 'bg-blue-100 text-blue-700',
+  kein_signal_thema_pruefen: 'bg-gray-100 text-gray-700',
+  beobachten: 'bg-cyan-100 text-cyan-700',
+  kein_signal_default: 'bg-gray-100 text-gray-700',
+}
+
+export const PIN_HANDLUNG: Record<PinDiagnose, string> = {
+  evergreen: '🌿 Zeitlos — keine Aktion nötig',
+  aktiver_top_performer: '🚀 Variante produzieren',
+  eingeschlafener_gewinner: '♻️ Neu aufsetzen',
+  hidden_gem: '🔎 SEO pushen',
+  hohe_impressionen_niedrige_ctr: '🎨 Hook optimieren',
+  noch_zu_frueh: '⏸ Abwarten',
+  kein_signal_thema_pruefen: '💤 Thema prüfen',
+  beobachten: '⭐ Noch abwarten',
+  kein_signal_default: '❌ Kein Recycling',
+}
+
+// Schwellwerte — Defaults; tatsächliche Werte kommen aus den Einstellungen
+export type PinAnalyticsThresholds = {
+  beobachtungszeitraum: number
+  mindestKlicks: number
+  mindestAlter: number
+  mindestCtr: number
+  mindestImpressionen: number
+}
+
+export const PIN_ANALYTICS_THRESHOLDS: PinAnalyticsThresholds = {
+  beobachtungszeitraum: 60,
+  mindestKlicks: 15,
+  mindestAlter: 70,
+  mindestCtr: 1.5,
+  mindestImpressionen: 1000,
+}
+
+export type EinstellungenSchwellwerte = {
+  schwellwert_beobachtung: number | null
+  schwellwert_min_klicks: number | null
+  schwellwert_alter_recycling: number | null
+  schwellwert_ctr: number | string | null
+  schwellwert_impressionen: number | null
+}
+
+export function thresholdsFromSettings(
+  settings: Partial<EinstellungenSchwellwerte> | null | undefined
+): PinAnalyticsThresholds {
+  const ctrRaw = settings?.schwellwert_ctr
+  const ctrNum =
+    ctrRaw === null || ctrRaw === undefined
+      ? PIN_ANALYTICS_THRESHOLDS.mindestCtr
+      : Number(ctrRaw)
+  return {
+    beobachtungszeitraum:
+      settings?.schwellwert_beobachtung ??
+      PIN_ANALYTICS_THRESHOLDS.beobachtungszeitraum,
+    mindestKlicks:
+      settings?.schwellwert_min_klicks ??
+      PIN_ANALYTICS_THRESHOLDS.mindestKlicks,
+    mindestAlter:
+      settings?.schwellwert_alter_recycling ??
+      PIN_ANALYTICS_THRESHOLDS.mindestAlter,
+    mindestCtr: Number.isFinite(ctrNum)
+      ? ctrNum
+      : PIN_ANALYTICS_THRESHOLDS.mindestCtr,
+    mindestImpressionen:
+      settings?.schwellwert_impressionen ??
+      PIN_ANALYTICS_THRESHOLDS.mindestImpressionen,
+  }
+}
+
+export function diagnosePin(args: {
+  alterTage: number
+  klicks: number
+  impressionen: number
+  ctr: number | null
+  hatDatum: boolean
+  thresholds?: PinAnalyticsThresholds
+}): PinDiagnose {
+  const t = args.thresholds ?? PIN_ANALYTICS_THRESHOLDS
+  const { alterTage, klicks, impressionen, hatDatum } = args
+  const ctrValue = args.ctr ?? 0
+
+  if (!hatDatum) return 'evergreen'
+
+  if (klicks >= t.mindestKlicks && alterTage < t.mindestAlter)
+    return 'aktiver_top_performer'
+
+  if (klicks >= t.mindestKlicks && alterTage >= t.mindestAlter)
+    return 'eingeschlafener_gewinner'
+
+  if (ctrValue >= t.mindestCtr && impressionen < t.mindestImpressionen)
+    return 'hidden_gem'
+
+  if (impressionen >= t.mindestImpressionen && ctrValue < t.mindestCtr)
+    return 'hohe_impressionen_niedrige_ctr'
+
+  if (alterTage < t.beobachtungszeitraum) return 'noch_zu_frueh'
+
+  if (alterTage >= t.beobachtungszeitraum && klicks === 0 && impressionen < 50)
+    return 'kein_signal_thema_pruefen'
+
+  if (klicks > 0 && ctrValue > 0) return 'beobachten'
+
+  return 'kein_signal_default'
+}
+
+export type PinAnalyticsRow = PinAnalyticsEntry & {
+  pin: PinOption | null
+  ctr: number | null
+  alter_tage: number
+  diagnose: PinDiagnose
+  handlung: string
+}
