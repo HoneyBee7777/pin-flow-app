@@ -11,6 +11,7 @@ export type SaisonEvent = {
   saison_typ: SaisonTyp
   suchbeginn_tage: number | null
   notizen: string | null
+  datum_variabel: boolean
   created_at: string
 }
 

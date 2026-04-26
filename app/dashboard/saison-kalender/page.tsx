@@ -14,21 +14,22 @@ type DefaultEvent = {
   day: number
   saison_typ: Exclude<SaisonTyp, 'evergreen'>
   suchbeginn_tage: number
+  datum_variabel: boolean
 }
 
 const DEFAULT_DATED_EVENTS: DefaultEvent[] = [
-  { event_name: 'Valentinstag', month: 2, day: 14, saison_typ: 'feiertag', suchbeginn_tage: 45 },
-  { event_name: 'Frühling', month: 3, day: 20, saison_typ: 'jahreszeit', suchbeginn_tage: 60 },
-  { event_name: 'Ostern', month: 4, day: 5, saison_typ: 'feiertag', suchbeginn_tage: 45 },
-  { event_name: 'Muttertag', month: 5, day: 10, saison_typ: 'feiertag', suchbeginn_tage: 45 },
-  { event_name: 'Vatertag', month: 5, day: 14, saison_typ: 'feiertag', suchbeginn_tage: 45 },
-  { event_name: 'Sommer', month: 6, day: 21, saison_typ: 'jahreszeit', suchbeginn_tage: 60 },
-  { event_name: 'Herbst', month: 9, day: 23, saison_typ: 'jahreszeit', suchbeginn_tage: 60 },
-  { event_name: 'Halloween', month: 10, day: 31, saison_typ: 'feiertag', suchbeginn_tage: 60 },
-  { event_name: 'Black Friday', month: 11, day: 28, saison_typ: 'shopping_event', suchbeginn_tage: 90 },
-  { event_name: 'Winter', month: 12, day: 21, saison_typ: 'jahreszeit', suchbeginn_tage: 60 },
-  { event_name: 'Weihnachten', month: 12, day: 25, saison_typ: 'feiertag', suchbeginn_tage: 90 },
-  { event_name: 'Silvester', month: 12, day: 31, saison_typ: 'feiertag', suchbeginn_tage: 60 },
+  { event_name: 'Valentinstag', month: 2, day: 14, saison_typ: 'feiertag', suchbeginn_tage: 45, datum_variabel: false },
+  { event_name: 'Frühling', month: 3, day: 20, saison_typ: 'jahreszeit', suchbeginn_tage: 60, datum_variabel: false },
+  { event_name: 'Ostern', month: 4, day: 5, saison_typ: 'feiertag', suchbeginn_tage: 45, datum_variabel: true },
+  { event_name: 'Muttertag', month: 5, day: 10, saison_typ: 'feiertag', suchbeginn_tage: 45, datum_variabel: true },
+  { event_name: 'Vatertag', month: 5, day: 14, saison_typ: 'feiertag', suchbeginn_tage: 45, datum_variabel: true },
+  { event_name: 'Sommer', month: 6, day: 21, saison_typ: 'jahreszeit', suchbeginn_tage: 60, datum_variabel: false },
+  { event_name: 'Herbst', month: 9, day: 23, saison_typ: 'jahreszeit', suchbeginn_tage: 60, datum_variabel: false },
+  { event_name: 'Halloween', month: 10, day: 31, saison_typ: 'feiertag', suchbeginn_tage: 60, datum_variabel: false },
+  { event_name: 'Black Friday', month: 11, day: 28, saison_typ: 'shopping_event', suchbeginn_tage: 90, datum_variabel: false },
+  { event_name: 'Winter', month: 12, day: 21, saison_typ: 'jahreszeit', suchbeginn_tage: 60, datum_variabel: false },
+  { event_name: 'Weihnachten', month: 12, day: 25, saison_typ: 'feiertag', suchbeginn_tage: 90, datum_variabel: false },
+  { event_name: 'Silvester', month: 12, day: 31, saison_typ: 'feiertag', suchbeginn_tage: 60, datum_variabel: false },
 ]
 
 function nextOccurrenceIso(
@@ -47,7 +48,7 @@ function nextOccurrenceIso(
 }
 
 const SELECT_FIELDS =
-  'id, event_name, event_datum, saison_typ, suchbeginn_tage, notizen, created_at'
+  'id, event_name, event_datum, saison_typ, suchbeginn_tage, notizen, datum_variabel, created_at'
 
 const REMINDER_TITLE =
   'Bitte prüfe und aktualisiere deine Saison-Events für die nächsten 6 Monate'
@@ -109,6 +110,7 @@ export default async function SaisonKalenderPage() {
       saison_typ: d.saison_typ,
       suchbeginn_tage: d.suchbeginn_tage,
       notizen: null,
+      datum_variabel: d.datum_variabel,
     }))
     const evergreenRow = {
       user_id: user.id,
@@ -117,6 +119,7 @@ export default async function SaisonKalenderPage() {
       saison_typ: 'evergreen' as const,
       suchbeginn_tage: null,
       notizen: null,
+      datum_variabel: false,
     }
 
     const seedResult = await supabase
@@ -136,15 +139,26 @@ export default async function SaisonKalenderPage() {
   }
 
   const events = (data ?? []) as SaisonEvent[]
-  const eventsWithStatus: EventWithStatus[] = events.map((e) => ({
-    ...e,
-    statusInfo: computeStatus(
-      e.event_datum,
-      e.saison_typ,
-      e.suchbeginn_tage,
-      today
-    ),
-  }))
+  const eventsWithStatus: EventWithStatus[] = events
+    .map((e) => ({
+      ...e,
+      statusInfo: computeStatus(
+        e.event_datum,
+        e.saison_typ,
+        e.suchbeginn_tage,
+        today
+      ),
+    }))
+    .sort((a, b) => {
+      const aDate = a.event_datum ?? ''
+      const bDate = b.event_datum ?? ''
+      if (!aDate && !bDate)
+        return a.event_name.localeCompare(b.event_name, 'de')
+      if (!aDate) return 1
+      if (!bDate) return -1
+      if (aDate === bDate) return a.event_name.localeCompare(b.event_name, 'de')
+      return aDate < bDate ? -1 : 1
+    })
 
   const loadError = error?.message ?? seedError ?? null
 
@@ -159,9 +173,9 @@ export default async function SaisonKalenderPage() {
       </header>
 
       <div className="mb-6 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
-        <span className="font-medium">Tipp:</span> Aktualisiere die
-        Jahresdaten deiner Events zweimal im Jahr — im Januar und im Juli —
-        damit der Kalender immer aktuell bleibt.
+        <span className="font-medium">Tipp:</span> Events mit ⚠️ haben ein
+        variables Datum, das sich jährlich ändert. Nutze den Button „Nächstes
+        Jahr planen", um diese Daten vorausschauend zu pflegen.
       </div>
 
       {loadError && (

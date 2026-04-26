@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useState, useTransition, type FormEvent } from 'react'
 import { addEvent, deleteEvent, updateEvent } from './actions'
 import {
@@ -102,7 +103,7 @@ export default function SaisonClient({
 
   return (
     <div className="space-y-6">
-      <div>
+      <div className="flex flex-wrap gap-2">
         <button
           type="button"
           onClick={() => (showAddForm ? closeForm() : openAdd())}
@@ -110,6 +111,12 @@ export default function SaisonClient({
         >
           {showAddForm ? 'Abbrechen' : 'Event hinzufügen'}
         </button>
+        <Link
+          href="/dashboard/saison-kalender/planung"
+          className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+        >
+          📅 Nächstes Jahr planen
+        </Link>
       </div>
 
       {formOpen && (
@@ -164,6 +171,30 @@ export default function SaisonClient({
               ))}
             </select>
           </div>
+
+          {!isEvergreen && (
+            <div className="flex items-start gap-2">
+              <input
+                id="datum_variabel"
+                name="datum_variabel"
+                type="checkbox"
+                defaultChecked={editing?.datum_variabel ?? false}
+                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
+              />
+              <div>
+                <label
+                  htmlFor="datum_variabel"
+                  className="block text-sm font-medium text-gray-700"
+                >
+                  Datum ändert sich jährlich (z.B. Ostern, Muttertag)
+                </label>
+                <p className="text-xs text-gray-500">
+                  Aktivieren bei beweglichen Feiertagen — diese Events
+                  erscheinen im Modus „Nächstes Jahr planen".
+                </p>
+              </div>
+            </div>
+          )}
 
           <div>
             <label
@@ -264,10 +295,10 @@ export default function SaisonClient({
                 Pin-Fenster
               </th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Typ
+                Countdown
               </th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Countdown
+                Typ
               </th>
               <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Aktion
@@ -307,10 +338,24 @@ export default function SaisonClient({
                       )}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-700">
-                      {formatDateDe(ev.event_datum)}
+                      <span className="inline-flex items-center gap-1.5">
+                        {formatDateDe(ev.event_datum)}
+                        {ev.datum_variabel && (
+                          <span
+                            className="text-yellow-500"
+                            title="Datum ändert sich jährlich — bitte vorausschauend pflegen"
+                            aria-label="Datum ändert sich jährlich — bitte vorausschauend pflegen"
+                          >
+                            ⚠️
+                          </span>
+                        )}
+                      </span>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-700">
                       {s.pinFenster ?? '—'}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-700">
+                      {s.countdown ?? '—'}
                     </td>
                     <td className="px-4 py-3 text-sm">
                       <span
@@ -318,9 +363,6 @@ export default function SaisonClient({
                       >
                         {SAISON_TYP_LABEL[ev.saison_typ]}
                       </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-700">
-                      {s.countdown ?? '—'}
                     </td>
                     <td className="px-4 py-3 text-right text-sm">
                       <div className="flex items-center justify-end gap-3">

@@ -21,6 +21,7 @@ type Input = {
   saison_typ: SaisonTyp
   suchbeginn_tage: number | null
   notizen: string | null
+  datum_variabel: boolean
 }
 
 function parseInput(
@@ -31,6 +32,7 @@ function parseInput(
   const typRaw = String(formData.get('saison_typ') ?? '')
   const tageRaw = String(formData.get('suchbeginn_tage') ?? '').trim()
   const notizen = String(formData.get('notizen') ?? '').trim() || null
+  const datumVariabelRaw = formData.get('datum_variabel')
 
   if (!event_name) return { error: 'Event-Name darf nicht leer sein.' }
   if (!isTyp(typRaw))
@@ -38,10 +40,12 @@ function parseInput(
 
   let event_datum: string | null = null
   let suchbeginn_tage: number | null = null
+  let datum_variabel = false
 
   if (typRaw === 'evergreen') {
     event_datum = null
     suchbeginn_tage = null
+    datum_variabel = false
   } else {
     if (!datumRaw)
       return { error: 'Datum ist Pflicht (außer bei Evergreen-Events).' }
@@ -57,6 +61,8 @@ function parseInput(
     } else {
       suchbeginn_tage = 60
     }
+
+    datum_variabel = datumVariabelRaw === 'on' || datumVariabelRaw === 'true'
   }
 
   return {
@@ -66,6 +72,7 @@ function parseInput(
       saison_typ: typRaw,
       suchbeginn_tage,
       notizen,
+      datum_variabel,
     },
   }
 }
