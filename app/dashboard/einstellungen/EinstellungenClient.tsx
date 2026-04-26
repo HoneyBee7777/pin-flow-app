@@ -11,6 +11,12 @@ export type InitialSchwellwerte = {
   impressionen: number | null
 }
 
+export type InitialPersoenlicheLinks = {
+  pinterestAccountUrl: string
+  websiteUrl: string
+  tailwindUrl: string
+}
+
 export type InitialBoardSchwellwerte = {
   wenigAktiv: number | null
   inaktiv: number | null
@@ -23,20 +29,134 @@ export type InitialBoardSchwellwerte = {
 export default function EinstellungenClient({
   initialEigeneSignalwoerter,
   initialPinterestAnalyticsUrl,
+  initialPersoenlicheLinks,
   initialSchwellwerte,
   initialBoardSchwellwerte,
 }: {
   initialEigeneSignalwoerter: string
   initialPinterestAnalyticsUrl: string
+  initialPersoenlicheLinks: InitialPersoenlicheLinks
   initialSchwellwerte: InitialSchwellwerte
   initialBoardSchwellwerte: InitialBoardSchwellwerte
 }) {
   return (
     <div className="space-y-6">
       <SignalwoerterSection initial={initialEigeneSignalwoerter} />
+      <PersoenlicheLinksSection initial={initialPersoenlicheLinks} />
       <AnalyticsLinkSection initial={initialPinterestAnalyticsUrl} />
       <SchwellwerteSection initial={initialSchwellwerte} />
       <BoardSchwellwerteSection initial={initialBoardSchwellwerte} />
+    </div>
+  )
+}
+
+function PersoenlicheLinksSection({
+  initial,
+}: {
+  initial: InitialPersoenlicheLinks
+}) {
+  const [pinterestAccount, setPinterestAccount] = useState(
+    initial.pinterestAccountUrl
+  )
+  const [website, setWebsite] = useState(initial.websiteUrl)
+  const [tailwind, setTailwind] = useState(initial.tailwindUrl)
+  const [isPending, startTransition] = useTransition()
+  const [feedback, setFeedback] = useState<{
+    saved?: boolean
+    error?: string
+  }>({})
+
+  function onSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const formData = new FormData(e.currentTarget)
+    setFeedback({})
+    startTransition(async () => {
+      const result = await saveEinstellungen(formData)
+      if (result.error) setFeedback({ error: result.error })
+      else setFeedback({ saved: true })
+    })
+  }
+
+  return (
+    <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+      <h2 className="text-lg font-semibold text-gray-900">
+        Persönliche Links (Dashboard)
+      </h2>
+      <p className="mt-1 text-sm text-gray-600">
+        Diese Links erscheinen als Quick-Buttons auf deinem Dashboard. Lass
+        Felder leer, wenn du sie noch nicht hast.
+      </p>
+
+      <form onSubmit={onSubmit} className="mt-4 space-y-4">
+        <UrlField
+          label="🔗 Pinterest Account"
+          name="pinterest_account_url"
+          value={pinterestAccount}
+          onChange={setPinterestAccount}
+          placeholder="https://www.pinterest.de/dein_account/"
+        />
+        <UrlField
+          label="🌐 Meine Website"
+          name="website_url"
+          value={website}
+          onChange={setWebsite}
+          placeholder="https://deine-website.de"
+        />
+        <UrlField
+          label="📅 Tailwind"
+          name="tailwind_url"
+          value={tailwind}
+          onChange={setTailwind}
+          placeholder="https://www.tailwindapp.com/..."
+        />
+
+        <div className="flex items-center gap-3">
+          <button
+            type="submit"
+            disabled={isPending}
+            className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+          >
+            {isPending ? 'Speichert…' : 'Speichern'}
+          </button>
+          {feedback.saved && (
+            <span className="text-sm text-green-700">✓ Gespeichert</span>
+          )}
+          {feedback.error && (
+            <span className="text-sm text-red-700">{feedback.error}</span>
+          )}
+        </div>
+      </form>
+    </section>
+  )
+}
+
+function UrlField({
+  label,
+  name,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string
+  name: string
+  value: string
+  onChange: (v: string) => void
+  placeholder?: string
+}) {
+  return (
+    <div>
+      <label htmlFor={name} className="block text-sm font-medium text-gray-700">
+        {label}
+      </label>
+      <input
+        id={name}
+        name={name}
+        type="url"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+      />
     </div>
   )
 }

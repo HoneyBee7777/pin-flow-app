@@ -12,6 +12,7 @@ export default async function EinstellungenPage() {
     .from('einstellungen')
     .select(
       `eigene_signalwoerter, pinterest_analytics_url,
+       pinterest_account_url, website_url, tailwind_url,
        schwellwert_beobachtung, schwellwert_min_klicks,
        schwellwert_alter_recycling, schwellwert_ctr, schwellwert_impressionen,
        schwellwert_board_wenig_aktiv, schwellwert_board_inaktiv,
@@ -40,6 +41,11 @@ export default async function EinstellungenPage() {
       <EinstellungenClient
         initialEigeneSignalwoerter={data?.eigene_signalwoerter ?? ''}
         initialPinterestAnalyticsUrl={data?.pinterest_analytics_url ?? ''}
+        initialPersoenlicheLinks={{
+          pinterestAccountUrl: data?.pinterest_account_url ?? '',
+          websiteUrl: data?.website_url ?? '',
+          tailwindUrl: data?.tailwind_url ?? '',
+        }}
         initialSchwellwerte={{
           beobachtung: data?.schwellwert_beobachtung ?? null,
           minKlicks: data?.schwellwert_min_klicks ?? null,

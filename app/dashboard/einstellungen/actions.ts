@@ -19,14 +19,18 @@ export async function saveEinstellungen(
     updates.eigene_signalwoerter = v || null
   }
 
-  if (formData.has('pinterest_analytics_url')) {
-    const v = String(formData.get('pinterest_analytics_url') ?? '').trim()
+  const urlFields = [
+    ['pinterest_analytics_url', 'Pinterest Analytics URL'],
+    ['pinterest_account_url', 'Pinterest Account URL'],
+    ['website_url', 'Website URL'],
+    ['tailwind_url', 'Tailwind URL'],
+  ] as const
+  for (const [name, label] of urlFields) {
+    if (!formData.has(name)) continue
+    const v = String(formData.get(name) ?? '').trim()
     if (v && !/^https?:\/\//i.test(v))
-      return {
-        error:
-          'Pinterest Analytics URL muss mit http:// oder https:// beginnen.',
-      }
-    updates.pinterest_analytics_url = v || null
+      return { error: `„${label}" muss mit http:// oder https:// beginnen.` }
+    updates[name] = v || null
   }
 
   const intFields = [
