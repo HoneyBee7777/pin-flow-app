@@ -27,6 +27,7 @@ import {
   type SaisonTyp,
   type StatusInfo,
 } from './saison-kalender/utils'
+import PerformanceChart, { type ChartPoint } from './PerformanceChart'
 
 type ContentPipelineUrl = {
   id: string
@@ -146,7 +147,7 @@ export default async function DashboardPage() {
         'id, datum, impressionen, ausgehende_klicks, saves, gesamte_zielgruppe, interagierende_zielgruppe, created_at'
       )
       .order('datum', { ascending: false })
-      .limit(2),
+      .limit(12),
     supabase
       .from('einstellungen')
       .select(
@@ -296,6 +297,16 @@ export default async function DashboardPage() {
     .map((k) => ({ id: k.id, keyword: k.keyword, typ: k.typ }))
     .slice(0, 10)
 
+  // ===== Performance-Verlauf (letzte 12 Monate, ASC für Chart) =====
+  const chartPoints: ChartPoint[] = [...rows]
+    .reverse()
+    .map((r) => ({
+      datum: r.datum,
+      impressionen: r.impressionen,
+      ausgehende_klicks: r.ausgehende_klicks,
+      saves: r.saves,
+    }))
+
   return (
     <div className="space-y-8 p-8">
       <header>
@@ -324,6 +335,8 @@ export default async function DashboardPage() {
         urls={urlsUnderfed}
         keywords={unusedKeywords}
       />
+
+      <PerformanceVerlaufSection points={chartPoints} />
 
       <UpdateStatusCard
         lastUpdate={updateStatus.lastUpdate}
@@ -878,6 +891,41 @@ function UnusedKeywordsCard({ keywords }: { keywords: UnusedKeyword[] }) {
         </div>
       )}
     </div>
+  )
+}
+
+// ===========================================================
+// Performance-Verlauf
+// ===========================================================
+function PerformanceVerlaufSection({ points }: { points: ChartPoint[] }) {
+  if (points.length < 2) {
+    return (
+      <section>
+        <h2 className="text-lg font-semibold text-gray-900">
+          Performance-Verlauf — letztes Jahr
+        </h2>
+        <div className="mt-3 rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+          Noch zu wenig Daten — trage mindestens 2 Monate Analytics ein um den
+          Jahresverlauf zu sehen.{' '}
+          <Link
+            href="/dashboard/analytics"
+            className="font-medium text-red-600 hover:underline"
+          >
+            → Zum Analytics-Tab
+          </Link>
+        </div>
+      </section>
+    )
+  }
+  return (
+    <section>
+      <h2 className="text-lg font-semibold text-gray-900">
+        Performance-Verlauf — letztes Jahr
+      </h2>
+      <div className="mt-3 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+        <PerformanceChart data={points} />
+      </div>
+    </section>
   )
 }
 
