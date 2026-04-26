@@ -59,6 +59,7 @@ export async function saveProfilAnalytics(
     )
 
   revalidatePath('/dashboard/analytics')
+  revalidatePath('/dashboard')
   return {}
 }
 
@@ -70,6 +71,7 @@ export async function deleteProfilAnalytics(
   if (!id) return
   await supabase.from('profil_analytics').delete().eq('id', id)
   revalidatePath('/dashboard/analytics')
+  revalidatePath('/dashboard')
 }
 
 export async function savePinAnalytics(
@@ -109,7 +111,16 @@ export async function savePinAnalytics(
     )
   if (error) return { error: error.message }
 
+  // Auto-Reset: alle Dashboard-Erledigt-Markierungen für diesen Pin
+  // entfernen, damit er bei neuem Handlungsbedarf wieder erscheint.
+  await supabase
+    .from('dashboard_erledigt')
+    .delete()
+    .eq('user_id', user.id)
+    .eq('pin_id', pin_id)
+
   revalidatePath('/dashboard/analytics')
+  revalidatePath('/dashboard')
   return {}
 }
 
@@ -121,6 +132,7 @@ export async function deletePinAnalytics(
   if (!id) return
   await supabase.from('pins_analytics').delete().eq('id', id)
   revalidatePath('/dashboard/analytics')
+  revalidatePath('/dashboard')
 }
 
 // ===========================================================

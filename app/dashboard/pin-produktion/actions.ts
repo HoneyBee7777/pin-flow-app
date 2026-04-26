@@ -236,6 +236,8 @@ export async function addPin(
 
   revalidatePath('/dashboard/pin-produktion')
   revalidatePath('/dashboard/canva-vorlagen')
+  revalidatePath('/dashboard/analytics')
+  revalidatePath('/dashboard')
   return {}
 }
 
@@ -277,6 +279,8 @@ export async function updatePin(
 
   revalidatePath('/dashboard/pin-produktion')
   revalidatePath('/dashboard/canva-vorlagen')
+  revalidatePath('/dashboard/analytics')
+  revalidatePath('/dashboard')
   return {}
 }
 
@@ -287,6 +291,8 @@ export async function deletePin(formData: FormData): Promise<void> {
   await supabase.from('pins').delete().eq('id', id)
   revalidatePath('/dashboard/pin-produktion')
   revalidatePath('/dashboard/canva-vorlagen')
+  revalidatePath('/dashboard/analytics')
+  revalidatePath('/dashboard')
 }
 
 export type ImportPinRow = {
@@ -359,5 +365,7 @@ export async function importPins(args: {
   if (error) return { error: error.message }
 
   revalidatePath('/dashboard/pin-produktion')
+  revalidatePath('/dashboard/analytics')
+  revalidatePath('/dashboard')
   return { imported: inserts.length }
 }

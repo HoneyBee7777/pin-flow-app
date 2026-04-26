@@ -206,6 +206,27 @@ export default async function AnalyticsPage() {
     })
   })
 
+  // ===== DEBUG (temporär) — entfernen sobald Diagnose-Parität verifiziert ist =====
+  console.log('[ANALYTICS] thresholds:', thresholds)
+  console.log('[ANALYTICS] today:', today)
+  const _seenDebug = new Set<string>()
+  const _dedupedDebug = pinAnalytics.filter((row) => {
+    if (_seenDebug.has(row.pin_id)) return false
+    _seenDebug.add(row.pin_id)
+    return true
+  })
+  console.log(
+    '[ANALYTICS] deduped pins (latest analytics per pin):',
+    _dedupedDebug.map((row) => ({
+      pin_id: row.pin_id,
+      titel: row.pin?.titel ?? null,
+      klicks: row.klicks,
+      ctr: row.ctr,
+      diagnose: row.diagnose,
+    }))
+  )
+  // =================================================================
+
   const loadError =
     profilRes.error?.message ??
     settingsRes.error?.message ??

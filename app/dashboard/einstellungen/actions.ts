@@ -100,5 +100,6 @@ export async function saveEinstellungen(
   revalidatePath('/dashboard/einstellungen')
   revalidatePath('/dashboard/pin-produktion')
   revalidatePath('/dashboard/analytics')
+  revalidatePath('/dashboard')
   return {}
 }
