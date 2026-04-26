@@ -182,7 +182,7 @@ export default async function DashboardPage() {
     supabase
       .from('einstellungen')
       .select(
-        `analytics_update_datum, pinterest_account_url, website_url, tailwind_url,
+        `analytics_update_datum,
          schwellwert_beobachtung, schwellwert_min_klicks,
          schwellwert_alter_recycling, schwellwert_ctr, schwellwert_impressionen`
       )
@@ -315,6 +315,8 @@ export default async function DashboardPage() {
   groupedActions.forEach((arr) => arr.sort((a, b) => b.klicks - a.klicks))
 
   // ===== DEBUG (temporär) — entfernen sobald Diagnose-Parität verifiziert ist =====
+  console.log('[DASHBOARD] settingsRes.data:', settingsRes.data)
+  console.log('[DASHBOARD] settingsRes.error:', settingsRes.error)
   console.log('[DASHBOARD] thresholds:', thresholds)
   console.log('[DASHBOARD] today:', today)
   console.log(
@@ -430,12 +432,6 @@ export default async function DashboardPage() {
       </header>
 
       <KpiBar latest={latest} />
-
-      <QuickActionsAndLinks
-        pinterestAccountUrl={settingsRes.data?.pinterest_account_url ?? null}
-        websiteUrl={settingsRes.data?.website_url ?? null}
-        tailwindUrl={settingsRes.data?.tailwind_url ?? null}
-      />
 
       <HandlungsbedarfSection
         grouped={groupedActions}
@@ -625,100 +621,6 @@ function GrowthBadge({ growth }: { growth: number | null }) {
     )
   }
   return <p className="mt-1 text-xs text-gray-500">→ unverändert</p>
-}
-
-// ===========================================================
-// Quick Actions + Persönliche Links
-// ===========================================================
-function QuickActionsAndLinks({
-  pinterestAccountUrl,
-  websiteUrl,
-  tailwindUrl,
-}: {
-  pinterestAccountUrl: string | null
-  websiteUrl: string | null
-  tailwindUrl: string | null
-}) {
-  return (
-    <section className="grid gap-4 lg:grid-cols-2">
-      <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-gray-900">Quick Actions</h2>
-        <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-          <ActionButton
-            href="/dashboard/pin-produktion"
-            label="➕ Neuen Pin erstellen"
-          />
-          <ActionButton
-            href="/dashboard/keywords"
-            label="➕ Keyword hinzufügen"
-          />
-          <ActionButton
-            href="/dashboard/analytics"
-            label="📊 Analytics aktualisieren"
-          />
-          <ActionButton href="/dashboard/boards" label="📋 Board erstellen" />
-        </div>
-      </div>
-
-      <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-gray-900">
-          Persönliche Links
-        </h2>
-        <div className="mt-4 space-y-2">
-          <ExternalLinkButton
-            url={pinterestAccountUrl}
-            label="🔗 Pinterest Account"
-          />
-          <ExternalLinkButton url={websiteUrl} label="🌐 Meine Website" />
-          <ExternalLinkButton url={tailwindUrl} label="📅 Tailwind" />
-        </div>
-      </div>
-    </section>
-  )
-}
-
-function ActionButton({ href, label }: { href: string; label: string }) {
-  return (
-    <Link
-      href={href}
-      className="flex items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:border-red-300 hover:bg-red-50 hover:text-red-700"
-    >
-      {label}
-    </Link>
-  )
-}
-
-function ExternalLinkButton({
-  url,
-  label,
-}: {
-  url: string | null
-  label: string
-}) {
-  if (url) {
-    return (
-      <a
-        href={url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="flex items-center justify-between rounded-md border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:border-red-300 hover:bg-red-50 hover:text-red-700"
-      >
-        <span>{label}</span>
-        <span className="text-xs text-gray-400" aria-hidden>
-          ↗
-        </span>
-      </a>
-    )
-  }
-  return (
-    <Link
-      href="/dashboard/einstellungen"
-      className="flex items-center justify-between rounded-md border border-dashed border-gray-300 bg-gray-50 px-4 py-2.5 text-sm text-gray-500 hover:border-gray-400 hover:bg-gray-100"
-    >
-      <span>{label}</span>
-      <span className="text-xs">In Einstellungen hinterlegen →</span>
-    </Link>
-  )
 }
 
 // ===========================================================

@@ -1,5 +1,6 @@
 'use client'
 
+import { useSearchParams } from 'next/navigation'
 import {
   useMemo,
   useRef,
@@ -83,8 +84,11 @@ function PencilIcon() {
 }
 
 export default function PinProduktionClient(props: Props) {
+  const searchParams = useSearchParams()
   const [editing, setEditing] = useState<PinWithRelations | null>(null)
-  const [showAddForm, setShowAddForm] = useState(false)
+  const [showAddForm, setShowAddForm] = useState(
+    () => searchParams?.get('new') === '1'
+  )
   const [showManualForm, setShowManualForm] = useState(false)
   const [showCsvImport, setShowCsvImport] = useState(false)
   const [isPending, startTransition] = useTransition()

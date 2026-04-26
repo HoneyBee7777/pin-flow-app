@@ -207,6 +207,8 @@ export default async function AnalyticsPage() {
   })
 
   // ===== DEBUG (temporär) — entfernen sobald Diagnose-Parität verifiziert ist =====
+  console.log('[ANALYTICS] settingsRes.data:', settingsRes.data)
+  console.log('[ANALYTICS] settingsRes.error:', settingsRes.error)
   console.log('[ANALYTICS] thresholds:', thresholds)
   console.log('[ANALYTICS] today:', today)
   const _seenDebug = new Set<string>()
