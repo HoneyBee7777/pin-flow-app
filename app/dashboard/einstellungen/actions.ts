@@ -34,6 +34,20 @@ export async function saveEinstellungen(
     ['schwellwert_min_klicks', 'Mindest-Klicks'],
     ['schwellwert_alter_recycling', 'Mindest-Alter'],
     ['schwellwert_impressionen', 'Mindest-Impressionen'],
+    ['schwellwert_board_wenig_aktiv', 'Wenig aktiv ab (Tage)'],
+    ['schwellwert_board_inaktiv', 'Inaktiv ab (Tage)'],
+    [
+      'schwellwert_board_min_impressionen_top',
+      'Mindest-Impressionen für Top Board',
+    ],
+    [
+      'schwellwert_board_min_impressionen_wachstum',
+      'Mindest-Impressionen für Wachstum',
+    ],
+    [
+      'schwellwert_board_min_impressionen_beobachten',
+      'Mindest-Impressionen für Beobachten',
+    ],
   ] as const
   for (const [name, label] of intFields) {
     if (!formData.has(name)) continue
@@ -50,17 +64,22 @@ export async function saveEinstellungen(
     updates[name] = n
   }
 
-  if (formData.has('schwellwert_ctr')) {
-    const raw = String(formData.get('schwellwert_ctr') ?? '').trim()
+  const decFields = [
+    ['schwellwert_ctr', 'Mindest-CTR'],
+    ['schwellwert_board_min_engagement_top', 'Mindest-Engagement Rate'],
+  ] as const
+  for (const [name, label] of decFields) {
+    if (!formData.has(name)) continue
+    const raw = String(formData.get(name) ?? '').trim()
     if (!raw) {
-      updates.schwellwert_ctr = null
-    } else {
-      const normalized = raw.replace(',', '.')
-      const n = Number(normalized)
-      if (!Number.isFinite(n) || n < 0)
-        return { error: '„Mindest-CTR" muss eine nicht-negative Zahl sein.' }
-      updates.schwellwert_ctr = n
+      updates[name] = null
+      continue
     }
+    const normalized = raw.replace(',', '.')
+    const n = Number(normalized)
+    if (!Number.isFinite(n) || n < 0)
+      return { error: `„${label}" muss eine nicht-negative Zahl sein.` }
+    updates[name] = n
   }
 
   if (Object.keys(updates).length === 0)

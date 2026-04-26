@@ -11,20 +11,32 @@ export type InitialSchwellwerte = {
   impressionen: number | null
 }
 
+export type InitialBoardSchwellwerte = {
+  wenigAktiv: number | null
+  inaktiv: number | null
+  minImpressionenTop: number | null
+  minEngagementTop: number | null
+  minImpressionenWachstum: number | null
+  minImpressionenBeobachten: number | null
+}
+
 export default function EinstellungenClient({
   initialEigeneSignalwoerter,
   initialPinterestAnalyticsUrl,
   initialSchwellwerte,
+  initialBoardSchwellwerte,
 }: {
   initialEigeneSignalwoerter: string
   initialPinterestAnalyticsUrl: string
   initialSchwellwerte: InitialSchwellwerte
+  initialBoardSchwellwerte: InitialBoardSchwellwerte
 }) {
   return (
     <div className="space-y-6">
       <SignalwoerterSection initial={initialEigeneSignalwoerter} />
       <AnalyticsLinkSection initial={initialPinterestAnalyticsUrl} />
       <SchwellwerteSection initial={initialSchwellwerte} />
+      <BoardSchwellwerteSection initial={initialBoardSchwellwerte} />
     </div>
   )
 }
@@ -269,6 +281,147 @@ function SchwellwertField({
       />
       <p className="mt-1 text-xs text-gray-500">{help}</p>
     </div>
+  )
+}
+
+function BoardSchwellwerteSection({
+  initial,
+}: {
+  initial: InitialBoardSchwellwerte
+}) {
+  const [wenigAktiv, setWenigAktiv] = useState(
+    initial.wenigAktiv !== null ? String(initial.wenigAktiv) : '30'
+  )
+  const [inaktiv, setInaktiv] = useState(
+    initial.inaktiv !== null ? String(initial.inaktiv) : '60'
+  )
+  const [minImpTop, setMinImpTop] = useState(
+    initial.minImpressionenTop !== null
+      ? String(initial.minImpressionenTop)
+      : '1000'
+  )
+  const [minEngTop, setMinEngTop] = useState(
+    initial.minEngagementTop !== null ? String(initial.minEngagementTop) : '2.0'
+  )
+  const [minImpWachstum, setMinImpWachstum] = useState(
+    initial.minImpressionenWachstum !== null
+      ? String(initial.minImpressionenWachstum)
+      : '500'
+  )
+  const [minImpBeobachten, setMinImpBeobachten] = useState(
+    initial.minImpressionenBeobachten !== null
+      ? String(initial.minImpressionenBeobachten)
+      : '100'
+  )
+  const [isPending, startTransition] = useTransition()
+  const [feedback, setFeedback] = useState<{
+    saved?: boolean
+    error?: string
+  }>({})
+
+  function onSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const formData = new FormData(e.currentTarget)
+    setFeedback({})
+    startTransition(async () => {
+      const result = await saveEinstellungen(formData)
+      if (result.error) setFeedback({ error: result.error })
+      else setFeedback({ saved: true })
+    })
+  }
+
+  return (
+    <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+      <h2 className="text-lg font-semibold text-gray-900">
+        Board-Schwellwerte
+      </h2>
+      <p className="mt-1 text-sm text-gray-600">
+        Diese Werte steuern den Board-Status (Aktivität) und Board-Score
+        (Performance) im Boards-Tab. Passe sie an die Größe deines Accounts an.
+      </p>
+
+      <form onSubmit={onSubmit} className="mt-4 space-y-4">
+        <div>
+          <p className="text-sm font-medium text-gray-900">
+            Status (Aktivität)
+          </p>
+          <div className="mt-2 space-y-4">
+            <SchwellwertField
+              label="Wenig aktiv ab (Tage)"
+              name="schwellwert_board_wenig_aktiv"
+              value={wenigAktiv}
+              onChange={setWenigAktiv}
+              step={1}
+              help={'Ab wie vielen Tagen ohne neuen Pin gilt ein Board als „wenig aktiv"?'}
+            />
+            <SchwellwertField
+              label="Inaktiv ab (Tage)"
+              name="schwellwert_board_inaktiv"
+              value={inaktiv}
+              onChange={setInaktiv}
+              step={1}
+              help={'Ab wie vielen Tagen ohne neuen Pin gilt ein Board als „inaktiv"?'}
+            />
+          </div>
+        </div>
+
+        <div>
+          <p className="text-sm font-medium text-gray-900">
+            Score (Performance)
+          </p>
+          <div className="mt-2 space-y-4">
+            <SchwellwertField
+              label="Mindest-Impressionen für Top Board"
+              name="schwellwert_board_min_impressionen_top"
+              value={minImpTop}
+              onChange={setMinImpTop}
+              step={1}
+              help={'Ab wie vielen Impressionen kann ein Board „Top" werden? (zusätzlich muss Engagement Rate hoch genug sein)'}
+            />
+            <SchwellwertField
+              label="Mindest-Engagement Rate für Top Board (%)"
+              name="schwellwert_board_min_engagement_top"
+              value={minEngTop}
+              onChange={setMinEngTop}
+              step={0.1}
+              help={'Ab welcher Engagement Rate gilt ein Board als „Top"? Engagement Rate = (Interaktionen ÷ Impressionen) × 100.'}
+            />
+            <SchwellwertField
+              label="Mindest-Impressionen für Wachstum"
+              name="schwellwert_board_min_impressionen_wachstum"
+              value={minImpWachstum}
+              onChange={setMinImpWachstum}
+              step={1}
+              help={'Ab wie vielen Impressionen gilt ein Board als „Wachstum"?'}
+            />
+            <SchwellwertField
+              label="Mindest-Impressionen für Beobachten"
+              name="schwellwert_board_min_impressionen_beobachten"
+              value={minImpBeobachten}
+              onChange={setMinImpBeobachten}
+              step={1}
+              help={'Ab wie vielen Impressionen gilt ein Board als „Beobachten"? Darunter zählt es als „Schwach".'}
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <button
+            type="submit"
+            disabled={isPending}
+            className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+          >
+            {isPending ? 'Speichert…' : 'Speichern'}
+          </button>
+          {feedback.saved && (
+            <span className="text-sm text-green-700">✓ Gespeichert</span>
+          )}
+          {feedback.error && (
+            <span className="text-sm text-red-700">{feedback.error}</span>
+          )}
+        </div>
+      </form>
+    </section>
   )
 }
 

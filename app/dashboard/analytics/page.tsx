@@ -1,14 +1,23 @@
 import { createClient } from '@/lib/supabase-server'
 import AnalyticsClient from './AnalyticsClient'
 import {
+  boardHandlung,
+  boardThresholdsFromSettings,
+  calcBoardEngagementRate,
   calcCtr,
+  diagnoseBoard,
   diagnosePin,
   diffDays,
   PIN_HANDLUNG,
+  scoreBoard,
   thresholdsFromSettings,
   todayIso,
   withGrowth,
+  type BoardAnalyticsEntry,
+  type BoardAnalyticsRow,
+  type BoardOption,
   type EinstellungenSchwellwerte,
+  type EinstellungenSchwellwerteBoard,
   type PinAnalyticsRow,
   type PinOption,
   type ProfilAnalytics,
@@ -32,7 +41,15 @@ export default async function AnalyticsPage() {
   } = await supabase.auth.getUser()
   if (!user) return null
 
-  const [profilRes, settingsRes, pinsRes, pinAnalyticsRes] = await Promise.all([
+  const [
+    profilRes,
+    settingsRes,
+    pinsRes,
+    pinAnalyticsRes,
+    boardsRes,
+    boardAnalyticsRes,
+    pinsForBoardRes,
+  ] = await Promise.all([
     supabase
       .from('profil_analytics')
       .select(
@@ -44,7 +61,11 @@ export default async function AnalyticsPage() {
       .select(
         `pinterest_analytics_url, analytics_update_datum,
          schwellwert_beobachtung, schwellwert_min_klicks,
-         schwellwert_alter_recycling, schwellwert_ctr, schwellwert_impressionen`
+         schwellwert_alter_recycling, schwellwert_ctr, schwellwert_impressionen,
+         schwellwert_board_wenig_aktiv, schwellwert_board_inaktiv,
+         schwellwert_board_min_impressionen_top, schwellwert_board_min_engagement_top,
+         schwellwert_board_min_impressionen_wachstum,
+         schwellwert_board_min_impressionen_beobachten`
       )
       .eq('user_id', user.id)
       .maybeSingle(),
@@ -59,6 +80,20 @@ export default async function AnalyticsPage() {
          pins ( id, titel, status, created_at, geplante_veroeffentlichung )`
       )
       .order('datum', { ascending: false }),
+    supabase
+      .from('boards')
+      .select('id, name, pinterest_url')
+      .order('name', { ascending: true }),
+    supabase
+      .from('board_analytics')
+      .select(
+        'id, board_id, datum, impressionen, klicks_auf_pins, ausgehende_klicks, saves, engagement, created_at'
+      )
+      .order('datum', { ascending: false }),
+    supabase
+      .from('pins')
+      .select('board_id, geplante_veroeffentlichung, created_at')
+      .not('board_id', 'is', null),
   ])
 
   const rows = (profilRes.data ?? []) as ProfilAnalytics[]
@@ -105,11 +140,80 @@ export default async function AnalyticsPage() {
     }
   })
 
+  // ===== Boards =====
+  const boards = (boardsRes.data ?? []) as BoardOption[]
+  const boardAnalyticsRaw =
+    (boardAnalyticsRes.data ?? []) as BoardAnalyticsEntry[]
+  const pinsForBoardRaw = (pinsForBoardRes.data ?? []) as Array<{
+    board_id: string | null
+    geplante_veroeffentlichung: string | null
+    created_at: string | null
+  }>
+
+  const boardThresholds = boardThresholdsFromSettings(
+    settingsRes.data as Partial<EinstellungenSchwellwerteBoard> | null
+  )
+
+  const lastPinByBoard = new Map<string, string>()
+  for (const p of pinsForBoardRaw) {
+    if (!p.board_id) continue
+    const refDate =
+      p.geplante_veroeffentlichung ?? p.created_at?.slice(0, 10) ?? null
+    if (!refDate) continue
+    const existing = lastPinByBoard.get(p.board_id)
+    if (!existing || refDate > existing)
+      lastPinByBoard.set(p.board_id, refDate)
+  }
+
+  // Dedup board_analytics — neueste Datum pro Board (Rohdaten sind DESC sortiert)
+  const latestByBoard = new Map<string, BoardAnalyticsEntry>()
+  for (const row of boardAnalyticsRaw) {
+    if (!latestByBoard.has(row.board_id))
+      latestByBoard.set(row.board_id, row)
+  }
+
+  const boardById = new Map(boards.map((b) => [b.id, b]))
+  const boardAnalytics: BoardAnalyticsRow[] = []
+  latestByBoard.forEach((latest, boardId) => {
+    const board = boardById.get(boardId)
+    if (!board) return // Board wurde gelöscht — überspringen
+    const lastPinDatum = lastPinByBoard.get(boardId) ?? null
+    const lastPinAlterTage = lastPinDatum
+      ? Math.max(0, diffDays(lastPinDatum, today))
+      : null
+    const engagementRate = calcBoardEngagementRate(
+      latest.engagement,
+      latest.impressionen
+    )
+    const status = diagnoseBoard({
+      lastPinAlterTage,
+      thresholds: boardThresholds,
+    })
+    const score = scoreBoard({
+      impressionen: latest.impressionen,
+      engagementRate,
+      thresholds: boardThresholds,
+    })
+    boardAnalytics.push({
+      board,
+      latest,
+      lastPinDatum,
+      lastPinAlterTage,
+      status,
+      score,
+      engagementRate,
+      handlung: boardHandlung({ score, status }),
+    })
+  })
+
   const loadError =
     profilRes.error?.message ??
     settingsRes.error?.message ??
     pinsRes.error?.message ??
     pinAnalyticsRes.error?.message ??
+    boardsRes.error?.message ??
+    boardAnalyticsRes.error?.message ??
+    pinsForBoardRes.error?.message ??
     null
 
   return (
@@ -139,6 +243,9 @@ export default async function AnalyticsPage() {
         pins={pins}
         pinAnalytics={pinAnalytics}
         thresholds={thresholds}
+        boards={boards}
+        boardAnalytics={boardAnalytics}
+        boardThresholds={boardThresholds}
       />
     </div>
   )

@@ -1,9 +1,13 @@
 'use client'
 
 import { useState } from 'react'
+import BoardsTab from './BoardsTab'
 import PinsTab from './PinsTab'
 import ProfilTab from './ProfilTab'
 import type {
+  BoardAnalyticsRow,
+  BoardOption,
+  BoardThresholds,
   PinAnalyticsRow,
   PinAnalyticsThresholds,
   PinOption,
@@ -25,6 +29,9 @@ export default function AnalyticsClient({
   pins,
   pinAnalytics,
   thresholds,
+  boards,
+  boardAnalytics,
+  boardThresholds,
 }: {
   profilAnalytics: ProfilAnalyticsWithGrowth[]
   pinterestAnalyticsUrl: string | null
@@ -32,6 +39,9 @@ export default function AnalyticsClient({
   pins: PinOption[]
   pinAnalytics: PinAnalyticsRow[]
   thresholds: PinAnalyticsThresholds
+  boards: BoardOption[]
+  boardAnalytics: BoardAnalyticsRow[]
+  boardThresholds: BoardThresholds
 }) {
   const [tab, setTab] = useState<Tab>('profil')
 
@@ -75,18 +85,13 @@ export default function AnalyticsClient({
           thresholds={thresholds}
         />
       )}
-      {tab === 'boards' && <Placeholder title="Board-Performance" />}
-    </div>
-  )
-}
-
-function Placeholder({ title }: { title: string }) {
-  return (
-    <div className="rounded-lg border border-dashed border-gray-300 bg-white p-12 text-center">
-      <h3 className="text-lg font-semibold text-gray-700">{title}</h3>
-      <p className="mt-2 text-sm text-gray-500">
-        Folgt im nächsten Schritt.
-      </p>
+      {tab === 'boards' && (
+        <BoardsTab
+          boards={boards}
+          boardAnalytics={boardAnalytics}
+          thresholds={boardThresholds}
+        />
+      )}
     </div>
   )
 }

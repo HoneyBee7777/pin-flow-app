@@ -376,3 +376,181 @@ export type PinAnalyticsRow = PinAnalyticsEntry & {
   diagnose: PinDiagnose
   handlung: string
 }
+
+// ===========================================================
+// Board-Analytics
+// ===========================================================
+export type BoardOption = {
+  id: string
+  name: string
+  pinterest_url: string | null
+}
+
+export type BoardAnalyticsEntry = {
+  id: string
+  board_id: string
+  datum: string
+  impressionen: number
+  klicks_auf_pins: number
+  ausgehende_klicks: number
+  saves: number
+  engagement: number
+  created_at: string
+}
+
+export const BOARD_STATUS = ['aktiv', 'wenig_aktiv', 'inaktiv'] as const
+export type BoardStatus = (typeof BOARD_STATUS)[number]
+
+export const BOARD_STATUS_LABEL: Record<BoardStatus, string> = {
+  aktiv: '✅ Aktiv',
+  wenig_aktiv: '⚠️ Wenig aktiv',
+  inaktiv: '❌ Inaktiv',
+}
+
+export const BOARD_STATUS_BADGE: Record<BoardStatus, string> = {
+  aktiv: 'bg-green-100 text-green-700',
+  wenig_aktiv: 'bg-amber-100 text-amber-800',
+  inaktiv: 'bg-red-100 text-red-700',
+}
+
+export const BOARD_SCORE = [
+  'top',
+  'wachstum',
+  'beobachten',
+  'schwach',
+] as const
+export type BoardScore = (typeof BOARD_SCORE)[number]
+
+export const BOARD_SCORE_LABEL: Record<BoardScore, string> = {
+  top: '🏆 Top Board',
+  wachstum: '📈 Wachstum',
+  beobachten: '👀 Beobachten',
+  schwach: '💤 Schwach',
+}
+
+export const BOARD_SCORE_BADGE: Record<BoardScore, string> = {
+  top: 'bg-emerald-100 text-emerald-700',
+  wachstum: 'bg-blue-100 text-blue-700',
+  beobachten: 'bg-cyan-100 text-cyan-700',
+  schwach: 'bg-gray-100 text-gray-700',
+}
+
+export type BoardThresholds = {
+  wenigAktiv: number
+  inaktiv: number
+  minImpressionenTop: number
+  minEngagementTop: number
+  minImpressionenWachstum: number
+  minImpressionenBeobachten: number
+}
+
+export const BOARD_THRESHOLDS: BoardThresholds = {
+  wenigAktiv: 30,
+  inaktiv: 60,
+  minImpressionenTop: 1000,
+  minEngagementTop: 2.0,
+  minImpressionenWachstum: 500,
+  minImpressionenBeobachten: 100,
+}
+
+export type EinstellungenSchwellwerteBoard = {
+  schwellwert_board_wenig_aktiv: number | null
+  schwellwert_board_inaktiv: number | null
+  schwellwert_board_min_impressionen_top: number | null
+  schwellwert_board_min_engagement_top: number | string | null
+  schwellwert_board_min_impressionen_wachstum: number | null
+  schwellwert_board_min_impressionen_beobachten: number | null
+}
+
+export function boardThresholdsFromSettings(
+  settings: Partial<EinstellungenSchwellwerteBoard> | null | undefined
+): BoardThresholds {
+  const eRaw = settings?.schwellwert_board_min_engagement_top
+  const eNum =
+    eRaw === null || eRaw === undefined
+      ? BOARD_THRESHOLDS.minEngagementTop
+      : Number(eRaw)
+  return {
+    wenigAktiv:
+      settings?.schwellwert_board_wenig_aktiv ?? BOARD_THRESHOLDS.wenigAktiv,
+    inaktiv: settings?.schwellwert_board_inaktiv ?? BOARD_THRESHOLDS.inaktiv,
+    minImpressionenTop:
+      settings?.schwellwert_board_min_impressionen_top ??
+      BOARD_THRESHOLDS.minImpressionenTop,
+    minEngagementTop: Number.isFinite(eNum)
+      ? eNum
+      : BOARD_THRESHOLDS.minEngagementTop,
+    minImpressionenWachstum:
+      settings?.schwellwert_board_min_impressionen_wachstum ??
+      BOARD_THRESHOLDS.minImpressionenWachstum,
+    minImpressionenBeobachten:
+      settings?.schwellwert_board_min_impressionen_beobachten ??
+      BOARD_THRESHOLDS.minImpressionenBeobachten,
+  }
+}
+
+export function diagnoseBoard(args: {
+  lastPinAlterTage: number | null
+  thresholds: BoardThresholds
+}): BoardStatus {
+  if (args.lastPinAlterTage === null) return 'inaktiv'
+  if (args.lastPinAlterTage < args.thresholds.wenigAktiv) return 'aktiv'
+  if (args.lastPinAlterTage <= args.thresholds.inaktiv) return 'wenig_aktiv'
+  return 'inaktiv'
+}
+
+export function calcBoardEngagementRate(
+  interaktionen: number,
+  impressionen: number
+): number | null {
+  if (impressionen <= 0) return null
+  return (interaktionen / impressionen) * 100
+}
+
+export function scoreBoard(args: {
+  impressionen: number
+  engagementRate: number | null
+  thresholds: BoardThresholds
+}): BoardScore {
+  const r = args.engagementRate ?? 0
+  if (
+    args.impressionen >= args.thresholds.minImpressionenTop &&
+    r >= args.thresholds.minEngagementTop
+  )
+    return 'top'
+  if (args.impressionen >= args.thresholds.minImpressionenWachstum)
+    return 'wachstum'
+  if (args.impressionen >= args.thresholds.minImpressionenBeobachten)
+    return 'beobachten'
+  return 'schwach'
+}
+
+export function boardHandlung(args: {
+  score: BoardScore
+  status: BoardStatus
+}): string | null {
+  if (args.score === 'schwach')
+    return '🔍 Keywords in Board-Beschreibung optimieren & mehr Pins hinzufügen'
+  if (args.status === 'inaktiv')
+    return '🚨 Board reaktivieren — mindestens 3 neue Pins pro Woche'
+  if (args.status === 'wenig_aktiv')
+    return '📌 Board aktiver bespielen — regelmäßiger pinnen'
+  if (args.score === 'beobachten')
+    return '⏸ Weiter beobachten — noch zu wenig Daten für klare Entscheidung'
+  if (args.score === 'wachstum')
+    return '🚀 Momentum nutzen — mehr Pins zu diesem Thema produzieren'
+  if (args.score === 'top')
+    return '⭐ Skalieren — ähnliche Boards aufbauen & Keyword-Cluster erweitern'
+  return null
+}
+
+export type BoardAnalyticsRow = {
+  board: BoardOption
+  latest: BoardAnalyticsEntry
+  lastPinDatum: string | null
+  lastPinAlterTage: number | null
+  status: BoardStatus
+  score: BoardScore
+  engagementRate: number | null
+  handlung: string | null
+}
