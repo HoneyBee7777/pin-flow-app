@@ -31,6 +31,7 @@ export const PIN_FORMATE = [
   'collage',
   'shopping',
   'carousel',
+  'infografik',
 ] as const
 export type PinFormat = (typeof PIN_FORMATE)[number]
 
@@ -90,6 +91,7 @@ export const PIN_FORMAT_LABEL: Record<PinFormat, string> = {
   collage: 'Collage',
   shopping: 'Shopping',
   carousel: 'Carousel',
+  infografik: 'Infografik',
 }
 
 export const PIN_FORMAT_BADGE: Record<PinFormat, string> = {
@@ -99,6 +101,7 @@ export const PIN_FORMAT_BADGE: Record<PinFormat, string> = {
   collage: 'bg-emerald-100 text-emerald-700',
   shopping: 'bg-rose-100 text-rose-700',
   carousel: 'bg-amber-100 text-amber-800',
+  infografik: 'bg-sky-100 text-sky-700',
 }
 
 export const KEYWORD_TYP_LABEL: Record<KeywordTyp, string> = {

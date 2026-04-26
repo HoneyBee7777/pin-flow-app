@@ -35,6 +35,7 @@ type Input = {
   content_id: string
   canva_vorlage_id: string | null
   ziel_url_id: string | null
+  ziel_url_direct: string | null
   board_id: string | null
   saison_event_id: string | null
   titel: string | null
@@ -108,11 +109,18 @@ function parseInput(
   if (datumRaw && !/^\d{4}-\d{2}-\d{2}$/.test(datumRaw))
     return { error: 'Ungültiges Datumsformat für Veröffentlichung.' }
 
+  const zielUrlDirectRaw = nullable(formData, 'ziel_url_direct')
+  if (zielUrlDirectRaw && !/^https?:\/\/\S+/i.test(zielUrlDirectRaw))
+    return {
+      error: 'Ziel-URL muss mit http:// oder https:// beginnen.',
+    }
+
   return {
     input: {
       content_id,
       canva_vorlage_id: nullable(formData, 'canva_vorlage_id'),
       ziel_url_id: nullable(formData, 'ziel_url_id'),
+      ziel_url_direct: zielUrlDirectRaw,
       board_id: nullable(formData, 'board_id'),
       saison_event_id: nullable(formData, 'saison_event_id'),
       titel,
@@ -128,6 +136,43 @@ function parseInput(
       keyword_ids: readIds(formData, 'keyword_ids'),
     },
   }
+}
+
+async function resolveZielUrlId(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  zielUrlId: string | null,
+  zielUrlDirect: string | null
+): Promise<{ id: string | null } | { error: string }> {
+  if (!zielUrlDirect) return { id: zielUrlId }
+
+  const url = zielUrlDirect.trim()
+
+  const { data: existing, error: lookupError } = await supabase
+    .from('ziel_urls')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('url', url)
+    .maybeSingle()
+  if (lookupError) return { error: lookupError.message }
+  if (existing) return { id: existing.id }
+
+  const { data: created, error: insertError } = await supabase
+    .from('ziel_urls')
+    .insert({
+      user_id: userId,
+      url,
+      titel: url,
+      typ: 'blogpost',
+      prioritaet: 'mittel',
+    })
+    .select('id')
+    .single()
+  if (insertError || !created)
+    return {
+      error: insertError?.message ?? 'Ziel-URL konnte nicht angelegt werden.',
+    }
+  return { id: created.id }
 }
 
 async function syncKeywords(
@@ -161,7 +206,17 @@ export async function addPin(
   const parsed = parseInput(formData)
   if ('error' in parsed) return { error: parsed.error }
 
-  const { keyword_ids, ...pinFields } = parsed.input
+  const { keyword_ids, ziel_url_direct, ...rest } = parsed.input
+
+  const resolved = await resolveZielUrlId(
+    supabase,
+    user.id,
+    rest.ziel_url_id,
+    ziel_url_direct
+  )
+  if ('error' in resolved) return { error: resolved.error }
+
+  const pinFields = { ...rest, ziel_url_id: resolved.id }
 
   const { data: inserted, error } = await supabase
     .from('pins')
@@ -199,7 +254,17 @@ export async function updatePin(
   const parsed = parseInput(formData)
   if ('error' in parsed) return { error: parsed.error }
 
-  const { keyword_ids, ...pinFields } = parsed.input
+  const { keyword_ids, ziel_url_direct, ...rest } = parsed.input
+
+  const resolved = await resolveZielUrlId(
+    supabase,
+    user.id,
+    rest.ziel_url_id,
+    ziel_url_direct
+  )
+  if ('error' in resolved) return { error: resolved.error }
+
+  const pinFields = { ...rest, ziel_url_id: resolved.id }
 
   const { error } = await supabase.from('pins').update(pinFields).eq('id', id)
   if (error) return { error: error.message }

@@ -85,6 +85,7 @@ function PencilIcon() {
 export default function PinProduktionClient(props: Props) {
   const [editing, setEditing] = useState<PinWithRelations | null>(null)
   const [showAddForm, setShowAddForm] = useState(false)
+  const [showManualForm, setShowManualForm] = useState(false)
   const [showCsvImport, setShowCsvImport] = useState(false)
   const [isPending, startTransition] = useTransition()
 
@@ -93,12 +94,21 @@ export default function PinProduktionClient(props: Props) {
   function openAdd() {
     setEditing(null)
     setShowAddForm(true)
+    setShowManualForm(false)
+    setShowCsvImport(false)
+  }
+
+  function openManual() {
+    setEditing(null)
+    setShowManualForm(true)
+    setShowAddForm(false)
     setShowCsvImport(false)
   }
 
   function openEdit(pin: PinWithRelations) {
     setEditing(pin)
     setShowAddForm(false)
+    setShowManualForm(false)
     setShowCsvImport(false)
   }
 
@@ -107,9 +117,14 @@ export default function PinProduktionClient(props: Props) {
     setEditing(null)
   }
 
+  function closeManual() {
+    setShowManualForm(false)
+  }
+
   function toggleCsvImport() {
     setShowCsvImport((s) => !s)
     setShowAddForm(false)
+    setShowManualForm(false)
     setEditing(null)
   }
 
@@ -130,6 +145,15 @@ export default function PinProduktionClient(props: Props) {
           className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
         >
           {formOpen ? 'Abbrechen' : 'Neuen Pin erstellen'}
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            showManualForm ? closeManual() : openManual()
+          }
+          className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+        >
+          {showManualForm ? 'Abbrechen' : '✍️ Pin manuell eintragen'}
         </button>
         <button
           type="button"
@@ -160,6 +184,18 @@ export default function PinProduktionClient(props: Props) {
           comboCount={props.comboCount}
           customSignalwoerter={props.customSignalwoerter}
           onClose={closeForm}
+        />
+      )}
+
+      {showManualForm && (
+        <ManualPinForm
+          contents={props.contents}
+          boards={props.boards}
+          urls={props.urls}
+          vorlagen={props.vorlagen}
+          saisonEvents={props.saisonEvents}
+          comboCount={props.comboCount}
+          onClose={closeManual}
         />
       )}
 
@@ -792,22 +828,12 @@ function PinForm({
           </Field>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <Field label="Ziel-URL" htmlFor="ziel_url_id">
-              <select
-                id="ziel_url_id"
-                name="ziel_url_id"
-                value={urlId}
-                onChange={(e) => setUrlId(e.target.value)}
-                className={inputCls}
-              >
-                <option value="">— keine URL —</option>
-                {urls.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.titel}
-                  </option>
-                ))}
-              </select>
-            </Field>
+            <ZielUrlPicker
+              urls={urls}
+              selectedId={urlId}
+              onSelectedIdChange={setUrlId}
+              idPrefix="pinform"
+            />
 
             <Field label="Canva-Vorlage" htmlFor="canva_vorlage_id">
               <select
@@ -937,6 +963,436 @@ function PinForm({
 }
 
 // ===========================================================
+// Manuelles Formular (für bereits fertige Pins, ohne Prompt)
+// ===========================================================
+function ManualPinForm({
+  contents,
+  boards,
+  urls,
+  vorlagen,
+  saisonEvents,
+  comboCount,
+  onClose,
+}: {
+  contents: ContentOption[]
+  boards: BoardOption[]
+  urls: ZielUrlOption[]
+  vorlagen: CanvaVorlageOption[]
+  saisonEvents: SaisonEventOption[]
+  comboCount: Record<string, number>
+  onClose: () => void
+}) {
+  const [contentId, setContentId] = useState('')
+  const [titel, setTitel] = useState('')
+  const [hookField, setHookField] = useState('')
+  const [beschreibung, setBeschreibung] = useState('')
+  const [callToAction, setCallToAction] = useState('')
+  const [urlId, setUrlId] = useState('')
+  const [boardId, setBoardId] = useState('')
+  const [strategieTyp, setStrategieTyp] = useState<StrategieTyp | ''>('')
+  const [conversionZiel, setConversionZiel] = useState<ConversionZiel | ''>('')
+  const [pinFormat, setPinFormat] = useState<PinFormat | ''>('')
+  const [vorlageId, setVorlageId] = useState('')
+  const [saisonEventId, setSaisonEventId] = useState('')
+  const [geplanteVeroeffentlichung, setGeplanteVeroeffentlichung] = useState('')
+  const [status, setStatus] = useState<Status>('entwurf')
+
+  const [formError, setFormError] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+
+  const dupCount =
+    vorlageId && urlId
+      ? (comboCount[`${vorlageId}|${urlId}`] ?? 0)
+      : 0
+
+  async function onSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    setFormError(null)
+    setSubmitting(true)
+
+    const formData = new FormData(e.currentTarget)
+    const result = await addPin(formData)
+    setSubmitting(false)
+
+    if (result.error) {
+      setFormError(result.error)
+      return
+    }
+    onClose()
+  }
+
+  return (
+    <form
+      onSubmit={onSubmit}
+      className="space-y-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm"
+    >
+      <div>
+        <h2 className="text-lg font-semibold text-gray-900">
+          Pin manuell eintragen
+        </h2>
+        <p className="mt-1 text-sm text-gray-600">
+          Für bereits fertige Pins — trage Titel, Hook und Beschreibung direkt
+          ein ohne den KI-Prompt zu nutzen.
+        </p>
+      </div>
+
+      <Field label="Content-Inhalt" htmlFor="manual_content_id" required>
+        <select
+          id="manual_content_id"
+          name="content_id"
+          required
+          value={contentId}
+          onChange={(e) => setContentId(e.target.value)}
+          className={inputCls}
+        >
+          <option value="" disabled>
+            Bitte wählen…
+          </option>
+          {contents.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.titel}
+            </option>
+          ))}
+        </select>
+      </Field>
+
+      <Field label="Titel" htmlFor="manual_titel">
+        <input
+          id="manual_titel"
+          name="titel"
+          type="text"
+          maxLength={100}
+          value={titel}
+          onChange={(e) => setTitel(e.target.value)}
+          className={inputCls}
+        />
+        <Counter current={titel.length} max={100} unit="Zeichen" />
+      </Field>
+
+      <Field label="Hook" htmlFor="manual_hook">
+        <input
+          id="manual_hook"
+          name="hook"
+          type="text"
+          value={hookField}
+          onChange={(e) => setHookField(e.target.value)}
+          className={inputCls}
+        />
+        <Counter current={countWords(hookField)} max={10} unit="Wörter" />
+      </Field>
+
+      <Field label="Beschreibung" htmlFor="manual_beschreibung">
+        <textarea
+          id="manual_beschreibung"
+          name="beschreibung"
+          rows={3}
+          maxLength={500}
+          value={beschreibung}
+          onChange={(e) => setBeschreibung(e.target.value)}
+          className={inputCls}
+        />
+        <Counter current={beschreibung.length} max={500} unit="Zeichen" />
+      </Field>
+
+      <Field label="Call-to-Action" htmlFor="manual_call_to_action">
+        <input
+          id="manual_call_to_action"
+          name="call_to_action"
+          type="text"
+          value={callToAction}
+          onChange={(e) => setCallToAction(e.target.value)}
+          className={inputCls}
+        />
+      </Field>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <ZielUrlPicker
+          urls={urls}
+          selectedId={urlId}
+          onSelectedIdChange={setUrlId}
+          idPrefix="manual"
+        />
+
+        <Field label="Board" htmlFor="manual_board_id">
+          <select
+            id="manual_board_id"
+            name="board_id"
+            value={boardId}
+            onChange={(e) => setBoardId(e.target.value)}
+            className={inputCls}
+          >
+            <option value="">— ohne Board —</option>
+            {boards.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <Field label="Strategie-Typ" htmlFor="manual_strategie_typ">
+          <select
+            id="manual_strategie_typ"
+            name="strategie_typ"
+            value={strategieTyp}
+            onChange={(e) =>
+              setStrategieTyp(e.target.value as StrategieTyp | '')
+            }
+            className={inputCls}
+          >
+            <option value="">— wählen —</option>
+            {STRATEGIE_TYPEN.map((s) => (
+              <option key={s} value={s}>
+                {STRATEGIE_LABEL[s]}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        <Field label="Conversion-Ziel" htmlFor="manual_conversion_ziel">
+          <select
+            id="manual_conversion_ziel"
+            name="conversion_ziel"
+            value={conversionZiel}
+            onChange={(e) =>
+              setConversionZiel(e.target.value as ConversionZiel | '')
+            }
+            className={inputCls}
+          >
+            <option value="">— wählen —</option>
+            {CONVERSION_ZIELE.map((c) => (
+              <option key={c} value={c}>
+                {CONVERSION_LABEL[c]}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        <Field label="Pin-Format" htmlFor="manual_pin_format">
+          <select
+            id="manual_pin_format"
+            name="pin_format"
+            value={pinFormat}
+            onChange={(e) => setPinFormat(e.target.value as PinFormat | '')}
+            className={inputCls}
+          >
+            <option value="">— wählen —</option>
+            {PIN_FORMATE.map((p) => (
+              <option key={p} value={p}>
+                {PIN_FORMAT_LABEL[p]}
+              </option>
+            ))}
+          </select>
+        </Field>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <Field label="Canva-Vorlage" htmlFor="manual_canva_vorlage_id">
+          <select
+            id="manual_canva_vorlage_id"
+            name="canva_vorlage_id"
+            value={vorlageId}
+            onChange={(e) => setVorlageId(e.target.value)}
+            className={inputCls}
+          >
+            <option value="">— keine Vorlage —</option>
+            {vorlagen.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        <Field label="Saison-Tag (optional)" htmlFor="manual_saison_event_id">
+          <select
+            id="manual_saison_event_id"
+            name="saison_event_id"
+            value={saisonEventId}
+            onChange={(e) => setSaisonEventId(e.target.value)}
+            className={inputCls}
+          >
+            <option value="">— keiner —</option>
+            {saisonEvents.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.event_name}
+                {s.event_datum ? ` (${formatDateDe(s.event_datum)})` : ''}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        <Field
+          label="Veröffentlichungsdatum (optional)"
+          htmlFor="manual_geplante_veroeffentlichung"
+        >
+          <input
+            id="manual_geplante_veroeffentlichung"
+            name="geplante_veroeffentlichung"
+            type="date"
+            value={geplanteVeroeffentlichung}
+            onChange={(e) => setGeplanteVeroeffentlichung(e.target.value)}
+            className={inputCls}
+          />
+        </Field>
+      </div>
+
+      {dupCount > 3 && (
+        <div className="rounded-md border border-yellow-300 bg-yellow-50 p-3 text-sm text-yellow-800">
+          ⚠️ Diese Kombination Vorlage + URL existiert bereits {dupCount}× —
+          Pinterest wertet sehr ähnliche Pins als Spam. Erwäge eine andere
+          Vorlage oder Ziel-URL.
+        </div>
+      )}
+
+      <Field label="Status" htmlFor="manual_status" required>
+        <select
+          id="manual_status"
+          name="status"
+          required
+          value={status}
+          onChange={(e) => setStatus(e.target.value as Status)}
+          className={inputCls}
+        >
+          {STATUS.map((s) => (
+            <option key={s} value={s}>
+              {STATUS_LABEL[s]}
+            </option>
+          ))}
+        </select>
+      </Field>
+
+      {formError && <p className="text-sm text-red-700">{formError}</p>}
+
+      <div className="flex gap-2">
+        <button
+          type="submit"
+          disabled={submitting}
+          className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+        >
+          {submitting ? 'Speichert…' : 'Speichern'}
+        </button>
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+        >
+          Abbrechen
+        </button>
+      </div>
+    </form>
+  )
+}
+
+// ===========================================================
+// Ziel-URL Picker (Liste oder Direkteingabe)
+// ===========================================================
+function ZielUrlPicker({
+  urls,
+  selectedId,
+  onSelectedIdChange,
+  idPrefix,
+}: {
+  urls: ZielUrlOption[]
+  selectedId: string
+  onSelectedIdChange: (id: string) => void
+  idPrefix: string
+}) {
+  const [mode, setMode] = useState<'list' | 'direct'>('list')
+  const [direct, setDirect] = useState('')
+
+  const listId = `${idPrefix}_ziel_url_id`
+  const directId = `${idPrefix}_ziel_url_direct`
+
+  function switchTo(next: 'list' | 'direct') {
+    if (next === mode) return
+    if (next === 'list') {
+      setDirect('')
+    } else {
+      onSelectedIdChange('')
+    }
+    setMode(next)
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-2">
+        <label
+          htmlFor={mode === 'list' ? listId : directId}
+          className="block text-sm font-medium text-gray-700"
+        >
+          Ziel-URL
+        </label>
+        <div className="inline-flex rounded-md border border-gray-300 bg-white text-xs">
+          <button
+            type="button"
+            onClick={() => switchTo('list')}
+            className={`px-2.5 py-1 ${
+              mode === 'list'
+                ? 'bg-gray-100 font-medium text-gray-900'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            Aus Liste wählen
+          </button>
+          <button
+            type="button"
+            onClick={() => switchTo('direct')}
+            className={`border-l border-gray-300 px-2.5 py-1 ${
+              mode === 'direct'
+                ? 'bg-gray-100 font-medium text-gray-900'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            URL direkt eingeben
+          </button>
+        </div>
+      </div>
+
+      {mode === 'list' ? (
+        <>
+          <select
+            id={listId}
+            name="ziel_url_id"
+            value={selectedId}
+            onChange={(e) => onSelectedIdChange(e.target.value)}
+            className={inputCls}
+          >
+            <option value="">— keine URL —</option>
+            {urls.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.titel} — {u.url}
+              </option>
+            ))}
+          </select>
+          <input type="hidden" name="ziel_url_direct" value="" />
+        </>
+      ) : (
+        <>
+          <input
+            id={directId}
+            name="ziel_url_direct"
+            type="url"
+            value={direct}
+            onChange={(e) => setDirect(e.target.value)}
+            placeholder="https://example.com/blog/artikel"
+            className={inputCls}
+          />
+          <p className="mt-1 text-xs text-gray-500">
+            Wenn die URL bereits in deiner Sammlung existiert, wird sie
+            automatisch verknüpft. Andernfalls wird sie als neue Ziel-URL
+            angelegt.
+          </p>
+          <input type="hidden" name="ziel_url_id" value="" />
+        </>
+      )}
+    </div>
+  )
+}
+
+// ===========================================================
 // Hilfs-Komponenten
 // ===========================================================
 const inputCls =
@@ -1058,16 +1514,9 @@ function normalizeStatus(v: string): Status | null {
 
 function normalizePinFormat(v: string): PinFormat | null {
   const lower = v.trim().toLowerCase()
-  const known: PinFormat[] = [
-    'standard',
-    'video',
-    'idea',
-    'collage',
-    'shopping',
-    'carousel',
-  ]
-  for (const k of known) if (lower === k) return k
+  for (const k of PIN_FORMATE) if (lower === k) return k
   if (lower === 'karussell') return 'carousel'
+  if (lower === 'infographic' || lower === 'info-grafik') return 'infografik'
   return null
 }
 
