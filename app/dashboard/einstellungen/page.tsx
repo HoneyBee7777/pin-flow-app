@@ -11,7 +11,7 @@ export default async function EinstellungenPage() {
   const { data, error } = await supabase
     .from('einstellungen')
     .select(
-      `eigene_signalwoerter, pinterest_analytics_url,
+      `profil_name, eigene_signalwoerter, pinterest_analytics_url,
        pinterest_account_url, website_url, tailwind_url,
        schwellwert_beobachtung, schwellwert_min_klicks,
        schwellwert_alter_recycling, schwellwert_ctr, schwellwert_impressionen,
@@ -39,6 +39,7 @@ export default async function EinstellungenPage() {
       )}
 
       <EinstellungenClient
+        initialProfilName={data?.profil_name ?? ''}
         initialEigeneSignalwoerter={data?.eigene_signalwoerter ?? ''}
         initialPinterestAnalyticsUrl={data?.pinterest_analytics_url ?? ''}
         initialPersoenlicheLinks={{

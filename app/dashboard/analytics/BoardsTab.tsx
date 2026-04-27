@@ -28,6 +28,7 @@ import {
   type BoardOption,
   type BoardThresholds,
 } from './utils'
+import { LabelWithTooltip } from '@/components/InfoTooltip'
 
 const inputCls =
   'mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500'
@@ -887,7 +888,7 @@ function SortableTh({
   dir: SortDir
   onSort: (key: SortKey) => void
   info?: string
-  children: React.ReactNode
+  children: string
 }) {
   const isActive = current === key
   return (
@@ -897,17 +898,9 @@ function SortableTh({
       className="cursor-pointer select-none px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 hover:bg-gray-100"
     >
       <span className="inline-flex items-center gap-1">
-        {children}
-        {info && (
-          <span
-            className="cursor-help text-gray-400"
-            title={info}
-            aria-label={info}
-            onClick={(e) => e.stopPropagation()}
-          >
-            ℹ️
-          </span>
-        )}
+        <span>
+          <LabelWithTooltip label={children} tooltip={info} />
+        </span>
         {isActive ? (
           <span className="text-gray-700" aria-hidden>
             {dir === 'asc' ? '↑' : '↓'}

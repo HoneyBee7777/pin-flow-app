@@ -22,12 +22,54 @@ export async function addAufgabe(
   if (faelligkeitsdatum && !/^\d{4}-\d{2}-\d{2}$/.test(faelligkeitsdatum))
     return { error: 'Datum muss im Format YYYY-MM-DD sein.' }
 
+  const prioritaet = formData.get('prioritaet') === 'true'
+
   const { error } = await supabase.from('aufgaben').insert({
     user_id: user.id,
     titel,
     faelligkeitsdatum,
     erledigt: false,
+    prioritaet,
   })
+  if (error) return { error: error.message }
+
+  revalidatePath('/dashboard')
+  return {}
+}
+
+export async function updateAufgabe(
+  id: string,
+  titel: string,
+  faelligkeitsdatum: string | null,
+  prioritaet: boolean
+): Promise<{ error?: string }> {
+  if (!id) return { error: 'ID fehlt.' }
+
+  const supabase = createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: 'Nicht angemeldet.' }
+
+  const titelTrimmed = titel.trim()
+  if (!titelTrimmed) return { error: 'Bitte einen Titel angeben.' }
+  if (titelTrimmed.length > 200)
+    return { error: 'Titel darf maximal 200 Zeichen haben.' }
+
+  if (
+    faelligkeitsdatum &&
+    !/^\d{4}-\d{2}-\d{2}$/.test(faelligkeitsdatum)
+  )
+    return { error: 'Datum muss im Format YYYY-MM-DD sein.' }
+
+  const { error } = await supabase
+    .from('aufgaben')
+    .update({
+      titel: titelTrimmed,
+      faelligkeitsdatum: faelligkeitsdatum || null,
+      prioritaet,
+    })
+    .eq('id', id)
   if (error) return { error: error.message }
 
   revalidatePath('/dashboard')

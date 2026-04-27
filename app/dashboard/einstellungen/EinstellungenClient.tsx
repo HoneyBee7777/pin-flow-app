@@ -27,12 +27,14 @@ export type InitialBoardSchwellwerte = {
 }
 
 export default function EinstellungenClient({
+  initialProfilName,
   initialEigeneSignalwoerter,
   initialPinterestAnalyticsUrl,
   initialPersoenlicheLinks,
   initialSchwellwerte,
   initialBoardSchwellwerte,
 }: {
+  initialProfilName: string
   initialEigeneSignalwoerter: string
   initialPinterestAnalyticsUrl: string
   initialPersoenlicheLinks: InitialPersoenlicheLinks
@@ -41,12 +43,79 @@ export default function EinstellungenClient({
 }) {
   return (
     <div className="space-y-6">
+      <ProfilNameSection initial={initialProfilName} />
       <SignalwoerterSection initial={initialEigeneSignalwoerter} />
       <PersoenlicheLinksSection initial={initialPersoenlicheLinks} />
       <AnalyticsLinkSection initial={initialPinterestAnalyticsUrl} />
       <SchwellwerteSection initial={initialSchwellwerte} />
       <BoardSchwellwerteSection initial={initialBoardSchwellwerte} />
     </div>
+  )
+}
+
+function ProfilNameSection({ initial }: { initial: string }) {
+  const [name, setName] = useState(initial)
+  const [isPending, startTransition] = useTransition()
+  const [feedback, setFeedback] = useState<{
+    saved?: boolean
+    error?: string
+  }>({})
+
+  function onSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const formData = new FormData(e.currentTarget)
+    setFeedback({})
+    startTransition(async () => {
+      const result = await saveEinstellungen(formData)
+      if (result.error) setFeedback({ error: result.error })
+      else setFeedback({ saved: true })
+    })
+  }
+
+  return (
+    <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+      <h2 className="text-lg font-semibold text-gray-900">Mein Profil</h2>
+      <p className="mt-1 text-sm text-gray-600">
+        Dieser Name wird als Begrüßung auf dem Dashboard angezeigt.
+      </p>
+
+      <form onSubmit={onSubmit} className="mt-4 space-y-3">
+        <div>
+          <label
+            htmlFor="profil_name"
+            className="block text-sm font-medium text-gray-700"
+          >
+            Dein Name oder Pinterest-Profilname
+          </label>
+          <input
+            id="profil_name"
+            name="profil_name"
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            maxLength={100}
+            placeholder="z.B. Jana"
+            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+          />
+        </div>
+
+        <div className="flex items-center gap-3">
+          <button
+            type="submit"
+            disabled={isPending}
+            className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+          >
+            {isPending ? 'Speichert…' : 'Speichern'}
+          </button>
+          {feedback.saved && (
+            <span className="text-sm text-green-700">Gespeichert ✓</span>
+          )}
+          {feedback.error && (
+            <span className="text-sm text-red-700">{feedback.error}</span>
+          )}
+        </div>
+      </form>
+    </section>
   )
 }
 

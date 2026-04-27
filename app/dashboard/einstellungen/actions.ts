@@ -19,6 +19,13 @@ export async function saveEinstellungen(
     updates.eigene_signalwoerter = v || null
   }
 
+  if (formData.has('profil_name')) {
+    const v = String(formData.get('profil_name') ?? '').trim()
+    if (v.length > 100)
+      return { error: 'Profilname darf maximal 100 Zeichen haben.' }
+    updates.profil_name = v || null
+  }
+
   const urlFields = [
     ['pinterest_analytics_url', 'Pinterest Analytics URL'],
     ['pinterest_account_url', 'Pinterest Account URL'],
