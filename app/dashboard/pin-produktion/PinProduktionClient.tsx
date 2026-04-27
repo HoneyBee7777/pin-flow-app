@@ -2,6 +2,7 @@
 
 import { useSearchParams } from 'next/navigation'
 import {
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -85,10 +86,26 @@ function PencilIcon() {
 
 export default function PinProduktionClient(props: Props) {
   const searchParams = useSearchParams()
-  const [editing, setEditing] = useState<PinWithRelations | null>(null)
+  const [editing, setEditing] = useState<PinWithRelations | null>(() => {
+    const editId = searchParams?.get('edit')
+    if (!editId) return null
+    return props.pins.find((p) => p.id === editId) ?? null
+  })
   const [showAddForm, setShowAddForm] = useState(
     () => searchParams?.get('new') === '1'
   )
+
+  // Wenn sich der edit-Param ändert (z.B. nach Server-Action-Redirect),
+  // den passenden Pin in den Edit-Modus setzen.
+  const editParam = searchParams?.get('edit') ?? null
+  useEffect(() => {
+    if (!editParam) return
+    const target = props.pins.find((p) => p.id === editParam)
+    if (target && target.id !== editing?.id) {
+      setEditing(target)
+      setShowAddForm(false)
+    }
+  }, [editParam, props.pins, editing?.id])
   const [showManualForm, setShowManualForm] = useState(false)
   const [showCsvImport, setShowCsvImport] = useState(false)
   const [isPending, startTransition] = useTransition()
@@ -259,6 +276,28 @@ function PinTable({
               <tr key={pin.id} className="align-top hover:bg-gray-50">
                 <td className="max-w-xs px-4 py-3 text-sm font-medium text-gray-900">
                   {pin.titel ?? <span className="text-gray-400">—</span>}
+                  {pin.variante_typ && (
+                    <span
+                      className={`ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                        pin.variante_typ === 'recycling'
+                          ? 'bg-amber-100 text-amber-800'
+                          : 'bg-purple-100 text-purple-700'
+                      }`}
+                      title={
+                        pin.variante_von_titel
+                          ? `${pin.variante_typ === 'recycling' ? 'Recycling' : 'Variante'} von „${pin.variante_von_titel}"`
+                          : `${pin.variante_typ === 'recycling' ? 'Recycling' : 'Variante'} (Original-Pin gelöscht)`
+                      }
+                    >
+                      {pin.variante_typ === 'recycling' ? '♻️' : '🔁'}{' '}
+                      {pin.variante_typ === 'recycling' ? 'Recycling' : 'Variante'}
+                      {pin.variante_von_titel && (
+                        <span className="ml-1 max-w-[160px] truncate text-gray-700">
+                          von „{pin.variante_von_titel}"
+                        </span>
+                      )}
+                    </span>
+                  )}
                 </td>
                 <td className="max-w-xs px-4 py-3 text-sm text-gray-700">
                   {pin.hook ?? <span className="text-gray-400">—</span>}

@@ -145,9 +145,13 @@ export type Pin = {
   klicks: number
   saves: number
   created_at: string
+  variante_von_pin_id: string | null
+  variante_typ: 'variante' | 'recycling' | null
+  pinterest_pin_url: string | null
 }
 
 export type PinWithRelations = Pin & {
+  variante_von_titel?: string | null
   content: { id: string; titel: string } | null
   vorlage: { id: string; name: string } | null
   url: { id: string; titel: string; url: string } | null

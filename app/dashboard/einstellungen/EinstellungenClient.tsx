@@ -364,9 +364,12 @@ function SchwellwerteSection({
   }
 
   return (
-    <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+    <section
+      id="pin-schwellwerte"
+      className="scroll-mt-24 rounded-lg border border-gray-200 bg-white p-6 shadow-sm"
+    >
       <h2 className="text-lg font-semibold text-gray-900">
-        Analytics-Schwellwerte
+        Pin-Schwellwerte für Analytics
       </h2>
       <p className="mt-1 text-sm text-gray-600">
         Diese Werte steuern die Diagnose-Logik im Pin-Analytics-Tab. Passe sie
@@ -520,9 +523,12 @@ function BoardSchwellwerteSection({
   }
 
   return (
-    <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+    <section
+      id="board-schwellwerte"
+      className="scroll-mt-24 rounded-lg border border-gray-200 bg-white p-6 shadow-sm"
+    >
       <h2 className="text-lg font-semibold text-gray-900">
-        Board-Schwellwerte
+        Board-Schwellwerte für Analytics
       </h2>
       <p className="mt-1 text-sm text-gray-600">
         Diese Werte steuern den Board-Status (Aktivität) und Board-Score

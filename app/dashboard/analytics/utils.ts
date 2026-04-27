@@ -220,6 +220,7 @@ export type PinOption = {
   status: string
   created_at: string
   geplante_veroeffentlichung: string | null
+  pinterest_pin_url?: string | null
 }
 
 export type PinAnalyticsEntry = {

@@ -14,6 +14,7 @@ const PIN_SELECT = `
   id, user_id, content_id, canva_vorlage_id, ziel_url_id, board_id, saison_event_id,
   titel, hook, beschreibung, call_to_action, strategie_typ, conversion_ziel, hook_art,
   pin_format, status, geplante_veroeffentlichung, impressionen, klicks, saves, created_at,
+  variante_von_pin_id, variante_typ, pinterest_pin_url,
   content_inhalte ( id, titel ),
   canva_vorlagen ( id, name ),
   ziel_urls ( id, titel, url ),
@@ -111,6 +112,8 @@ export default async function PinProduktionPage() {
     (settingsRes.data?.eigene_signalwoerter ?? null) as string | null
 
   const pinsRaw = (pinsRes.data ?? []) as unknown as RawPinRow[]
+  const titelById = new Map<string, string | null>()
+  for (const r of pinsRaw) titelById.set(r.id, r.titel)
   const pins: PinWithRelations[] = pinsRaw.map((row) => {
     const {
       content_inhalte,
@@ -135,6 +138,9 @@ export default async function PinProduktionPage() {
           keyword: pk.keywords!.keyword,
           typ: pk.keywords!.typ,
         })),
+      variante_von_titel: row.variante_von_pin_id
+        ? titelById.get(row.variante_von_pin_id) ?? null
+        : null,
     }
   })
 

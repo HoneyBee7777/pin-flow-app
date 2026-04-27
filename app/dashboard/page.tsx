@@ -42,9 +42,10 @@ import {
 } from './saison-kalender/utils'
 import PerformanceChart, { type ChartPoint } from './PerformanceChart'
 import AufgabenSection, { type Aufgabe } from './AufgabenSection'
-import HandlungsbedarfRow, {
-  type HandlungsbedarfRowData,
-} from './HandlungsbedarfRow'
+import HandlungsbedarfPinRow, {
+  type ActionButton,
+  type HandlungsbedarfPin,
+} from './HandlungsbedarfPinRow'
 import BearbeitetRow, { type BearbeitetRowData } from './BearbeitetRow'
 
 type ContentPipelineUrl = {
@@ -128,44 +129,117 @@ type ActionablePin = {
   pin_id: string
   titel: string | null
   klicks: number
+  impressionen: number
   ctr: number | null
+  alterTage: number
+  letzterAnalyticsDatum: string
+  pinterestUrl: string | null
   diagnose: PinDiagnose
   handlung: string
 }
 
-const HANDLUNGS_CATEGORIES: Array<{
+type HandlungsCategory = {
   diagnose: PinDiagnose
   emoji: string
   label: string
-  description: string
-}> = [
+  subtitle: string
+  tooltip: string
+  iconBg: string
+  counterBg: string
+  primaryAction: ActionButton
+  metrics: Array<
+    'klicks' | 'impressionen' | 'ctr' | 'alter' | 'datum' | 'push'
+  >
+  metricLabels: Partial<
+    Record<'klicks' | 'impressionen' | 'ctr' | 'alter' | 'datum' | 'push', string>
+  >
+}
+
+const HANDLUNGS_CATEGORIES: HandlungsCategory[] = [
   {
     diagnose: 'aktiver_top_performer',
     emoji: '🚀',
     label: 'Aktiver Top Performer',
-    description:
-      'Deine stärksten Pins nach Klicks. Das sind deine Blueprints – repliziere diese Themen, Formate und Hooks für neue Pins. Pins die jünger als 70 Tage sind und bereits mindestens 15 Klicks erreicht haben performen aktiv – produziere jetzt Varianten solange der Algorithmus sie pusht. Die Schwellwerte kannst du in den Einstellungen anpassen.',
+    subtitle:
+      'Diese Pins laufen stark – produziere Varianten solange der Algorithmus pusht.',
+    tooltip:
+      'Deine stärksten Pins nach Klicks. Pins jünger als 70 Tage mit mindestens 15 Klicks performen aktiv. Pinterest pusht neue Pins in den ersten 60-90 Tagen besonders stark – nutze dieses Zeitfenster.',
+    iconBg: 'bg-green-100 text-green-700',
+    counterBg: 'bg-green-100 text-green-700',
+    primaryAction: {
+      type: 'variante',
+      varianteTyp: 'variante',
+      label: 'Variante produzieren',
+    },
+    metrics: ['klicks', 'ctr', 'alter', 'push'],
+    metricLabels: {
+      klicks: 'Klicks',
+      ctr: 'CTR',
+      alter: 'Alter',
+      push: 'Algorithmus-Push',
+    },
   },
   {
     diagnose: 'hidden_gem',
     emoji: '💎',
     label: 'Hidden Gem',
-    description:
-      'Pins mit einer CTR über 1,5% aber weniger als 1.000 Impressionen. Der Hook funktioniert – aber das SEO ist schwach. Keywords und Board optimieren für mehr Reichweite. Die Schwellwerte kannst du in den Einstellungen anpassen.',
+    subtitle:
+      'Hohe CTR wenig Reichweite – Hook und Design top aber SEO schwach – Keywords und Boards optimieren.',
+    tooltip:
+      'Pins mit einer CTR über 1,5% aber weniger als 1.000 Impressionen. Der Hook funktioniert – aber das SEO ist schwach. Keywords und Board optimieren für mehr Reichweite.',
+    iconBg: 'bg-blue-100 text-blue-700',
+    counterBg: 'bg-blue-100 text-blue-700',
+    primaryAction: { type: 'edit', label: 'Keywords optimieren' },
+    metrics: ['ctr', 'impressionen', 'klicks'],
+    metricLabels: {
+      ctr: 'CTR',
+      impressionen: 'Impressionen',
+      klicks: 'Klicks',
+    },
   },
   {
     diagnose: 'hohe_impressionen_niedrige_ctr',
-    emoji: '🎨',
+    emoji: '🎯',
     label: 'Optimierungspotenzial',
-    description:
-      'Pins mit mehr als 1.000 Impressionen aber einer CTR unter 1,5%. Reichweite vorhanden – der Hook überzeugt nicht zum Klicken. Erstelle einen neuen Pin mit optimiertem Titel und Design — bearbeite NICHT den bestehenden Pin da Pinterest sonst alle bisherigen Daten verliert. Die Schwellwerte kannst du in den Einstellungen anpassen.',
+    subtitle:
+      'Viel ausgespielt wenig geklickt – SEO läuft, Hook und Design optimieren.',
+    tooltip:
+      'Viel ausgespielt (SEO funktioniert) aber wenig geklickt. Titel und Beschreibung können identisch bleiben — sie funktionieren für den Algorithmus. Was geändert werden muss: Hook-Text auf dem Bild und Pin-Design. Erstelle einen neuen Pin mit demselben Titel aber anderem Hook und Design.',
+    iconBg: 'bg-orange-100 text-orange-700',
+    counterBg: 'bg-orange-100 text-orange-700',
+    primaryAction: {
+      type: 'variante',
+      varianteTyp: 'variante',
+      label: 'Hook optimieren',
+    },
+    metrics: ['impressionen', 'ctr', 'klicks'],
+    metricLabels: {
+      impressionen: 'Impressionen',
+      ctr: 'CTR',
+      klicks: 'Klicks',
+    },
   },
   {
     diagnose: 'eingeschlafener_gewinner',
     emoji: '♻️',
     label: 'Eingeschlafener Gewinner',
-    description:
-      'Eingeschlafene Gewinner die eine neue Chance verdienen. Pins die älter als 120 Tage sind und mindestens 15 Klicks hatten – aber nicht mehr aktiv performen. Produziere eine neue Variante mit frischem Design und aktualisierten Keywords. Die Schwellwerte kannst du in den Einstellungen anpassen.',
+    subtitle:
+      'Pins die früher stark liefen – jetzt Zeit fürs Recycling mit frischem Design.',
+    tooltip:
+      'Pins die älter als 120 Tage sind und mindestens 15 Klicks hatten – aber nicht mehr aktiv performen. Produziere eine neue Variante mit frischem Design und aktualisierten Keywords.',
+    iconBg: 'bg-gray-200 text-gray-700',
+    counterBg: 'bg-gray-200 text-gray-700',
+    primaryAction: {
+      type: 'variante',
+      varianteTyp: 'recycling',
+      label: 'Recycling starten',
+    },
+    metrics: ['klicks', 'alter', 'datum'],
+    metricLabels: {
+      klicks: 'Frühere Klicks',
+      alter: 'Alter',
+      datum: 'Letzter Analytics-Eintrag',
+    },
   },
 ]
 
@@ -213,7 +287,7 @@ export default async function DashboardPage() {
       .from('pins_analytics')
       .select(
         `id, pin_id, datum, impressionen, klicks, saves, created_at,
-         pins ( id, titel, status, created_at, geplante_veroeffentlichung )`
+         pins ( id, titel, status, created_at, geplante_veroeffentlichung, pinterest_pin_url )`
       )
       .order('datum', { ascending: false }),
     supabase
@@ -293,14 +367,9 @@ export default async function DashboardPage() {
   const erledigtRows = (erledigtRes.data ?? []) as unknown as ErledigtRawRow[]
 
   const erledigtSet = new Set<string>()
-  const erledigtCountByDiagnose = new Map<PinDiagnose, number>()
   const validDiagnoseKeys = new Set(HANDLUNGS_CATEGORIES.map((c) => c.diagnose))
   for (const row of erledigtRows) {
     erledigtSet.add(`${row.pin_id}|${row.kategorie}`)
-    if (validDiagnoseKeys.has(row.kategorie as PinDiagnose)) {
-      const k = row.kategorie as PinDiagnose
-      erledigtCountByDiagnose.set(k, (erledigtCountByDiagnose.get(k) ?? 0) + 1)
-    }
   }
 
   const bearbeitet: BearbeitetRowData[] = erledigtRows
@@ -341,7 +410,11 @@ export default async function DashboardPage() {
       pin_id: row.pin_id,
       titel: pin?.titel ?? null,
       klicks: row.klicks,
+      impressionen: row.impressionen,
       ctr,
+      alterTage,
+      letzterAnalyticsDatum: row.datum,
+      pinterestUrl: pin?.pinterest_pin_url ?? null,
       diagnose,
       handlung: PIN_HANDLUNG[diagnose],
     })
@@ -595,10 +668,14 @@ export default async function DashboardPage() {
       <HandlungsbedarfSection
         grouped={groupedActions}
         hasAnyAnalytics={hasAnyAnalytics}
-        erledigtCountByDiagnose={erledigtCountByDiagnose}
         bearbeitet={bearbeitet}
         today={today}
       />
+
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+        <MeineTopPinsSection pins={topPins} />
+        <BoardGesundheitSection boards={boardHealth} />
+      </div>
 
       <SaisonVorschauSection events={upcomingEvents} />
 
@@ -608,11 +685,6 @@ export default async function DashboardPage() {
       />
 
       <AufgabenSection tasks={aufgabenSorted} today={today} />
-
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        <MeineTopPinsSection pins={topPins} />
-        <BoardGesundheitSection boards={boardHealth} />
-      </div>
     </div>
   )
 }
@@ -1103,32 +1175,54 @@ function GrowthBadge({ growth }: { growth: number | null | undefined }) {
 // ===========================================================
 // Handlungsbedarf
 // ===========================================================
+function formatMetric(
+  kind: 'klicks' | 'impressionen' | 'ctr' | 'alter' | 'datum' | 'push',
+  pin: HandlungsbedarfPin
+): string {
+  switch (kind) {
+    case 'klicks':
+      return formatZahl(pin.klicks)
+    case 'impressionen':
+      return formatZahl(pin.impressionen)
+    case 'ctr':
+      return formatPercent(pin.ctr)
+    case 'alter':
+      return `${pin.alterTage} Tage`
+    case 'datum':
+      return formatDateDe(pin.letzterAnalyticsDatum)
+    case 'push': {
+      const remaining = 70 - pin.alterTage
+      return remaining > 0 ? `noch ${remaining} Tage aktiv` : ''
+    }
+  }
+}
+
 function HandlungsbedarfSection({
   grouped,
   hasAnyAnalytics,
-  erledigtCountByDiagnose,
   bearbeitet,
   today,
 }: {
   grouped: Map<PinDiagnose, ActionablePin[]>
   hasAnyAnalytics: boolean
-  erledigtCountByDiagnose: Map<PinDiagnose, number>
   bearbeitet: BearbeitetRowData[]
   today: string
 }) {
-  const intro = (
-    <p className="mt-1 text-sm text-gray-600">
-      Hier siehst du alle Pins die aktuell eine konkrete Maßnahme brauchen.
-      Jeder Pin zeigt dir direkt was zu tun ist – SEO optimieren, Hook testen
-      oder eine Variante produzieren.
-    </p>
+  const heading = (
+    <>
+      <h2 className="text-lg font-semibold text-gray-900">Handlungsbedarf</h2>
+      <p className="mt-1 text-sm text-gray-600">
+        Hier siehst du alle Pins die aktuell eine konkrete Maßnahme brauchen.
+        Jeder Pin zeigt dir direkt was zu tun ist. Erstelle immer einen neuen
+        Pin — bearbeite nie den bereits bei Pinterest veröffentlichten Pin!
+      </p>
+    </>
   )
 
   if (!hasAnyAnalytics) {
     return (
       <section>
-        <h2 className="text-lg font-semibold text-gray-900">Handlungsbedarf</h2>
-        {intro}
+        {heading}
         <div className="mt-3 rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
           Trage deine ersten Pin-Analytics ein um Handlungsempfehlungen zu
           sehen.{' '}
@@ -1143,132 +1237,34 @@ function HandlungsbedarfSection({
     )
   }
 
-  const visibleCategories = HANDLUNGS_CATEGORIES.filter((c) => {
-    const active = grouped.get(c.diagnose)?.length ?? 0
-    const done = erledigtCountByDiagnose.get(c.diagnose) ?? 0
-    return active > 0 || done > 0
-  })
-
-  if (visibleCategories.length === 0 && bearbeitet.length === 0) {
-    return (
-      <section>
-        <h2 className="text-lg font-semibold text-gray-900">Handlungsbedarf</h2>
-        {intro}
-        <div className="mt-3 rounded-md border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
-          Aktuell keine offenen Handlungen — alle deine Pins laufen entweder
-          noch zu kurz für eine Bewertung oder zeigen keine kritischen Signale.
-        </div>
-      </section>
-    )
-  }
-
   return (
     <section>
-      <h2 className="text-lg font-semibold text-gray-900">Handlungsbedarf</h2>
-      {intro}
-      <div className="mt-3 space-y-2">
-        {visibleCategories.map((cat) => {
-          const pins = grouped.get(cat.diagnose) ?? []
-          const allDone = pins.length === 0
-          return (
-            <details
-              key={cat.diagnose}
-              className="group rounded-lg border border-gray-200 bg-white shadow-sm"
-            >
-              <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-medium text-gray-900 hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
-                <span className="inline-flex items-center gap-2">
-                  <span aria-hidden>{cat.emoji}</span>
-                  {cat.label}
-                </span>
-                <span className="inline-flex items-center gap-2">
-                  {allDone ? (
-                    <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700">
-                      ✓ Alle erledigt
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700">
-                      {pins.length}
-                    </span>
-                  )}
-                  <span className="text-xs text-gray-400" aria-hidden>
-                    <span className="inline group-open:hidden">▶</span>
-                    <span className="hidden group-open:inline">▼</span>
-                  </span>
-                </span>
-              </summary>
-              <div className="border-t border-gray-200 px-4 py-3 text-xs text-gray-600">
-                {cat.description.split('Die Schwellwerte kannst du in den Einstellungen anpassen.')[0]}
-                <Link
-                  href="/dashboard/einstellungen"
-                  className="font-medium text-red-600 hover:underline"
-                >
-                  Die Schwellwerte kannst du in den Einstellungen anpassen.
-                </Link>
-              </div>
-              {allDone ? (
-                <div className="border-t border-gray-200 px-4 py-6 text-center text-sm text-green-700">
-                  ✓ Alle Pins dieser Kategorie sind aktuell als bearbeitet
-                  markiert.
-                </div>
-              ) : (
-                <div className="border-t border-gray-200">
-                  <table className="min-w-full divide-y divide-gray-100 text-sm">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                          Erledigt
-                        </th>
-                        <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                          Pin
-                        </th>
-                        <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                          Klicks
-                        </th>
-                        <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                          CTR
-                        </th>
-                        <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                          Handlung
-                        </th>
-                        <th className="px-4 py-2 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">
-                          Aktion
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {pins.map((p) => {
-                        const rowData: HandlungsbedarfRowData = {
-                          id: p.id,
-                          pin_id: p.pin_id,
-                          titel: p.titel,
-                          klicks: p.klicks,
-                          ctr: p.ctr,
-                          handlung: p.handlung,
-                          kategorie: cat.diagnose,
-                        }
-                        return <HandlungsbedarfRow key={p.id} pin={rowData} />
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </details>
-          )
-        })}
+      {heading}
+      <div className="mt-3 space-y-3">
+        {HANDLUNGS_CATEGORIES.map((cat) => (
+          <HandlungsbedarfKategorieCard
+            key={cat.diagnose}
+            cat={cat}
+            pins={grouped.get(cat.diagnose) ?? []}
+          />
+        ))}
 
         {bearbeitet.length > 0 && (
           <details className="group rounded-lg border border-gray-200 bg-white shadow-sm">
-            <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-medium text-gray-900 hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
-              <span className="inline-flex items-center gap-2">
-                <span aria-hidden>✅</span>
-                Bereits bearbeitet
-                <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">
-                  {bearbeitet.length} {bearbeitet.length === 1 ? 'Pin' : 'Pins'}
-                </span>
+            <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 text-sm font-medium text-gray-900 hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
+              <span className="text-2xl leading-none text-gray-400" aria-hidden>
+                <span className="inline group-open:hidden">▸</span>
+                <span className="hidden group-open:inline">▾</span>
               </span>
-              <span className="text-xs text-gray-400" aria-hidden>
-                <span className="inline group-open:hidden">▶</span>
-                <span className="hidden group-open:inline">▼</span>
+              <span
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-green-500 text-base font-bold text-white"
+                aria-hidden
+              >
+                ✓
+              </span>
+              <span className="flex-1">Handlung abgeschlossen</span>
+              <span className="inline-flex items-center rounded-full bg-gray-200 px-2.5 py-0.5 text-xs font-semibold text-gray-700">
+                {bearbeitet.length}
               </span>
             </summary>
             <div className="border-t border-gray-200 px-4 py-2">
@@ -1284,8 +1280,133 @@ function HandlungsbedarfSection({
             </div>
           </details>
         )}
+
+        <p className="pt-2 text-xs text-gray-500">
+          <Link
+            href="/dashboard/einstellungen#pin-schwellwerte"
+            className="font-medium text-red-600 hover:underline"
+          >
+            Schwellwerte aller Kategorien anpassen ↗
+          </Link>
+        </p>
       </div>
     </section>
+  )
+}
+
+const PUSH_TOOLTIP =
+  'Pinterest pusht neue Pins in den ersten 60-90 Tagen besonders stark – das nennt sich Push-Window oder Honeymoon-Phase. In dieser Zeit reicht der Algorithmus den Pin proaktiv neuen Zielgruppen aus. Danach läuft er nur noch über Saves und natürliche Reichweite. Wenn ein Pin in dieser Phase außergewöhnlich gut läuft hast du ein kurzes Zeitfenster um das Maximum rauszuholen — produziere Varianten während der Algorithmus deinem Profil gerade vertraut. Pinterest lernt dann: Diese Person macht guten Content zu diesem Thema und pusht die nächsten Pins bevorzugt.'
+
+function buildPinData(p: ActionablePin): HandlungsbedarfPin {
+  return {
+    id: p.id,
+    pin_id: p.pin_id,
+    titel: p.titel,
+    klicks: p.klicks,
+    impressionen: p.impressionen,
+    ctr: p.ctr,
+    alterTage: p.alterTage,
+    letzterAnalyticsDatum: p.letzterAnalyticsDatum,
+    pinterestUrl: p.pinterestUrl,
+  }
+}
+
+function buildMetrics(cat: HandlungsCategory, pinData: HandlungsbedarfPin) {
+  return cat.metrics
+    .map((kind) => ({
+      label: cat.metricLabels[kind] ?? '',
+      value: formatMetric(kind, pinData),
+      tooltip: kind === 'push' ? PUSH_TOOLTIP : undefined,
+    }))
+    .filter((m) => m.value !== '')
+}
+
+function HandlungsbedarfKategorieCard({
+  cat,
+  pins,
+}: {
+  cat: HandlungsCategory
+  pins: ActionablePin[]
+}) {
+  const visiblePins = pins.slice(0, 3)
+  const remaining = pins.length - visiblePins.length
+
+  return (
+    <details
+      className="group rounded-lg border border-gray-200 bg-white shadow-sm"
+      open={pins.length > 0}
+    >
+      <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
+        <span className="text-2xl leading-none text-gray-400" aria-hidden>
+          <span className="inline group-open:hidden">▸</span>
+          <span className="hidden group-open:inline">▾</span>
+        </span>
+        <span
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-base ${cat.iconBg}`}
+          aria-hidden
+        >
+          {cat.emoji}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1 text-sm font-medium text-gray-900">
+            <LabelWithTooltip label={cat.label} tooltip={cat.tooltip} />
+          </div>
+          <p className="mt-0.5 text-xs text-gray-600">{cat.subtitle}</p>
+        </div>
+        <span
+          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${cat.counterBg}`}
+        >
+          {pins.length}
+        </span>
+      </summary>
+
+      {pins.length === 0 ? (
+        <div className="border-t border-gray-200 px-4 py-6 text-center text-sm text-green-700">
+          ✓ Alle Pins dieser Kategorie sind aktuell als bearbeitet markiert.
+        </div>
+      ) : (
+        <div className="border-t border-gray-200">
+          <p className="px-4 pt-2 text-[11px] uppercase tracking-wide text-gray-400">
+            Abhaken sobald Handlung erfolgt ist
+          </p>
+          <ul className="divide-y divide-gray-100">
+            {visiblePins.map((p) => {
+              const pinData = buildPinData(p)
+              return (
+                <HandlungsbedarfPinRow
+                  key={p.id}
+                  pin={pinData}
+                  kategorie={cat.diagnose}
+                  metrics={buildMetrics(cat, pinData)}
+                  primaryAction={cat.primaryAction}
+                />
+              )
+            })}
+          </ul>
+          {remaining > 0 && (
+            <details className="border-t border-gray-100">
+              <summary className="cursor-pointer list-none px-4 py-2 text-xs font-medium text-red-600 hover:underline">
+                + {remaining} weitere Pin{remaining === 1 ? '' : 's'} anzeigen
+              </summary>
+              <ul className="divide-y divide-gray-100">
+                {pins.slice(3).map((p) => {
+                  const pinData = buildPinData(p)
+                  return (
+                    <HandlungsbedarfPinRow
+                      key={p.id}
+                      pin={pinData}
+                      kategorie={cat.diagnose}
+                      metrics={buildMetrics(cat, pinData)}
+                      primaryAction={cat.primaryAction}
+                    />
+                  )
+                })}
+              </ul>
+            </details>
+          )}
+        </div>
+      )}
+    </details>
   )
 }
 
