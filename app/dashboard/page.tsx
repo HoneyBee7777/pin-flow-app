@@ -1332,10 +1332,7 @@ function HandlungsbedarfKategorieCard({
   const remaining = pins.length - visiblePins.length
 
   return (
-    <details
-      className="group rounded-lg border border-gray-200 bg-white shadow-sm"
-      open={pins.length > 0}
-    >
+    <details className="group rounded-lg border border-gray-200 bg-white shadow-sm">
       <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
         <span className="text-2xl leading-none text-gray-400" aria-hidden>
           <span className="inline group-open:hidden">▸</span>
@@ -1711,39 +1708,39 @@ function BoardGesundheitSection({ boards }: { boards: BoardHealthData[] }) {
 function PerformanceVerlaufSection({ points }: { points: ChartPoint[] }) {
   const headingTooltip =
     'Hier siehst du die Entwicklung deiner wichtigsten Metriken über die letzten 12 Monate (rollierend). Sobald ein neuer Monat hinzukommt, fällt der älteste raus.'
-  const heading = (
-    <h2 className="text-lg font-semibold text-gray-900">
-      <LabelWithTooltip
-        label="Performance-Verlauf"
-        tooltip={headingTooltip}
-      />
-    </h2>
-  )
+  const tooLittle = points.length < 3
+  const datapointLabel =
+    points.length === 1 ? '1 Datenpunkt' : `${points.length} Datenpunkte`
 
-  if (points.length < 3) {
-    const datapointLabel =
-      points.length === 1
-        ? '1 Datenpunkt'
-        : `${points.length} Datenpunkte`
-    return (
-      <section>
-        {heading}
-        <div className="mt-3 flex h-72 items-center justify-center rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-          <p className="text-center text-sm text-gray-400">
-            Der Verlauf wird ab dem 3. Monat sichtbar.
-            <br />
-            Aktuell verfügbar: {datapointLabel}.
-          </p>
-        </div>
-      </section>
-    )
-  }
   return (
     <section>
-      {heading}
-      <div className="mt-3 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-        <PerformanceChart data={points} />
-      </div>
+      <details className="group rounded-lg border border-gray-200 bg-white shadow-sm">
+        <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
+          <span className="text-2xl leading-none text-gray-400" aria-hidden>
+            <span className="inline group-open:hidden">▸</span>
+            <span className="hidden group-open:inline">▾</span>
+          </span>
+          <h2 className="flex-1 text-lg font-semibold text-gray-900">
+            <LabelWithTooltip
+              label="Performance-Verlauf"
+              tooltip={headingTooltip}
+            />
+          </h2>
+        </summary>
+        <div className="border-t border-gray-200 p-4">
+          {tooLittle ? (
+            <div className="flex h-72 items-center justify-center">
+              <p className="text-center text-sm text-gray-400">
+                Der Verlauf wird ab dem 3. Monat sichtbar.
+                <br />
+                Aktuell verfügbar: {datapointLabel}.
+              </p>
+            </div>
+          ) : (
+            <PerformanceChart data={points} />
+          )}
+        </div>
+      </details>
     </section>
   )
 }
