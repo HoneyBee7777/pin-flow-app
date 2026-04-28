@@ -8,7 +8,10 @@
       "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\('supabase-js:', p.dependencies['@supabase/supabase-js']\\); console.log\\('supabase/ssr:', p.dependencies['@supabase/ssr']\\);\")",
       "Bash(python *)",
       "Read(//tmp/**)",
-      "Bash(curl -sS -o /tmp/dash.html -w \"HTTP=%{http_code}\\\\n\" http://localhost:3002/dashboard)"
+      "Bash(curl -sS -o /tmp/dash.html -w \"HTTP=%{http_code}\\\\n\" http://localhost:3002/dashboard)",
+      "Bash(rm -rf .next)",
+      "Bash(npx next *)",
+      "Bash(curl *)"
     ]
   }
 }

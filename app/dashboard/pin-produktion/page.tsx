@@ -50,12 +50,65 @@ type ContentRaw = {
 
 type DuplRow = { canva_vorlage_id: string; ziel_url_id: string }
 
+// Self-healing Status-Reconciliation: gleicht alle Pins des aktuellen Nutzers
+// auf den korrekten Status an, basierend auf geplante_veroeffentlichung.
+// Idempotent — die `.neq('status', …)`-Filter sorgen dafür, dass nur Pins mit
+// abweichendem Status angefasst werden. Läuft bei jedem Seitenaufruf als
+// stiller No-Op, sobald alles synchron ist. Vergleichs-Datum: Berlin-Lokal
+// (matched mit `computeStatus` in actions.ts).
+async function reconcilePinStatus(
+  supabase: ReturnType<typeof createClient>,
+  userId: string
+): Promise<void> {
+  const today = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Berlin',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date())
+
+  try {
+    // 1. Kein Datum → 'entwurf'
+    await supabase
+      .from('pins')
+      .update({ status: 'entwurf' })
+      .eq('user_id', userId)
+      .is('geplante_veroeffentlichung', null)
+      .neq('status', 'entwurf')
+
+    // 2. Datum > heute → 'geplant'
+    await supabase
+      .from('pins')
+      .update({ status: 'geplant' })
+      .eq('user_id', userId)
+      .gt('geplante_veroeffentlichung', today)
+      .neq('status', 'geplant')
+
+    // 3. Datum <= heute → 'veroeffentlicht'
+    await supabase
+      .from('pins')
+      .update({ status: 'veroeffentlicht' })
+      .eq('user_id', userId)
+      .lte('geplante_veroeffentlichung', today)
+      .neq('status', 'veroeffentlicht')
+  } catch (err) {
+    // Fehler beim Reconcile blockiert das Seiten-Rendering nicht — die
+    // Anzeige nutzt im Worst-Case den alten DB-Status, das ist tolerierbar.
+    console.error('[PinProduktion] Status-Reconcile fehlgeschlagen:', err)
+  }
+}
+
 export default async function PinProduktionPage() {
   const supabase = createClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) return null
+
+  // Status-Migration VOR dem Pin-Fetch ausführen, damit die Tabelle direkt die
+  // korrekten Werte zeigt. await ist wichtig — sonst läuft der Fetch noch
+  // gegen den alten Zustand.
+  await reconcilePinStatus(supabase, user.id)
 
   const [
     pinsRes,

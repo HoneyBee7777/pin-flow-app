@@ -6,7 +6,6 @@ import {
   CONVERSION_ZIELE,
   HOOK_ARTEN,
   PIN_FORMATE,
-  STATUS,
   STRATEGIE_TYPEN,
   type ConversionZiel,
   type HookArt,
@@ -15,8 +14,30 @@ import {
   type StrategieTyp,
 } from './utils'
 
-function isStatus(value: string): value is Status {
-  return (STATUS as readonly string[]).includes(value)
+// Status wird automatisch aus dem Veröffentlichungsdatum abgeleitet — kein
+// manueller Status-Input mehr (siehe Pin-Anlege-Maske).
+//
+// Wichtig: Vergleich gegen Berlin-Lokalzeit, NICHT UTC.
+// Der HTML-Date-Picker liefert eine TZ-naive Lokal-Datumsangabe (z.B.
+// „2026-04-28" wenn die Nutzerin in Berlin auf „heute" klickt). Würden wir
+// das gegen UTC-„today" vergleichen, käme abends in Berlin (UTC noch
+// gestern) ein falsches „geplant" raus — der Pin wäre laut Logik in der
+// Zukunft, obwohl es gerade „heute" ist. Mit `Europe/Berlin` als TZ-Anker
+// matchen Server- und Client-Datum auch bei Tageswechseln.
+function todayInBerlin(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Berlin',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date())
+}
+
+function computeStatus(dateIso: string | null): Status {
+  if (!dateIso) return 'entwurf'
+  const today = todayInBerlin()
+  if (dateIso > today) return 'geplant'
+  return 'veroeffentlicht'
 }
 function isStrategie(value: string): value is StrategieTyp {
   return (STRATEGIE_TYPEN as readonly string[]).includes(value)
@@ -73,10 +94,6 @@ function parseInput(
   const content_id = String(formData.get('content_id') ?? '').trim()
   if (!content_id) return { error: 'Bitte einen Content-Inhalt wählen.' }
 
-  const statusRaw = String(formData.get('status') ?? '')
-  if (!isStatus(statusRaw))
-    return { error: 'Bitte einen gültigen Status wählen.' }
-
   const strategieRaw = String(formData.get('strategie_typ') ?? '').trim()
   if (strategieRaw && !isStrategie(strategieRaw))
     return { error: 'Ungültiger Strategie-Typ.' }
@@ -131,7 +148,7 @@ function parseInput(
       conversion_ziel: conversionRaw ? (conversionRaw as ConversionZiel) : null,
       hook_art: hookArtRaw ? (hookArtRaw as HookArt) : null,
       pin_format: pinFormatRaw ? (pinFormatRaw as PinFormat) : null,
-      status: statusRaw,
+      status: computeStatus(datumRaw),
       geplante_veroeffentlichung: datumRaw,
       keyword_ids: readIds(formData, 'keyword_ids'),
     },
@@ -216,7 +233,14 @@ export async function addPin(
   )
   if ('error' in resolved) return { error: resolved.error }
 
-  const pinFields = { ...rest, ziel_url_id: resolved.id }
+  // Status defensiv NEU berechnen direkt vor dem Insert — garantiert dass
+  // niemals ein vom Client geliefertes Status-Feld in die DB landet, auch
+  // wenn irgendwo upstream FormData manipuliert wurde.
+  const pinFields = {
+    ...rest,
+    ziel_url_id: resolved.id,
+    status: computeStatus(rest.geplante_veroeffentlichung),
+  }
 
   const { data: inserted, error } = await supabase
     .from('pins')
@@ -266,7 +290,14 @@ export async function updatePin(
   )
   if ('error' in resolved) return { error: resolved.error }
 
-  const pinFields = { ...rest, ziel_url_id: resolved.id }
+  // Status defensiv NEU berechnen direkt vor dem Update — garantiert dass
+  // niemals ein vom Client geliefertes Status-Feld in die DB landet, auch
+  // wenn irgendwo upstream FormData manipuliert wurde.
+  const pinFields = {
+    ...rest,
+    ziel_url_id: resolved.id,
+    status: computeStatus(rest.geplante_veroeffentlichung),
+  }
 
   const { error } = await supabase.from('pins').update(pinFields).eq('id', id)
   if (error) return { error: error.message }
@@ -295,13 +326,15 @@ export async function deletePin(formData: FormData): Promise<void> {
   revalidatePath('/dashboard')
 }
 
+// Status NICHT mehr Teil des Import-Schemas — wird beim Speichern aus dem
+// Datum berechnet (siehe computeStatus). CSV-Vorlage hat keine Status-Spalte
+// mehr.
 export type ImportPinRow = {
   titel: string | null
   hook: string | null
   beschreibung: string | null
   call_to_action: string | null
   pin_format: PinFormat | null
-  status: Status
   geplante_veroeffentlichung: string | null
   board_id: string | null
   ziel_url_id: string | null
@@ -332,8 +365,6 @@ export async function importPins(args: {
   for (let i = 0; i < args.rows.length; i++) {
     const r = args.rows[i]
     const lineNo = i + 2
-    if (!isStatus(r.status))
-      return { error: `Zeile ${lineNo}: Status "${r.status}" ungültig.` }
     if (r.pin_format && !isPinFormat(r.pin_format))
       return {
         error: `Zeile ${lineNo}: Pin-Format "${r.pin_format}" ungültig.`,
@@ -355,6 +386,8 @@ export async function importPins(args: {
       }
   }
 
+  // Status wird beim Import aus dem Datum neu berechnet — entspricht der
+  // Pin-Anlege-Maske. Der CSV-Status dient nur noch als Validierungs-Check.
   const inserts = args.rows.map((r) => ({
     user_id: user.id,
     content_id: contentId,
@@ -363,7 +396,7 @@ export async function importPins(args: {
     beschreibung: r.beschreibung ? r.beschreibung.slice(0, 500) : r.beschreibung,
     call_to_action: r.call_to_action,
     pin_format: r.pin_format,
-    status: r.status,
+    status: computeStatus(r.geplante_veroeffentlichung),
     geplante_veroeffentlichung: r.geplante_veroeffentlichung,
     board_id: r.board_id,
     ziel_url_id: r.ziel_url_id,

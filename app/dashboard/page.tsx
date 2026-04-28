@@ -139,11 +139,20 @@ type ActionablePin = {
   // Felder bleiben null bis zum Enrich-Pass; siehe Block „Board-Verknüpfung".
   boardId: string | null
   boardName: string | null
-  // 'Top' | 'Wachstum' | 'Solide' | 'Schwach' | 'Schlafend' | null (= Board ohne Analytics)
-  boardScoreLabel: string | null
-  boardIsWeak: boolean
+  // Status aus der Board-Gesundheit-Klassifizierung (assignCategory). Single
+  // Source of Truth für Farbe + Warnhinweis im Pin-Handlungsbedarf.
+  // null = Board ohne Analytics (eigener Anzeigefall).
+  boardScoreLabel: BoardScoreLabel | null
   boardHasAnalytics: boolean
 }
+
+type BoardScoreLabel =
+  | 'Top'
+  | 'Wachstum'
+  | 'Solide'
+  | 'Schwach'
+  | 'Schlafend'
+  | 'Inaktiv'
 
 type BoardDashHealth = {
   id: string
@@ -165,7 +174,7 @@ type BoardDashHealth = {
   lastPinId: string | null
 }
 
-type BoardCat = BoardScore | 'schlafende_top'
+type BoardCat = BoardScore | 'schlafende_top' | 'inaktive'
 
 type WinItem =
   | { kind: 'pin'; titel: string; growthPct: number }
@@ -196,7 +205,7 @@ type BoardCatConfig = {
 const BOARD_CATEGORIES: BoardCatConfig[] = [
   {
     key: 'schlafende_top',
-    emoji: '🔺',
+    emoji: '💤',
     label: 'Schlafende Top-Boards',
     subtitle:
       'Stark performende Boards aktuell ohne Aktivität – größtes ungenutztes Potenzial.',
@@ -216,6 +225,30 @@ const BOARD_CATEGORIES: BoardCatConfig[] = [
     metrics: ['er', 'impressionen', 'klicks'],
     emptyMessage:
       'Aktuell keine schlafenden Top-Boards – deine starken Boards werden aktiv bepinnt. Sehr gut!',
+    prominentLastPin: true,
+  },
+  {
+    key: 'inaktive',
+    emoji: '⏸️',
+    label: 'Inaktive Boards',
+    subtitle:
+      'Boards mit mittlerer Performance, aktuell ohne neue Pins – Reaktivierung lohnt sich.',
+    tooltip:
+      'Boards mit mittlerer Engagement Rate, die seit über 30 Tagen keine neuen Pins erhalten haben. Auch ohne Top-Performance profitieren Boards von regelmäßigem Bepinnen – sonst verliert Pinterest das thematische Vertrauen.',
+    iconBg: 'bg-orange-50 text-orange-700',
+    counterBg: 'bg-orange-50 text-orange-700',
+    hint: '💡 Der Hebel: Inaktive Boards mit mittlerer Performance können wieder hochgefahren werden – Pinterest belohnt regelmäßige Aktivität, auch bei stabilen Werten.',
+    nextStep:
+      '🎯 So gehst du vor: Mit 2-3 neuen Pins pro Woche reaktivieren – das hält die Sichtbarkeit aufrecht und kann zur Performance-Verbesserung führen.',
+    hintTone: 'orange',
+    primary: {
+      label: 'Pins planen',
+      href: (b) => `/dashboard/pin-produktion?new=1&board=${b.id}`,
+    },
+    primaryButtonClass: 'bg-red-600 text-white hover:bg-red-700',
+    metrics: ['er', 'impressionen', 'klicks'],
+    emptyMessage:
+      'Aktuell keine inaktiven solide Boards – deine soliden Boards werden alle aktiv bepinnt.',
     prominentLastPin: true,
   },
   {
@@ -288,7 +321,7 @@ const BOARD_CATEGORIES: BoardCatConfig[] = [
   },
   {
     key: 'schwach',
-    emoji: '💤',
+    emoji: '📉',
     label: 'Schwache Boards',
     subtitle:
       'Geringe Engagement Rate – Pin-Designs überarbeiten oder Keywords in Titel und Beschreibung optimieren.',
@@ -355,10 +388,11 @@ const HANDLUNGS_CATEGORIES: HandlungsCategory[] = [
       varianteTyp: 'variante',
       label: 'Variante produzieren',
     },
-    metrics: ['klicks', 'ctr', 'alter', 'push'],
+    metrics: ['klicks', 'ctr', 'impressionen', 'alter', 'push'],
     metricLabels: {
       klicks: 'Klicks',
       ctr: 'CTR',
+      impressionen: 'Impressionen',
       alter: 'Alter',
       push: 'Algorithmus-Push',
     },
@@ -466,13 +500,21 @@ export default async function DashboardPage() {
       )
       .eq('user_id', user.id)
       .maybeSingle(),
-    supabase
-      .from('pins_analytics')
-      .select(
-        `id, pin_id, datum, impressionen, klicks, saves, created_at,
-         pins ( id, titel, status, created_at, geplante_veroeffentlichung, pinterest_pin_url, board_id )`
-      )
-      .order('datum', { ascending: false }),
+    // pins_analytics: erweitert um pins.board_id für die Pin↔Board-Verknüpfung
+    // (Etappe 3). Bei Netzwerk-/RLS-Fehler wird auf leeres Array zurückgefallen,
+    // damit die Dashboard-Seite weiter rendert statt komplett zu crashen.
+    Promise.resolve(
+      supabase
+        .from('pins_analytics')
+        .select(
+          `id, pin_id, datum, impressionen, klicks, saves, created_at,
+           pins ( id, titel, status, created_at, geplante_veroeffentlichung, pinterest_pin_url, board_id )`
+        )
+        .order('datum', { ascending: false })
+    ).catch((err: unknown) => {
+      console.error('[Dashboard] pins_analytics query failed:', err)
+      return { data: [], error: err as Error }
+    }),
     supabase
       .from('saison_events')
       .select(
@@ -495,9 +537,17 @@ export default async function DashboardPage() {
       .from('dashboard_erledigt')
       .select('pin_id, kategorie, created_at, pins ( id, titel )')
       .eq('user_id', user.id),
-    supabase
-      .from('pins')
-      .select('id, status, created_at, geplante_veroeffentlichung, board_id'),
+    // pins: alle Status-Stufen für Pin-Anzahl pro Board (Etappe 3).
+    // Bei Netzwerk-/RLS-Fehler leeres Array → veroeffentlichtePinsCount = 0
+    // und keine Reaktivierungs-Hinweise; restliche Sektionen rendern normal.
+    Promise.resolve(
+      supabase
+        .from('pins')
+        .select('id, status, created_at, geplante_veroeffentlichung, board_id')
+    ).catch((err: unknown) => {
+      console.error('[Dashboard] pins query failed:', err)
+      return { data: [], error: err as Error }
+    }),
     supabase.from('boards').select('id, name, pinterest_url, created_at'),
     supabase
       .from('board_analytics')
@@ -599,6 +649,11 @@ export default async function DashboardPage() {
       pinterestUrl: pin?.pinterest_pin_url ?? null,
       diagnose,
       handlung: PIN_HANDLUNG[diagnose],
+      boardId: pin?.board_id ?? null,
+      // Board-Felder werden nach boardsHealth-Berechnung gefüllt.
+      boardName: null,
+      boardScoreLabel: null,
+      boardHasAnalytics: false,
     })
   }
   const hasAnyAnalytics = rawPinAnalytics.length > 0
@@ -859,25 +914,65 @@ export default async function DashboardPage() {
     }
   })
 
+  // Board-Verknüpfung pro Pin — anreichern, sobald boardsHealth existiert.
+  // Klassifizierung 1:1 aus assignCategory (gleiche Logik wie Board-Gesundheit-
+  // Sektion):
+  //   - Inaktiv + (top|wachstum) → 'Schlafend'
+  //   - Inaktiv + solide          → 'Inaktiv'
+  //   - Inaktiv + schwach         → 'Schwach' (Performance dominiert)
+  //   - Sonst                     → score-Label
+  const boardHealthById = new Map<string, BoardDashHealth>()
+  for (const b of boardsHealth) boardHealthById.set(b.id, b)
+  for (const p of actionable) {
+    if (!p.boardId) continue
+    const b = boardHealthById.get(p.boardId)
+    if (!b) continue
+    p.boardName = b.name
+    p.boardHasAnalytics = b.hasAnalytics
+    if (!b.hasAnalytics) {
+      p.boardScoreLabel = null
+      continue
+    }
+    if (b.status === 'inaktiv') {
+      if (b.score === 'top' || b.score === 'wachstum') {
+        p.boardScoreLabel = 'Schlafend'
+        continue
+      }
+      if (b.score === 'solide') {
+        p.boardScoreLabel = 'Inaktiv'
+        continue
+      }
+      // schwach + inaktiv → fällt durch zur Score-Zuordnung unten
+    }
+    if (b.score === 'top') p.boardScoreLabel = 'Top'
+    else if (b.score === 'wachstum') p.boardScoreLabel = 'Wachstum'
+    else if (b.score === 'solide') p.boardScoreLabel = 'Solide'
+    else p.boardScoreLabel = 'Schwach'
+  }
+
   type BoardAssignment = BoardCat | 'ohne_analytics' | 'leeres_board'
+  // Routing-Reihenfolge:
+  //   1. Inaktiv + (Top|Wachstum) → schlafende_top
+  //   2. Inaktiv + Solide          → inaktive
+  //   3. Schwach (egal welcher Status) → schwach
+  //   4. Sonst (aktiv|wenig_aktiv) → score (top|wachstum|solide)
+  // „inaktive" enthält nur solide Boards ohne Aktivität — schwache inaktive
+  // Boards landen weiterhin in der Schwach-Kategorie (Performance-Issue
+  // dominiert über Aktivitäts-Issue).
   function assignCategory(b: BoardDashHealth): BoardAssignment {
     if (!b.hasAnalytics) return 'ohne_analytics'
-    // Boards ohne Pins (anzahl_pins = 0/null) werden NICHT in den
-    // Kategorien angezeigt. Stattdessen separater Footer-Hinweis.
     if ((b.anzahlPins ?? 0) <= 0) return 'leeres_board'
-    // Schlafende Top: starkes Board (top oder wachstum), aber inaktiv —
-    // ungenutztes Potenzial, eigene Kategorie vor dem Score-Routing.
-    if (
-      b.status === 'inaktiv' &&
-      (b.score === 'top' || b.score === 'wachstum')
-    ) {
-      return 'schlafende_top'
+    if (b.status === 'inaktiv') {
+      if (b.score === 'top' || b.score === 'wachstum') return 'schlafende_top'
+      if (b.score === 'solide') return 'inaktive'
+      // schwach + inaktiv → Schwach-Kategorie (Performance dominiert)
     }
     return b.score
   }
 
   const boardsByCategory: Record<BoardCat, BoardDashHealth[]> = {
     schlafende_top: [],
+    inaktive: [],
     top: [],
     wachstum: [],
     solide: [],
@@ -896,7 +991,9 @@ export default async function DashboardPage() {
       boardsByCategory[assignment].push(b)
     }
   }
-  // Innerhalb jeder Kategorie nach ER DESC sortieren
+  // Innerhalb jeder Kategorie nach ER DESC sortieren. Solide enthält jetzt
+  // nur noch aktive/wenig_aktive Boards (inaktive solide → eigene Kategorie),
+  // daher reicht reine ER-Sortierung überall.
   for (const key of Object.keys(boardsByCategory) as BoardCat[]) {
     boardsByCategory[key].sort(
       (a, b) => (b.engagementRate ?? 0) - (a.engagementRate ?? 0)
@@ -1178,6 +1275,7 @@ export default async function DashboardPage() {
         hasAnyBoardAnalytics={hasAnyBoardAnalytics}
         boardsOhneAnalyticsCount={boardsOhneAnalyticsCount}
         boardsLeerCount={boardsLeerCount}
+        pinsCountByBoard={pinsCountByBoard}
       />
 
       <MeineTopPinsSection pins={topPins} />
@@ -1862,6 +1960,9 @@ function buildPinData(p: ActionablePin): HandlungsbedarfPin {
     alterTage: p.alterTage,
     letzterAnalyticsDatum: p.letzterAnalyticsDatum,
     pinterestUrl: p.pinterestUrl,
+    boardName: p.boardName,
+    boardScoreLabel: p.boardScoreLabel,
+    boardHasAnalytics: p.boardHasAnalytics,
   }
 }
 
@@ -2203,6 +2304,7 @@ function BoardGesundheitDashboardSection({
   hasAnyBoardAnalytics,
   boardsOhneAnalyticsCount,
   boardsLeerCount,
+  pinsCountByBoard,
 }: {
   byCategory: Record<BoardCat, BoardDashHealth[]>
   kpis: {
@@ -2216,6 +2318,7 @@ function BoardGesundheitDashboardSection({
   hasAnyBoardAnalytics: boolean
   boardsOhneAnalyticsCount: number
   boardsLeerCount: number
+  pinsCountByBoard: Map<string, number>
 }) {
   const headingTooltip =
     'Pinterest ist eine Suchmaschine — Keywords bestimmen wer dich findet, Boards bestimmen ob Pinterest dir vertraut. Inaktive Boards bremsen alle Pins darauf und schaden deiner thematischen Autorität. Top Boards signalisieren thematische Expertise und geben neuen Pins automatisch mehr Reichweite.'
@@ -2276,6 +2379,7 @@ function BoardGesundheitDashboardSection({
           value={`${formatPercent(kpis.aktivitaetsratePct, 0)} aktiv`}
           sub={`${kpis.aktivBoardsCount} von ${kpis.boardsTotal} Boards`}
           tooltip="Anteil der Boards, die in den letzten 14 Tagen einen neuen Pin bekommen haben. Pinterest belohnt aktive Boards mit mehr Reichweite."
+          accent={aktivitaetAccent(kpis.aktivitaetsratePct)}
         />
         <BoardKpiCell
           label="Ø Letzter Pin"
@@ -2289,8 +2393,15 @@ function BoardGesundheitDashboardSection({
                   : `vor ${kpis.avgLastPinDays} Tagen`
           }
           tooltip="Im Durchschnitt vor wie vielen Tagen wurde auf deinen Boards zuletzt ein Pin veröffentlicht. Frequenz ist der wichtigste Hebel für Board-Performance."
+          accent={avgPinAccent(kpis.avgLastPinDays)}
         />
       </div>
+
+      <BoardKurzanalyse
+        aktivitaetsratePct={kpis.aktivitaetsratePct}
+        avgLastPinDays={kpis.avgLastPinDays}
+        profilEr={kpis.profilEr}
+      />
 
       <div className="mt-3 space-y-3">
         {BOARD_CATEGORIES.map((cat) => (
@@ -2299,6 +2410,7 @@ function BoardGesundheitDashboardSection({
             cat={cat}
             boards={byCategory[cat.key]}
             thresholds={thresholds}
+            pinsCountByBoard={pinsCountByBoard}
           />
         ))}
 
@@ -2349,6 +2461,137 @@ function BoardGesundheitDashboardSection({
   )
 }
 
+// Regelbasierte Kurzanalyse — keine KI, nur Textbausteine je nach Datenwert.
+// Schwellwerte hier als Konstanten; bei Bedarf später nach einstellungen
+// auslagern (analog zu boardThresholds).
+function BoardKurzanalyse({
+  aktivitaetsratePct,
+  avgLastPinDays,
+  profilEr,
+}: {
+  aktivitaetsratePct: number
+  avgLastPinDays: number | null
+  profilEr: number | null
+}) {
+  const lines: string[] = []
+
+  // Baustein 1 — Aktivitätsrate
+  if (aktivitaetsratePct >= 70) {
+    lines.push('Deine Boards sind aktiv – das ist eine starke Basis.')
+  } else if (aktivitaetsratePct >= 40) {
+    lines.push(
+      'Etwa die Hälfte deiner Boards wird aktiv bepinnt – hier ist Luft nach oben.'
+    )
+  } else {
+    const inaktivPct = Math.round(100 - aktivitaetsratePct)
+    lines.push(
+      `${inaktivPct}% deiner Boards sind nicht aktiv – das bremst dein Pinterest-Wachstum.`
+    )
+  }
+
+  // Baustein 2 — Ø Letzter Pin
+  if (avgLastPinDays !== null) {
+    const d = avgLastPinDays
+    if (d <= 7) {
+      lines.push(
+        'Im Schnitt pinnst du fast täglich – der Algorithmus bekommt konstant Material.'
+      )
+    } else if (d <= 14) {
+      lines.push(
+        'Im Schnitt pinnst du etwa wöchentlich – solide, könnte aber öfter sein.'
+      )
+    } else if (d <= 30) {
+      lines.push(
+        `Im Schnitt wird auf jedem Board nur alle ${d} Tage gepinnt – das ist zu wenig für stabiles Wachstum.`
+      )
+    } else {
+      lines.push(
+        `Im Schnitt wird auf jedem Board nur alle ${d} Tage gepinnt – das ist deutlich zu wenig für Pinterest-Wachstum.`
+      )
+    }
+  }
+
+  // Baustein 3 — Ø Engagement Rate
+  if (profilEr !== null) {
+    if (profilEr >= 5) {
+      lines.push(
+        'Deine Engagement Rate ist überdurchschnittlich – Pinterest erkennt thematische Stärke.'
+      )
+    } else if (profilEr >= 3) {
+      lines.push('Deine Engagement Rate ist solide – über dem Pinterest-Schnitt.')
+    } else if (profilEr >= 1.5) {
+      lines.push(
+        'Deine Engagement Rate liegt im normalen Bereich – Optimierungspotenzial vorhanden.'
+      )
+    } else {
+      lines.push(
+        'Deine Engagement Rate liegt unter dem Pinterest-Schnitt – Hooks und Themen prüfen.'
+      )
+    }
+  }
+
+  // Baustein 4 — Handlungsempfehlung. Reihenfolge = Priorität: erste passende
+  // Regel gewinnt. Wenn keine kritische Bedingung greift und alle Werte im
+  // grünen Bereich sind → „Weiter so". Sonst keine Empfehlung (40-69% mit
+  // grüner ER bekommt z.B. keine, da kein klarer Hebel sichtbar).
+  const r = aktivitaetsratePct
+  const d = avgLastPinDays
+  const er = profilEr
+  let rec: string | null = null
+  if (r < 40 && d !== null && d > 14) {
+    rec =
+      '🎯 Größter Hebel: Pinning-Frequenz erhöhen – mindestens 3 neue Pins pro Woche pro aktivem Board.'
+  } else if (r < 40 && d !== null && d <= 14) {
+    rec =
+      '🎯 Größter Hebel: Inaktive Boards reaktivieren – das Pinning auf mehr Boards verteilen.'
+  } else if (r >= 70 && er !== null && er < 3) {
+    rec =
+      '🎯 Größter Hebel: Pin-Designs und Hooks optimieren – die Aktivität stimmt, aber das Engagement bleibt zurück.'
+  } else if (
+    r >= 70 &&
+    (d === null || d <= 14) &&
+    (er === null || er >= 3)
+  ) {
+    rec = '🎯 Weiter so – Dranbleiben ist der wichtigste Hebel.'
+  }
+
+  if (lines.length === 0 && !rec) return null
+
+  // Eine zusammenhängende Karte mit dezenter orange-Akzentkante links —
+  // subtile Hervorhebung, nicht dominant. Empfehlung optisch leicht stärker
+  // (font-medium) als die Lage-Bausteine, damit der Hebel hervorsticht.
+  return (
+    <div className="mt-3 rounded-md border border-gray-200 border-l-[3px] border-l-orange-300 bg-gray-50 p-4">
+      <div className="flex items-start gap-3 text-sm text-gray-700">
+        <span aria-hidden className="text-base leading-tight">
+          📊
+        </span>
+        <div className="space-y-1.5">
+          {lines.map((l, i) => (
+            <p key={i} className="text-sm leading-relaxed">
+              {l}
+            </p>
+          ))}
+          {rec && (
+            <p className="text-sm font-medium text-gray-900 leading-relaxed">
+              {rec}
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+type KpiAccent = 'green' | 'yellow' | 'red' | 'gray' | null
+
+const KPI_ACCENT_CLASS: Record<Exclude<KpiAccent, null>, string> = {
+  green: 'border-l-4 border-l-green-500',
+  yellow: 'border-l-4 border-l-yellow-500',
+  red: 'border-l-4 border-l-red-500',
+  gray: 'border-l-4 border-l-gray-400',
+}
+
 function BoardKpiCell({
   label,
   value,
@@ -2356,6 +2599,7 @@ function BoardKpiCell({
   tooltip,
   sub,
   highlight = false,
+  accent = null,
 }: {
   label: string
   value: string
@@ -2363,10 +2607,15 @@ function BoardKpiCell({
   tooltip?: string
   sub?: string
   highlight?: boolean
+  accent?: KpiAccent
 }) {
+  // Hero (Engagement Rate) hat eigenen 2px-Rahmen — kein zusätzlicher Akzent.
+  // Andernfalls dezenter Linksrand-Akzent gemäß Datenwert.
   const borderCls = highlight
     ? 'border-2 border-green-200'
-    : 'border border-gray-200'
+    : accent
+      ? `border border-gray-200 ${KPI_ACCENT_CLASS[accent]}`
+      : 'border border-gray-200'
   return (
     <div className={`rounded-lg ${borderCls} bg-white p-4 shadow-sm`}>
       <div className="text-[11px] uppercase tracking-wide text-gray-500">
@@ -2380,21 +2629,43 @@ function BoardKpiCell({
   )
 }
 
+function aktivitaetAccent(pct: number): KpiAccent {
+  if (pct >= 70) return 'green'
+  if (pct >= 40) return 'yellow'
+  return 'red'
+}
+
+function avgPinAccent(days: number | null): KpiAccent {
+  if (days === null) return null
+  if (days <= 7) return 'green'
+  if (days <= 14) return 'gray'
+  if (days <= 30) return 'yellow'
+  return 'red'
+}
+
 function BoardKategorieCard({
   cat,
   boards,
   thresholds,
+  pinsCountByBoard,
 }: {
   cat: BoardCatConfig
   boards: BoardDashHealth[]
   thresholds: BoardThresholds
+  pinsCountByBoard: Map<string, number>
 }) {
   const visible = boards.slice(0, 3)
   const remaining = boards.length - visible.length
   const tone = BOARD_HINT_TONE[cat.hintTone]
+  // Schlafende Top-Boards startet aufgeklappt — höchste Priorität für die
+  // Nutzerin (ungenutztes Potenzial). Alle anderen Kategorien zugeklappt.
+  const defaultOpen = cat.key === 'schlafende_top'
 
   return (
-    <details className="group rounded-lg border border-gray-200 bg-white shadow-sm">
+    <details
+      className="group rounded-lg border border-gray-200 bg-white shadow-sm"
+      open={defaultOpen}
+    >
       <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
         <span className="text-2xl leading-none text-gray-400" aria-hidden>
           <span className="inline group-open:hidden">▸</span>
@@ -2438,19 +2709,37 @@ function BoardKategorieCard({
             <div>{cat.hint}</div>
             <div>{cat.nextStep}</div>
           </div>
-          <ul className="divide-y divide-gray-100">
+          <ul className="space-y-4 py-3">
             {visible.map((b) => (
-              <BoardRow key={b.id} board={b} cat={cat} thresholds={thresholds} />
+              <BoardRow
+                key={b.id}
+                board={b}
+                cat={cat}
+                thresholds={thresholds}
+                pinsInDb={pinsCountByBoard.get(b.id) ?? 0}
+              />
             ))}
           </ul>
           {remaining > 0 && (
-            <details className="border-t border-gray-100">
-              <summary className="cursor-pointer list-none px-4 py-2 text-xs font-medium text-red-600 hover:underline">
-                + {remaining} weitere Board{remaining === 1 ? '' : 's'} anzeigen
+            <details className="group border-t border-gray-100">
+              <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
+                <span className="text-lg leading-none text-gray-400" aria-hidden>
+                  <span className="inline group-open:hidden">▸</span>
+                  <span className="hidden group-open:inline">▾</span>
+                </span>
+                <span>
+                  {remaining} weitere Board{remaining === 1 ? '' : 's'} anzeigen
+                </span>
               </summary>
-              <ul className="divide-y divide-gray-100">
+              <ul className="space-y-4 py-3">
                 {boards.slice(3).map((b) => (
-                  <BoardRow key={b.id} board={b} cat={cat} thresholds={thresholds} />
+                  <BoardRow
+                key={b.id}
+                board={b}
+                cat={cat}
+                thresholds={thresholds}
+                pinsInDb={pinsCountByBoard.get(b.id) ?? 0}
+              />
                 ))}
               </ul>
             </details>
@@ -2506,15 +2795,18 @@ const SOLIDE_PINS_MIN = 10
 const SOLIDE_IMPRESSIONS_MIN = 1000
 const SOLIDE_ER_TARGET = 5.0
 
+// Liefert die Lücke des Solide-Boards als „[Defizit] – [Aktion]"-Phrase
+// (ohne führendes „Was fehlt:"). Wird im warum-Text als Anschluss an
+// „Stabile ER (X%), aber …" eingebaut. null = keine erkennbare Lücke.
 function buildWasFehltText(b: BoardDashHealth): string | null {
   const pins = b.anzahlPins ?? 0
   const imp = b.impressionen
   const er = b.engagementRate
   if (pins < SOLIDE_PINS_MIN && imp < SOLIDE_IMPRESSIONS_MIN) {
-    return 'Was fehlt: Pin-Volumen erhöhen – mehr Material für Pinterest.'
+    return 'wenig Pin-Volumen – mehr Material für Pinterest erstellen.'
   }
   if (pins >= SOLIDE_PINS_MIN && imp < SOLIDE_IMPRESSIONS_MIN) {
-    return 'Was fehlt: Reichweite – Keywords in Titel und Beschreibung optimieren.'
+    return 'niedrige Reichweite – Keywords optimieren.'
   }
   if (
     pins >= SOLIDE_PINS_MIN &&
@@ -2522,9 +2814,36 @@ function buildWasFehltText(b: BoardDashHealth): string | null {
     er !== null &&
     er < SOLIDE_ER_TARGET
   ) {
-    return 'Was fehlt: Engagement – Pin-Designs und Hooks überarbeiten.'
+    return 'niedriges Engagement – Pin-Designs und Hooks überarbeiten.'
   }
   return null
+}
+
+// Hinweis „vorbereitete Pins in der Datenbank" — nur in Kategorien mit
+// ungenutztem Reaktivierungs-Potenzial: Schlafende Top, Solide, Schwach.
+// Top/Wachstum sind bereits aktiv → kein Hinweis (gibt nur Rauschen).
+//
+// Differenz-Logik:
+//   prepared = dbCount (alle Pins mit board_id) − publishedCount (anzahl_pins
+//   aus board_analytics, also was Pinterest aktuell sieht).
+// Wenn prepared > 0 → einsetzbares Reaktivierungs-Material vorhanden.
+// Wenn prepared < 0 → Datenbank ist nicht synchron (Pinterest hat Pins, die
+// in der lokalen Erfassung fehlen).
+function buildPinsInDbLine(
+  cat: BoardCat,
+  dbCount: number,
+  publishedCount: number | null
+): string | null {
+  if (cat === 'top' || cat === 'wachstum') return null
+  // Sync-Lücke: lokale Erfassung kennt weniger Pins als Pinterest meldet.
+  if (publishedCount !== null && dbCount < publishedCount) {
+    return '📌 Datenbank nicht vollständig synchronisiert – einige veröffentlichte Pins fehlen noch in deiner Pin-Erfassung.'
+  }
+  const prepared = Math.max(0, dbCount - (publishedCount ?? 0))
+  if (prepared <= 0) {
+    return '📌 Keine vorbereiteten Pins in deiner Datenbank – Pin-Pipeline auffüllen für schnelle Reaktivierung.'
+  }
+  return `📌 ${prepared} weitere ${prepared === 1 ? 'Pin' : 'Pins'} in deiner Datenbank vorbereitet – sofort einsetzbar zur Reaktivierung.`
 }
 
 function buildWarumText(cat: BoardCat, b: BoardDashHealth): string {
@@ -2537,14 +2856,18 @@ function buildWarumText(cat: BoardCat, b: BoardDashHealth): string {
       return `📊 Warum spannend: Engagement Rate ist im Vergleich zum Vormonat um ${trend}% gestiegen – das Board nimmt Fahrt auf.`
     case 'solide': {
       const fehlt = buildWasFehltText(b)
-      const base = `📊 Was funktioniert: ER bei ${er} – stabile Performance.`
-      return fehlt ? `${base} ${fehlt}` : base
+      if (fehlt) return `📊 Stabile ER (${er}), aber ${fehlt}`
+      return `📊 Stabile ER (${er}) – solide Performance.`
     }
     case 'schwach':
       return `📊 Warum schwach: Engagement Rate bei nur ${er} – Nutzer:innen interagieren wenig mit den Themen oder Pin-Designs.`
     case 'schlafende_top': {
       const tage = b.lastPinAlterTage !== null ? `${b.lastPinAlterTage}` : '—'
       return `📊 Warum schlafend: Hohe Engagement Rate (${er}), aber seit ${tage} Tagen keine neuen Pins – ungenutztes Potenzial.`
+    }
+    case 'inaktive': {
+      const tage = b.lastPinAlterTage !== null ? `${b.lastPinAlterTage}` : '—'
+      return `📊 Warum inaktiv: Stabile ER (${er}), aber seit ${tage} Tagen keine neuen Pins – Pinterest verliert das thematische Vertrauen.`
     }
   }
 }
@@ -2553,10 +2876,12 @@ function BoardRow({
   board,
   cat,
   thresholds,
+  pinsInDb,
 }: {
   board: BoardDashHealth
   cat: BoardCatConfig
   thresholds: BoardThresholds
+  pinsInDb: number
 }) {
   const pins = board.anzahlPins ?? 0
   const isEmpty = pins <= 0
@@ -2582,20 +2907,53 @@ function BoardRow({
   })
   const warum = buildWarumText(cat.key, board)
 
+  const metricEls = cat.metrics
+    .map((kind) => {
+      switch (kind) {
+        case 'er':
+          return <ErWithTrend key={kind} board={board} />
+        case 'impressionen':
+          return (
+            <span key={kind}>
+              Impressionen{' '}
+              <strong className="text-gray-900">
+                {formatZahl(board.impressionen)}
+              </strong>
+            </span>
+          )
+        case 'klicks':
+          return (
+            <span key={kind}>
+              Klicks{' '}
+              <strong className="text-gray-900">
+                {formatZahl(board.klicks)}
+              </strong>
+            </span>
+          )
+        default:
+          return null
+      }
+    })
+    .filter((el): el is JSX.Element => el !== null)
+  // Hint-Zeilen tragen den Kategorie-Akzentton (📊 Warum, 📌 Pins). Solide-
+  // Inaktiv-Hinweis behält bewusst eigene Warn-Tönung (orange-700), weil er
+  // ein zusätzliches Achtungssignal setzt, unabhängig vom Kategorie-Tone.
+  const hintToneText = BOARD_HINT_TONE[cat.hintTone].text
+
   return (
-    <li className="px-4 py-3">
+    <li className="px-4">
       <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1 text-sm font-medium text-gray-900">
+          <div className="mb-1.5 flex items-center gap-1.5 text-base font-semibold text-gray-900">
             <span className="truncate">{board.name}</span>
             <InfoTooltip text={scoreTooltip} className="text-gray-400" />
           </div>
-          <div className={`mt-0.5 text-xs ${activityClass}`}>
+          <div className={`text-[13px] ${activityClass}`}>
             {isEmpty ? (
               'Leeres Board · erste Pins veröffentlichen'
             ) : (
               <>
-                {pins} {pins === 1 ? 'Pin' : 'Pins'} ·{' '}
+                {pins} {pins === 1 ? 'Pin veröffentlicht' : 'Pins veröffentlicht'} ·{' '}
                 {board.lastPinId ? (
                   <Link
                     href={`/dashboard/pin-produktion?highlight=${board.lastPinId}`}
@@ -2610,35 +2968,34 @@ function BoardRow({
               </>
             )}
           </div>
-          <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600">
-            {cat.metrics.map((kind) => {
-              switch (kind) {
-                case 'er':
-                  return <ErWithTrend key={kind} board={board} />
-                case 'impressionen':
-                  return (
-                    <span key={kind}>
-                      Impressionen{' '}
-                      <strong className="text-gray-900">
-                        {formatZahl(board.impressionen)}
-                      </strong>
+          {metricEls.length > 0 && (
+            <div className="mt-1 flex flex-wrap items-center gap-y-1 text-[13px] text-gray-500">
+              {metricEls.map((el, idx) => (
+                <span key={idx} className="inline-flex items-center">
+                  {idx > 0 && (
+                    <span className="mx-2 text-gray-400" aria-hidden>
+                      ·
                     </span>
-                  )
-                case 'klicks':
-                  return (
-                    <span key={kind}>
-                      Klicks{' '}
-                      <strong className="text-gray-900">
-                        {formatZahl(board.klicks)}
-                      </strong>
-                    </span>
-                  )
-                default:
-                  return null
-              }
-            })}
-          </div>
-          <div className="mt-2 text-xs text-gray-700">{warum}</div>
+                  )}
+                  {el}
+                </span>
+              ))}
+            </div>
+          )}
+          <div className={`mt-2 text-xs ${hintToneText}`}>{warum}</div>
+          {(() => {
+            const pinsInDbLine = buildPinsInDbLine(
+              cat.key,
+              pinsInDb,
+              board.anzahlPins
+            )
+            if (!pinsInDbLine) return null
+            return (
+              <div className={`mt-1 text-xs ${hintToneText}`}>
+                {pinsInDbLine}
+              </div>
+            )
+          })()}
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <Link

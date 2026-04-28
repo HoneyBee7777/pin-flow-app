@@ -630,8 +630,8 @@ function PinTable({
         </div>
       </div>
 
-      <div className="max-h-[800px] overflow-auto rounded-lg border border-gray-200 bg-white shadow-sm">
-        <table className="min-w-full divide-y divide-gray-200">
+      <TableWithTopScrollbar>
+        <table className="min-w-max divide-y divide-gray-200">
           <thead className="sticky top-0 z-10 bg-gray-50">
             <tr>
               <SortableTh dir={dirOf('titel')} onClick={() => toggleSort('titel')}>
@@ -641,6 +641,7 @@ function PinTable({
                 Board
               </SortableTh>
               <Th>Hook</Th>
+              <Th>Beschreibung</Th>
               <SortableTh dir={dirOf('status')} onClick={() => toggleSort('status')}>
                 Status
               </SortableTh>
@@ -663,7 +664,7 @@ function PinTable({
             {sortedPins.length === 0 ? (
               <tr>
                 <td
-                  colSpan={11}
+                  colSpan={12}
                   className="px-4 py-8 text-center text-sm text-gray-500"
                 >
                   {pins.length === 0
@@ -713,9 +714,21 @@ function PinTable({
                 <td className="max-w-xs px-4 py-3 text-sm text-gray-700">
                   {pin.hook ?? <span className="text-gray-400">—</span>}
                 </td>
+                <td className="max-w-xs px-4 py-3 text-sm text-gray-700">
+                  {pin.beschreibung ? (
+                    <span
+                      className="line-clamp-2 break-words"
+                      title={pin.beschreibung}
+                    >
+                      {pin.beschreibung}
+                    </span>
+                  ) : (
+                    <span className="text-gray-400">—</span>
+                  )}
+                </td>
                 <td className="px-4 py-3 text-sm">
                   <span
-                    className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_BADGE[pin.status]}`}
+                    className={`inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_BADGE[pin.status]}`}
                   >
                     {STATUS_LABEL[pin.status]}
                   </span>
@@ -726,7 +739,7 @@ function PinTable({
                 <td className="px-4 py-3 text-sm">
                   {pin.strategie_typ ? (
                     <span
-                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${STRATEGIE_BADGE[pin.strategie_typ]}`}
+                      className={`inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium ${STRATEGIE_BADGE[pin.strategie_typ]}`}
                     >
                       {STRATEGIE_LABEL[pin.strategie_typ]}
                     </span>
@@ -759,7 +772,7 @@ function PinTable({
                 <td className="px-4 py-3 text-sm text-gray-700">
                   {pin.vorlage?.name ?? <span className="text-gray-400">—</span>}
                 </td>
-                <td className="max-w-xs px-4 py-3 text-sm text-gray-700">
+                <td className="min-w-[200px] max-w-xs px-4 py-3 text-sm text-gray-700">
                   {pin.url ? (
                     <span className="block [word-break:break-all]" title={pin.url.titel}>
                       {pin.url.url}
@@ -794,7 +807,114 @@ function PinTable({
             )}
           </tbody>
         </table>
+      </TableWithTopScrollbar>
+    </div>
+  )
+}
+
+// Tabellen-Wrapper mit horizontalem Scrollbalken oben fixiert.
+//
+// Pattern: zwei separate Scroll-Container nebeneinander, deren scrollLeft
+// synchronisiert wird. Oben ein dünner Spacer-Streifen mit derselben Breite
+// wie die Tabelle, darunter der eigentliche Tabellen-Container.
+//
+// Warum nicht rotateX(180deg)? Der innere `overflow-y: auto`-Container
+// promotet `overflow-x` automatisch zu `auto` (CSS-Spec), was horizontalen
+// Overflow „fängt" bevor er den rotierten äußeren Container erreicht — der
+// Top-Scrollbalken erschiene nie. Der Sync-Ansatz ist robust und arbeitet
+// mit dem normalen Browser-Scrollbar-Verhalten.
+function TableWithTopScrollbar({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  const tableScrollRef = useRef<HTMLDivElement>(null)
+  const topScrollRef = useRef<HTMLDivElement>(null)
+  const [contentWidth, setContentWidth] = useState(0)
+
+  useEffect(() => {
+    const el = tableScrollRef.current
+    if (!el) return
+    const update = () => {
+      const t = el.querySelector('table')
+      if (t) setContentWidth(t.scrollWidth)
+    }
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    const t = el.querySelector('table')
+    if (t) ro.observe(t)
+    return () => ro.disconnect()
+  }, [children])
+
+  // scrollLeft-Sync ohne Flag-Race-Conditions: Idempotenter Vergleich.
+  // Wenn beide Container schon dieselbe Position haben, no-op → kein
+  // Feedback-Loop, auch bei schnellem Scrollen.
+  function syncFrom(source: 'top' | 'table') {
+    const top = topScrollRef.current
+    const table = tableScrollRef.current
+    if (!top || !table) return
+    if (source === 'top') {
+      if (table.scrollLeft !== top.scrollLeft) {
+        table.scrollLeft = top.scrollLeft
+      }
+    } else {
+      if (top.scrollLeft !== table.scrollLeft) {
+        top.scrollLeft = table.scrollLeft
+      }
+    }
+  }
+
+  // Top-Scrollbar IMMER sichtbar erzwingen (auch auf macOS mit auto-
+  // versteckten Overlay-Scrollbars). Inline-Styles machen sie zu „klassischen"
+  // Scrollbalken mit fester Höhe — sonst wäre der Top-Bar nicht zu sehen,
+  // bevor man scrollt.
+  const forceVisibleScrollbar: React.CSSProperties = {
+    overflowX: 'scroll',
+    scrollbarWidth: 'thin',
+    WebkitOverflowScrolling: 'touch',
+  }
+
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
+      <div
+        ref={topScrollRef}
+        onScroll={() => syncFrom('top')}
+        style={forceVisibleScrollbar}
+        className="force-scrollbar border-b border-gray-200"
+      >
+        <div style={{ width: contentWidth, height: 1 }} />
       </div>
+      <div
+        ref={tableScrollRef}
+        onScroll={() => syncFrom('table')}
+        className="max-h-[800px] overflow-auto"
+      >
+        {children}
+      </div>
+      {/*
+        WebKit (Safari/Chrome auf macOS) zeigt Overlay-Scrollbars in
+        leeren Containern manchmal gar nicht. Inline-CSS via <style>:
+        Klassen-Ziel `force-scrollbar` bekommt explizit eine WebKit-
+        Scrollbar mit 10px Höhe und sichtbarem Thumb. Greift nicht in
+        andere Bereiche.
+      */}
+      <style>{`
+        .force-scrollbar::-webkit-scrollbar {
+          height: 10px;
+          -webkit-appearance: none;
+        }
+        .force-scrollbar::-webkit-scrollbar-track {
+          background: rgba(0, 0, 0, 0.04);
+        }
+        .force-scrollbar::-webkit-scrollbar-thumb {
+          background-color: rgba(0, 0, 0, 0.35);
+          border-radius: 5px;
+        }
+        .force-scrollbar::-webkit-scrollbar-thumb:hover {
+          background-color: rgba(0, 0, 0, 0.55);
+        }
+      `}</style>
     </div>
   )
 }
@@ -988,7 +1108,6 @@ function PinForm({
   const [geplanteVeroeffentlichung, setGeplanteVeroeffentlichung] = useState(
     editing?.geplante_veroeffentlichung ?? ''
   )
-  const [status, setStatus] = useState<Status>(editing?.status ?? 'entwurf')
 
   const [formError, setFormError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -1474,22 +1593,6 @@ function PinForm({
             </Field>
           </div>
 
-          <Field label="Status" htmlFor="status" required>
-            <select
-              id="status"
-              name="status"
-              required
-              value={status}
-              onChange={(e) => setStatus(e.target.value as Status)}
-              className={inputCls}
-            >
-              {STATUS.map((s) => (
-                <option key={s} value={s}>
-                  {STATUS_LABEL[s]}
-                </option>
-              ))}
-            </select>
-          </Field>
         </fieldset>
       )}
 
@@ -1555,7 +1658,6 @@ function ManualPinForm({
   const [vorlageId, setVorlageId] = useState('')
   const [saisonEventId, setSaisonEventId] = useState('')
   const [geplanteVeroeffentlichung, setGeplanteVeroeffentlichung] = useState('')
-  const [status, setStatus] = useState<Status>('entwurf')
 
   const [formError, setFormError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -1807,23 +1909,6 @@ function ManualPinForm({
         </div>
       )}
 
-      <Field label="Status" htmlFor="manual_status" required>
-        <select
-          id="manual_status"
-          name="status"
-          required
-          value={status}
-          onChange={(e) => setStatus(e.target.value as Status)}
-          className={inputCls}
-        >
-          {STATUS.map((s) => (
-            <option key={s} value={s}>
-              {STATUS_LABEL[s]}
-            </option>
-          ))}
-        </select>
-      </Field>
-
       {formError && <p className="text-sm text-red-700">{formError}</p>}
 
       <div className="flex gap-2">
@@ -1913,33 +1998,41 @@ function ZielUrlPicker({
 
       {mode === 'list' ? (
         <>
-          <select
-            id={listId}
-            name="ziel_url_id"
-            value={selectedId}
-            onChange={(e) => onSelectedIdChange(e.target.value)}
-            className={inputCls}
-          >
-            <option value="">— keine URL —</option>
-            {urls.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.titel} — {u.url}
-              </option>
-            ))}
-          </select>
+          <div className="flex items-stretch gap-2">
+            <select
+              id={listId}
+              name="ziel_url_id"
+              value={selectedId}
+              onChange={(e) => onSelectedIdChange(e.target.value)}
+              className={`${inputCls} flex-1`}
+            >
+              <option value="">— keine URL —</option>
+              {urls.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.titel} — {u.url}
+                </option>
+              ))}
+            </select>
+            <CopyUrlButton
+              value={urls.find((u) => u.id === selectedId)?.url ?? ''}
+            />
+          </div>
           <input type="hidden" name="ziel_url_direct" value="" />
         </>
       ) : (
         <>
-          <input
-            id={directId}
-            name="ziel_url_direct"
-            type="url"
-            value={direct}
-            onChange={(e) => setDirect(e.target.value)}
-            placeholder="https://example.com/blog/artikel"
-            className={inputCls}
-          />
+          <div className="flex items-stretch gap-2">
+            <input
+              id={directId}
+              name="ziel_url_direct"
+              type="url"
+              value={direct}
+              onChange={(e) => setDirect(e.target.value)}
+              placeholder="https://example.com/blog/artikel"
+              className={`${inputCls} flex-1`}
+            />
+            <CopyUrlButton value={direct} />
+          </div>
           <p className="mt-1 text-xs text-gray-500">
             Wenn die URL bereits in deiner Sammlung existiert, wird sie
             automatisch verknüpft. Andernfalls wird sie als neue Ziel-URL
@@ -1949,6 +2042,53 @@ function ZielUrlPicker({
         </>
       )}
     </div>
+  )
+}
+
+// Kopiert die übergebene URL in die Zwischenablage und zeigt für ~1,5s ein
+// ✓-Feedback. Disabled wenn der Wert leer ist (z.B. „— keine URL —" gewählt).
+function CopyUrlButton({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false)
+  const trimmed = value.trim()
+  const disabled = !trimmed
+
+  async function onCopy() {
+    if (!trimmed) return
+    try {
+      await navigator.clipboard.writeText(trimmed)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1500)
+    } catch {
+      // Clipboard-API nicht verfügbar (z.B. unsicherer Kontext) — silent.
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onCopy}
+      disabled={disabled}
+      title={disabled ? 'Keine URL zum Kopieren' : 'URL in Zwischenablage kopieren'}
+      aria-label="URL kopieren"
+      className="mt-1 inline-flex shrink-0 items-center justify-center rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-700 shadow-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      {copied ? (
+        <span className="text-green-600" aria-hidden>
+          ✓
+        </span>
+      ) : (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 20 20"
+          fill="currentColor"
+          className="h-4 w-4"
+          aria-hidden
+        >
+          <path d="M7 3a2 2 0 00-2 2v8a2 2 0 002 2h6a2 2 0 002-2V5a2 2 0 00-2-2H7zm-2 12a4 4 0 01-2-3.732V5a4 4 0 014-4h6a4 4 0 014 4v6.268A4 4 0 0113 15H5z" />
+          <path d="M3 7a2 2 0 00-2 2v8a2 2 0 002 2h6a2 2 0 002-2v-1H5a2 2 0 01-2-2V7z" />
+        </svg>
+      )}
+    </button>
   )
 }
 
@@ -2010,21 +2150,21 @@ type CsvFieldKey =
   | 'beschreibung'
   | 'call_to_action'
   | 'pin_format'
-  | 'status'
   | 'geplante_veroeffentlichung'
   | 'board'
   | 'ziel_url'
   | 'strategie_typ'
   | 'conversion_ziel'
 
-// In Vorlage und Hinweistext sichtbare Spalten-Namen (Reihenfolge wird so ausgegeben).
+// In Vorlage und Hinweistext sichtbare Spalten-Namen (Reihenfolge wird so
+// ausgegeben). Status taucht NICHT auf — wird beim Speichern automatisch aus
+// dem Veröffentlichungsdatum berechnet.
 const CSV_TEMPLATE_COLUMNS: Array<{ key: CsvFieldKey; display: string }> = [
   { key: 'titel', display: 'Titel' },
   { key: 'hook', display: 'Hook' },
   { key: 'beschreibung', display: 'Beschreibung' },
   { key: 'call_to_action', display: 'Call to Action' },
   { key: 'pin_format', display: 'Pin Format' },
-  { key: 'status', display: 'Status' },
   { key: 'geplante_veroeffentlichung', display: 'Geplantes Veröffentlichungsdatum' },
   { key: 'board', display: 'Board' },
   { key: 'ziel_url', display: 'Ziel URL' },
@@ -2055,7 +2195,6 @@ const CSV_HEADER_ALIASES: Record<string, CsvFieldKey> = {
   cta: 'call_to_action',
   pinformat: 'pin_format',
   format: 'pin_format',
-  status: 'status',
   geplantesveroeffentlichungsdatum: 'geplante_veroeffentlichung',
   veroeffentlichungsdatum: 'geplante_veroeffentlichung',
   geplanteveroeffentlichung: 'geplante_veroeffentlichung',
@@ -2112,19 +2251,6 @@ function parseCsv(text: string): string[][] {
   }
   if (field.length > 0 || row.length > 0) commitRow()
   return rows
-}
-
-function normalizeStatus(v: string): Status | null {
-  const lower = v.trim().toLowerCase()
-  if (lower === 'entwurf' || lower === 'draft') return 'entwurf'
-  if (lower === 'geplant' || lower === 'scheduled') return 'geplant'
-  if (
-    lower === 'veröffentlicht' ||
-    lower === 'veroeffentlicht' ||
-    lower === 'published'
-  )
-    return 'veroeffentlicht'
-  return null
 }
 
 function normalizePinFormat(v: string): PinFormat | null {
@@ -2402,7 +2528,6 @@ function CsvImport({
         const beschreibung = get('beschreibung')
         const cta = get('call_to_action')
         const formatRaw = get('pin_format')
-        const statusRaw = get('status')
         const datumRaw = get('geplante_veroeffentlichung')
         const boardRaw = get('board')
         const urlRaw = get('ziel_url')
@@ -2416,7 +2541,6 @@ function CsvImport({
           !beschreibung &&
           !cta &&
           !formatRaw &&
-          !statusRaw &&
           !datumRaw &&
           !boardRaw &&
           !urlRaw &&
@@ -2427,21 +2551,10 @@ function CsvImport({
 
         // KRITISCHER FEHLER (Zeile wird übersprungen): nur fehlender Titel.
         // Alle anderen Felder sind optional und werden bei Leerwert als NULL
-        // gespeichert. Status fällt bei Leerwert still auf „entwurf" zurück.
+        // gespeichert. Status wird beim Speichern aus dem Datum berechnet.
         if (!titel) {
           errors.push(`Zeile ${lineNo}: Kein Titel — Zeile übersprungen`)
           continue
-        }
-        let status: Status = 'entwurf'
-        if (statusRaw) {
-          const normalized = normalizeStatus(statusRaw)
-          if (normalized) {
-            status = normalized
-          } else {
-            warns.push(
-              `Zeile ${lineNo}: Status „${statusRaw}" unbekannt — als Entwurf importiert`
-            )
-          }
         }
 
         // WARNUNGEN (Pin wird trotzdem importiert, ggf. mit Korrektur):
@@ -2546,7 +2659,6 @@ function CsvImport({
           beschreibung: beschreibungOut || null,
           call_to_action: cta || null,
           pin_format,
-          status,
           geplante_veroeffentlichung: datum,
           board_id,
           ziel_url_id,
@@ -2623,6 +2735,12 @@ function CsvImport({
         </p>
         <p className="mt-1">
           {CSV_TEMPLATE_COLUMNS.map((c) => c.display).join(', ')}
+        </p>
+        <p className="mt-2 text-gray-500">
+          Hinweis: Status wird beim Import automatisch aus dem
+          Veröffentlichungsdatum berechnet — keine eigene Spalte nötig
+          (kein Datum → Entwurf, Datum in der Zukunft → Geplant, Datum heute
+          oder in der Vergangenheit → Veröffentlicht).
         </p>
         <p className="mt-2">
           <button
@@ -2754,7 +2872,6 @@ function CsvImport({
                   <th className="px-2 py-1.5 text-left">Beschreibung</th>
                   <th className="px-2 py-1.5 text-left">Call to Action</th>
                   <th className="px-2 py-1.5 text-left">Pin Format</th>
-                  <th className="px-2 py-1.5 text-left">Status</th>
                   <th className="px-2 py-1.5 text-left">
                     Geplantes Veröffentlichungsdatum
                   </th>
@@ -2802,7 +2919,6 @@ function CsvImport({
                       <td className="px-2 py-1.5">
                         {r.pin_format ? PIN_FORMAT_LABEL[r.pin_format] : '—'}
                       </td>
-                      <td className="px-2 py-1.5">{STATUS_LABEL[r.status]}</td>
                       <td
                         className="whitespace-nowrap px-2 py-1.5"
                         title={
