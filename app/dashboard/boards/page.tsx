@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase-server'
 import BoardsClient, {
   type Board,
+  type BoardPin,
   type ContentOption,
   type KeywordOption,
 } from './BoardsClient'
@@ -31,28 +32,43 @@ type RawBoardRow = {
 export default async function BoardsPage() {
   const supabase = createClient()
 
-  const [boardsRes, keywordsRes, contentsRes] = await Promise.all([
-    supabase
-      .from('boards')
-      .select(
-        `
+  const [boardsRes, keywordsRes, contentsRes, pinsRes, pinAnalyticsRes] =
+    await Promise.all([
+      supabase
+        .from('boards')
+        .select(
+          `
         id, name, beschreibung, kategorie, pinterest_url, geheim,
         strategie_fokus, impressionen, klicks_auf_pins, ausgehende_klicks,
         saves, created_at,
         board_keywords ( keyword_id, keywords ( id, keyword ) ),
         content_boards ( content_id, content_inhalte ( id, titel ) )
       `
-      )
-      .order('created_at', { ascending: false }),
-    supabase
-      .from('keywords')
-      .select('id, keyword, typ')
-      .order('keyword', { ascending: true }),
-    supabase
-      .from('content_inhalte')
-      .select('id, titel')
-      .order('titel', { ascending: true }),
-  ])
+        )
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('keywords')
+        .select('id, keyword, typ')
+        .order('keyword', { ascending: true }),
+      supabase
+        .from('content_inhalte')
+        .select('id, titel')
+        .order('titel', { ascending: true }),
+      supabase
+        .from('pins')
+        .select(
+          'id, board_id, titel, status, geplante_veroeffentlichung, created_at'
+        )
+        .not('board_id', 'is', null)
+        .order('geplante_veroeffentlichung', {
+          ascending: false,
+          nullsFirst: false,
+        }),
+      supabase
+        .from('pins_analytics')
+        .select('pin_id, datum, impressionen, klicks')
+        .order('datum', { ascending: false }),
+    ])
 
   const rawRows = (boardsRes.data ?? []) as unknown as RawBoardRow[]
   const boards: Board[] = rawRows.map((row) => ({
@@ -85,10 +101,54 @@ export default async function BoardsPage() {
   const availableKeywords = (keywordsRes.data ?? []) as KeywordOption[]
   const availableContents = (contentsRes.data ?? []) as ContentOption[]
 
+  // Pins pro Board mit aktuellster CTR (aus pins_analytics)
+  type PinRow = {
+    id: string
+    board_id: string
+    titel: string | null
+    status: 'entwurf' | 'geplant' | 'veroeffentlicht'
+    geplante_veroeffentlichung: string | null
+    created_at: string
+  }
+  type PinAnalyticsLite = {
+    pin_id: string
+    datum: string
+    impressionen: number
+    klicks: number
+  }
+  const pinRows = (pinsRes.data ?? []) as unknown as PinRow[]
+  const pinAnalyticsRows =
+    (pinAnalyticsRes.data ?? []) as unknown as PinAnalyticsLite[]
+
+  // Latest analytics per pin (rows DESC by datum)
+  const latestAnalyticsByPin = new Map<string, PinAnalyticsLite>()
+  for (const r of pinAnalyticsRows) {
+    if (!latestAnalyticsByPin.has(r.pin_id))
+      latestAnalyticsByPin.set(r.pin_id, r)
+  }
+
+  const pinsByBoardId: Record<string, BoardPin[]> = {}
+  for (const p of pinRows) {
+    const a = latestAnalyticsByPin.get(p.id) ?? null
+    const ctr =
+      a && a.impressionen > 0 ? (a.klicks / a.impressionen) * 100 : null
+    const arr = pinsByBoardId[p.board_id] ?? []
+    arr.push({
+      id: p.id,
+      titel: p.titel,
+      status: p.status,
+      geplante_veroeffentlichung: p.geplante_veroeffentlichung,
+      ctr,
+    })
+    pinsByBoardId[p.board_id] = arr
+  }
+
   const loadError =
     boardsRes.error?.message ??
     keywordsRes.error?.message ??
     contentsRes.error?.message ??
+    pinsRes.error?.message ??
+    pinAnalyticsRes.error?.message ??
     null
 
   return (
@@ -110,6 +170,7 @@ export default async function BoardsPage() {
         boards={boards}
         availableKeywords={availableKeywords}
         availableContents={availableContents}
+        pinsByBoardId={pinsByBoardId}
       />
     </div>
   )

@@ -47,18 +47,6 @@ export async function saveEinstellungen(
     ['schwellwert_impressionen', 'Mindest-Impressionen'],
     ['schwellwert_board_wenig_aktiv', 'Wenig aktiv ab (Tage)'],
     ['schwellwert_board_inaktiv', 'Inaktiv ab (Tage)'],
-    [
-      'schwellwert_board_min_impressionen_top',
-      'Mindest-Impressionen für Top Board',
-    ],
-    [
-      'schwellwert_board_min_impressionen_wachstum',
-      'Mindest-Impressionen für Wachstum',
-    ],
-    [
-      'schwellwert_board_min_impressionen_beobachten',
-      'Mindest-Impressionen für Beobachten',
-    ],
   ] as const
   for (const [name, label] of intFields) {
     if (!formData.has(name)) continue
@@ -77,7 +65,10 @@ export async function saveEinstellungen(
 
   const decFields = [
     ['schwellwert_ctr', 'Mindest-CTR'],
-    ['schwellwert_board_min_engagement_top', 'Mindest-Engagement Rate'],
+    ['schwellwert_board_top_er', 'Top Board ER Schwellwert'],
+    ['schwellwert_board_top_prozent', 'Top Board Profil-Prozent'],
+    ['schwellwert_board_schwach_er', 'Schwach ER Schwellwert'],
+    ['schwellwert_board_wachstum_trend', 'Wachstums-Trend Schwellwert'],
   ] as const
   for (const [name, label] of decFields) {
     if (!formData.has(name)) continue

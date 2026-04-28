@@ -9,7 +9,8 @@ import {
   diagnosePin,
   diffDays,
   PIN_HANDLUNG,
-  scoreBoard,
+  scoreBoardHybrid,
+  topPercentCutoff,
   thresholdsFromSettings,
   todayIso,
   withGrowth,
@@ -63,9 +64,8 @@ export default async function AnalyticsPage() {
          schwellwert_beobachtung, schwellwert_min_klicks,
          schwellwert_alter_recycling, schwellwert_ctr, schwellwert_impressionen,
          schwellwert_board_wenig_aktiv, schwellwert_board_inaktiv,
-         schwellwert_board_min_impressionen_top, schwellwert_board_min_engagement_top,
-         schwellwert_board_min_impressionen_wachstum,
-         schwellwert_board_min_impressionen_beobachten`
+         schwellwert_board_top_er, schwellwert_board_top_prozent,
+         schwellwert_board_schwach_er, schwellwert_board_wachstum_trend`
       )
       .eq('user_id', user.id)
       .maybeSingle(),
@@ -82,12 +82,12 @@ export default async function AnalyticsPage() {
       .order('datum', { ascending: false }),
     supabase
       .from('boards')
-      .select('id, name, pinterest_url')
+      .select('id, name, pinterest_url, geheim')
       .order('name', { ascending: true }),
     supabase
       .from('board_analytics')
       .select(
-        'id, board_id, datum, impressionen, klicks_auf_pins, ausgehende_klicks, saves, engagement, created_at'
+        'id, board_id, datum, impressionen, klicks_auf_pins, ausgehende_klicks, saves, engagement, anzahl_pins, created_at'
       )
       .order('datum', { ascending: false }),
     supabase
@@ -141,7 +141,13 @@ export default async function AnalyticsPage() {
   })
 
   // ===== Boards =====
-  const boards = (boardsRes.data ?? []) as BoardOption[]
+  type BoardRow = BoardOption & { geheim: boolean | null }
+  const boardsRaw = (boardsRes.data ?? []) as BoardRow[]
+  const boards: BoardOption[] = boardsRaw.map(({ id, name, pinterest_url }) => ({
+    id,
+    name,
+    pinterest_url,
+  }))
   const boardAnalyticsRaw =
     (boardAnalyticsRes.data ?? []) as BoardAnalyticsEntry[]
   const pinsForBoardRaw = (pinsForBoardRes.data ?? []) as Array<{
@@ -165,18 +171,34 @@ export default async function AnalyticsPage() {
       lastPinByBoard.set(p.board_id, refDate)
   }
 
-  // Dedup board_analytics — neueste Datum pro Board (Rohdaten sind DESC sortiert)
+  // Dedup board_analytics — neueste + zweitneueste Datum pro Board
+  // (Rohdaten sind DESC sortiert; zweiter Treffer = Vormonat).
   const latestByBoard = new Map<string, BoardAnalyticsEntry>()
+  const prevByBoard = new Map<string, BoardAnalyticsEntry>()
   for (const row of boardAnalyticsRaw) {
-    if (!latestByBoard.has(row.board_id))
+    if (!latestByBoard.has(row.board_id)) {
       latestByBoard.set(row.board_id, row)
+    } else if (!prevByBoard.has(row.board_id)) {
+      prevByBoard.set(row.board_id, row)
+    }
   }
 
   const boardById = new Map(boards.map((b) => [b.id, b]))
-  const boardAnalytics: BoardAnalyticsRow[] = []
+
+  type PreScored = {
+    board: BoardOption
+    latest: BoardAnalyticsEntry
+    prev: BoardAnalyticsEntry | null
+    lastPinDatum: string | null
+    lastPinAlterTage: number | null
+    engagementRate: number | null
+    engagementRateVormonat: number | null
+    status: ReturnType<typeof diagnoseBoard>
+  }
+  const preScored: PreScored[] = []
   latestByBoard.forEach((latest, boardId) => {
     const board = boardById.get(boardId)
-    if (!board) return // Board wurde gelöscht — überspringen
+    if (!board) return
     const lastPinDatum = lastPinByBoard.get(boardId) ?? null
     const lastPinAlterTage = lastPinDatum
       ? Math.max(0, diffDays(lastPinDatum, today))
@@ -185,49 +207,63 @@ export default async function AnalyticsPage() {
       latest.engagement,
       latest.impressionen
     )
+    const prev = prevByBoard.get(boardId) ?? null
+    const engagementRateVormonat = prev
+      ? calcBoardEngagementRate(prev.engagement, prev.impressionen)
+      : null
     const status = diagnoseBoard({
       lastPinAlterTage,
       thresholds: boardThresholds,
     })
-    const score = scoreBoard({
-      impressionen: latest.impressionen,
-      engagementRate,
-      thresholds: boardThresholds,
-    })
-    boardAnalytics.push({
+    preScored.push({
       board,
       latest,
+      prev,
       lastPinDatum,
       lastPinAlterTage,
-      status,
-      score,
       engagementRate,
-      handlung: boardHandlung({ score, status }),
+      engagementRateVormonat,
+      status,
     })
   })
 
-  // ===== DEBUG (temporär) — entfernen sobald Diagnose-Parität verifiziert ist =====
-  console.log('[ANALYTICS] settingsRes.data:', settingsRes.data)
-  console.log('[ANALYTICS] settingsRes.error:', settingsRes.error)
-  console.log('[ANALYTICS] thresholds:', thresholds)
-  console.log('[ANALYTICS] today:', today)
-  const _seenDebug = new Set<string>()
-  const _dedupedDebug = pinAnalytics.filter((row) => {
-    if (_seenDebug.has(row.pin_id)) return false
-    _seenDebug.add(row.pin_id)
-    return true
+  // Cutoff für „obere X %" des Profils berechnen.
+  const allErs = preScored
+    .map((p) => p.engagementRate)
+    .filter((er): er is number => er !== null)
+  const topCutoffEr = topPercentCutoff(allErs, boardThresholds.topProzent)
+
+  const boardAnalytics: BoardAnalyticsRow[] = preScored.map((p) => {
+    const { score, dataInsufficient, trendPct } = scoreBoardHybrid({
+      er: p.engagementRate,
+      erVormonat: p.engagementRateVormonat,
+      topCutoffEr,
+      thresholds: boardThresholds,
+    })
+    return {
+      board: p.board,
+      latest: p.latest,
+      lastPinDatum: p.lastPinDatum,
+      lastPinAlterTage: p.lastPinAlterTage,
+      status: p.status,
+      score,
+      engagementRate: p.engagementRate,
+      engagementRateVormonat: p.engagementRateVormonat,
+      trendPct,
+      dataInsufficient,
+      handlung: boardHandlung({
+        score,
+        status: p.status,
+        dataInsufficient,
+      }),
+    }
   })
-  console.log(
-    '[ANALYTICS] deduped pins (latest analytics per pin):',
-    _dedupedDebug.map((row) => ({
-      pin_id: row.pin_id,
-      titel: row.pin?.titel ?? null,
-      klicks: row.klicks,
-      ctr: row.ctr,
-      diagnose: row.diagnose,
-    }))
-  )
-  // =================================================================
+
+  // Öffentliche Boards (geheim = false) ohne board_analytics-Eintrag
+  const boardsWithAnalyticsIds = new Set(latestByBoard.keys())
+  const publicBoardsWithoutAnalytics = boardsRaw
+    .filter((b) => b.geheim === false && !boardsWithAnalyticsIds.has(b.id))
+    .map((b) => ({ id: b.id, name: b.name }))
 
   const loadError =
     profilRes.error?.message ??
@@ -269,6 +305,7 @@ export default async function AnalyticsPage() {
         boards={boards}
         boardAnalytics={boardAnalytics}
         boardThresholds={boardThresholds}
+        publicBoardsWithoutAnalytics={publicBoardsWithoutAnalytics}
       />
     </div>
   )

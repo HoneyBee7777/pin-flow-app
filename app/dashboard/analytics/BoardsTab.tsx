@@ -5,6 +5,7 @@ import {
   useMemo,
   useState,
   useTransition,
+  type ClipboardEvent,
   type FormEvent,
 } from 'react'
 import {
@@ -18,6 +19,7 @@ import {
   BOARD_SCORE_LABEL,
   BOARD_STATUS_BADGE,
   BOARD_STATUS_LABEL,
+  boardScoreTooltip,
   diffDays,
   formatDateDe,
   formatNumber,
@@ -28,7 +30,8 @@ import {
   type BoardOption,
   type BoardThresholds,
 } from './utils'
-import { LabelWithTooltip } from '@/components/InfoTooltip'
+import InfoTooltip, { LabelWithTooltip } from '@/components/InfoTooltip'
+import SharedSortableTh from '@/components/SortableTh'
 
 const inputCls =
   'mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500'
@@ -63,6 +66,7 @@ type SingleFormState = {
   ausgehende_klicks: string
   saves: string
   engagement: string
+  anzahl_pins: string
 }
 
 const EMPTY_FORM: SingleFormState = {
@@ -73,16 +77,24 @@ const EMPTY_FORM: SingleFormState = {
   ausgehende_klicks: '',
   saves: '',
   engagement: '',
+  anzahl_pins: '',
+}
+
+export type BoardWithoutAnalytics = {
+  id: string
+  name: string
 }
 
 export default function BoardsTab({
   boards,
   boardAnalytics,
   thresholds,
+  publicBoardsWithoutAnalytics = [],
 }: {
   boards: BoardOption[]
   boardAnalytics: BoardAnalyticsRow[]
   thresholds: BoardThresholds
+  publicBoardsWithoutAnalytics?: BoardWithoutAnalytics[]
 }) {
   const [showBulk, setShowBulk] = useState(false)
   const [singleForm, setSingleForm] = useState<SingleFormState>({
@@ -105,6 +117,7 @@ export default function BoardsTab({
       ausgehende_klicks: String(row.latest.ausgehende_klicks),
       saves: String(row.latest.saves),
       engagement: String(row.latest.engagement),
+      anzahl_pins: String(row.latest.anzahl_pins ?? 0),
     })
     setSingleFeedback({})
     if (typeof window !== 'undefined') {
@@ -143,6 +156,31 @@ export default function BoardsTab({
         wachsen und welche stagnieren — schwache Boards bremsen alle Pins
         darauf.
       </div>
+
+      {publicBoardsWithoutAnalytics.length > 0 && (
+        <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <p className="font-medium">
+            Diese Boards sind in deiner Boards-Datenbank angelegt und öffentlich
+            aber haben noch keine Analytics-Einträge:
+          </p>
+          <ul className="mt-2 space-y-1">
+            {publicBoardsWithoutAnalytics.map((b) => (
+              <li
+                key={b.id}
+                className="flex flex-wrap items-center gap-x-3 gap-y-1"
+              >
+                <span className="font-medium text-gray-900">{b.name}</span>
+                <Link
+                  href={`/dashboard/boards?edit=${b.id}`}
+                  className="text-xs font-medium text-red-600 hover:underline"
+                >
+                  Board bearbeiten ↗
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <details className="rounded-md border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
         <summary className="cursor-pointer font-medium text-gray-900">
@@ -190,6 +228,7 @@ export default function BoardsTab({
 
       <BoardAnalyticsTable
         rows={boardAnalytics}
+        thresholds={thresholds}
         onEdit={startEdit}
         onDelete={onDelete}
         deleteDisabled={deletePending}
@@ -235,6 +274,40 @@ function BulkBoardForm({
     }))
   }
 
+  // Paste-Distribution für Pinterest CSV (5 Werte): wenn der Nutzer in das
+  // Impressionen-Feld einer Board-Zeile Tab-/Komma-/Whitespace-getrennte Zahlen
+  // einfügt, werden diese auf Impressionen → Interaktionen → Pin-Klicks →
+  // Ausgehende Klicks → Saves verteilt. Anzahl Pins bleibt leer (manuell).
+  // Pinterest CSV-Reihenfolge: Impressions | Engagement | Pin clicks |
+  //   Outbound clicks | Saves.
+  function onImpressionsPaste(
+    boardId: string,
+    e: ClipboardEvent<HTMLInputElement>
+  ) {
+    const text = e.clipboardData.getData('text')
+    if (!text) return
+    // Tokens trennen an Tab, Komma, Semikolon oder mehrfachem Whitespace.
+    const tokens = text
+      .replace(/[\r\n]+/g, ' ')
+      .split(/[\t,;\s]+/)
+      .map((t) => t.replace(/[^\d-]/g, ''))
+      .filter((t) => t.length > 0)
+    if (tokens.length < 2) return // Einzelwert → normales Paste-Verhalten zulassen
+    e.preventDefault()
+    const [imp, eng, klicks, outbound, saves] = tokens
+    setRows((prev) => ({
+      ...prev,
+      [boardId]: {
+        ...prev[boardId],
+        impressionen: imp ?? prev[boardId].impressionen,
+        engagement: eng ?? prev[boardId].engagement,
+        klicks_auf_pins: klicks ?? prev[boardId].klicks_auf_pins,
+        ausgehende_klicks: outbound ?? prev[boardId].ausgehende_klicks,
+        saves: saves ?? prev[boardId].saves,
+      },
+    }))
+  }
+
   function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setFeedback({})
@@ -248,6 +321,7 @@ function BulkBoardForm({
         ausgehende_klicks: parseIntStr(r.ausgehende_klicks),
         saves: parseIntStr(r.saves),
         engagement: parseIntStr(r.engagement),
+        anzahl_pins: parseIntStr(r.anzahl_pins),
       }
     })
 
@@ -291,9 +365,16 @@ function BulkBoardForm({
         </div>
       </div>
 
+      <div className="rounded-md border border-yellow-200 bg-yellow-50 p-3 text-xs text-yellow-900">
+        <span className="font-medium">Tipp:</span> Öffne die Pinterest CSV in
+        OnlyOffice oder Excel. Kopiere die Zahlen einer Board-Zeile (ab Spalte
+        Impressions bis Saves) und füge sie direkt in das Impressionen-Feld
+        des entsprechenden Boards ein — die App verteilt die Werte automatisch.
+      </div>
+
       <div className="overflow-x-auto rounded-md border border-gray-200">
         <table className="min-w-full divide-y divide-gray-200 text-sm">
-          <thead className="bg-gray-50">
+          <thead className="sticky top-0 z-10 bg-gray-50">
             <tr>
               <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Board
@@ -302,7 +383,10 @@ function BulkBoardForm({
                 Impressionen
               </th>
               <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Pin Klicks
+                Interaktionen
+              </th>
+              <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Pin-Klicks
               </th>
               <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Ausgehende Klicks
@@ -311,14 +395,14 @@ function BulkBoardForm({
                 Saves
               </th>
               <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Interaktionen
+                Anzahl Pins
               </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {boards.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-3 py-4 text-center text-gray-500">
+                <td colSpan={7} className="px-3 py-4 text-center text-gray-500">
                   Noch keine Boards angelegt.
                 </td>
               </tr>
@@ -333,10 +417,11 @@ function BulkBoardForm({
                     {(
                       [
                         'impressionen',
+                        'engagement',
                         'klicks_auf_pins',
                         'ausgehende_klicks',
                         'saves',
-                        'engagement',
+                        'anzahl_pins',
                       ] as const
                     ).map((key) => (
                       <td key={key} className="px-3 py-2">
@@ -346,6 +431,11 @@ function BulkBoardForm({
                           step={1}
                           value={r[key]}
                           onChange={(e) => setCell(b.id, key, e.target.value)}
+                          onPaste={
+                            key === 'impressionen'
+                              ? (e) => onImpressionsPaste(b.id, e)
+                              : undefined
+                          }
                           className={cellInputCls}
                         />
                       </td>
@@ -392,6 +482,7 @@ type BulkRowState = {
   ausgehende_klicks: string
   saves: string
   engagement: string
+  anzahl_pins: string
 }
 
 function emptyBulkRow(): BulkRowState {
@@ -401,6 +492,7 @@ function emptyBulkRow(): BulkRowState {
     ausgehende_klicks: '',
     saves: '',
     engagement: '',
+    anzahl_pins: '',
   }
 }
 
@@ -421,6 +513,7 @@ function initialBulkRows(
         ausgehende_klicks: String(existing.latest.ausgehende_klicks),
         saves: String(existing.latest.saves),
         engagement: String(existing.latest.engagement),
+        anzahl_pins: String(existing.latest.anzahl_pins ?? 0),
       }
     } else {
       out[b.id] = emptyBulkRow()
@@ -512,7 +605,7 @@ function SingleBoardForm({
         </Field>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3 lg:grid-cols-6">
         <NumField
           label="Impressionen"
           name="impressionen"
@@ -542,6 +635,13 @@ function SingleBoardForm({
           name="engagement"
           value={form.engagement}
           onChange={(v) => set('engagement', v)}
+        />
+        <NumField
+          label="Anzahl Pins (Pinterest)"
+          name="anzahl_pins"
+          value={form.anzahl_pins}
+          onChange={(v) => set('anzahl_pins', v)}
+          info="Anzahl der Pins wie sie in deinen Pinterest-Analytics erscheint – nicht aus der internen Pin-Datenbank berechnet."
         />
       </div>
 
@@ -574,6 +674,7 @@ type SortKey =
   | 'ausgehende_klicks'
   | 'saves'
   | 'interaktionen'
+  | 'anzahl_pins'
   | 'engagement_rate'
   | 'score'
   | 'status'
@@ -607,6 +708,9 @@ function compareRows(
     case 'interaktionen':
       res = a.latest.engagement - b.latest.engagement
       break
+    case 'anzahl_pins':
+      res = (a.latest.anzahl_pins ?? -1) - (b.latest.anzahl_pins ?? -1)
+      break
     case 'engagement_rate':
       res = (a.engagementRate ?? -Infinity) - (b.engagementRate ?? -Infinity)
       break
@@ -631,11 +735,13 @@ function compareRows(
 
 function BoardAnalyticsTable({
   rows,
+  thresholds,
   onEdit,
   onDelete,
   deleteDisabled,
 }: {
   rows: BoardAnalyticsRow[]
+  thresholds: BoardThresholds
   onEdit: (row: BoardAnalyticsRow) => void
   onDelete: (id: string) => void
   deleteDisabled: boolean
@@ -667,9 +773,9 @@ function BoardAnalyticsTable({
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm">
+    <div className="max-h-[600px] overflow-auto rounded-lg border border-gray-200 bg-white shadow-sm">
       <table className="min-w-full divide-y divide-gray-200">
-        <thead className="bg-gray-50">
+        <thead className="sticky top-0 z-10 bg-gray-50">
           <tr>
             <SortableTh
               sortKey="name"
@@ -721,6 +827,15 @@ function BoardAnalyticsTable({
               info="Alle aktiven Handlungen mit Pins auf diesem Board: Klicks, Saves, Kommentare, Carousel-Swipes. Entspricht Interaktionen in den deutschen Pinterest Analytics."
             >
               Interaktionen
+            </SortableTh>
+            <SortableTh
+              sortKey="anzahl_pins"
+              current={sortKey}
+              dir={sortDir}
+              onSort={toggleSort}
+              info="Anzahl der Pins wie sie in deinen Pinterest-Analytics erscheint – nicht aus der internen Pin-Datenbank berechnet."
+            >
+              Anzahl Pins
             </SortableTh>
             <SortableTh
               sortKey="engagement_rate"
@@ -809,13 +924,34 @@ function BoardAnalyticsTable({
                   {formatZahl(row.latest.engagement)}
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">
+                  {row.latest.anzahl_pins === null ||
+                  row.latest.anzahl_pins === undefined ? (
+                    <span className="text-gray-400">—</span>
+                  ) : (
+                    formatZahl(row.latest.anzahl_pins)
+                  )}
+                </td>
+                <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">
                   {formatPercent(row.engagementRate)}
                 </td>
                 <td className="px-4 py-3 text-sm">
-                  <span
-                    className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${BOARD_SCORE_BADGE[row.score]}`}
-                  >
-                    {BOARD_SCORE_LABEL[row.score]}
+                  <span className="inline-flex items-center gap-1">
+                    <span
+                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${BOARD_SCORE_BADGE[row.score]}`}
+                    >
+                      {BOARD_SCORE_LABEL[row.score]}
+                    </span>
+                    <InfoTooltip
+                      text={boardScoreTooltip({
+                        score: row.score,
+                        er: row.engagementRate,
+                        erVormonat: row.engagementRateVormonat,
+                        trendPct: row.trendPct,
+                        dataInsufficient: row.dataInsufficient,
+                        thresholds,
+                      })}
+                      className="text-gray-400"
+                    />
                   </span>
                 </td>
                 <td className="px-4 py-3 text-sm">
@@ -890,28 +1026,11 @@ function SortableTh({
   info?: string
   children: string
 }) {
-  const isActive = current === key
+  const activeDir = current === key ? dir : null
   return (
-    <th
-      scope="col"
-      onClick={() => onSort(key)}
-      className="cursor-pointer select-none px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 hover:bg-gray-100"
-    >
-      <span className="inline-flex items-center gap-1">
-        <span>
-          <LabelWithTooltip label={children} tooltip={info} />
-        </span>
-        {isActive ? (
-          <span className="text-gray-700" aria-hidden>
-            {dir === 'asc' ? '↑' : '↓'}
-          </span>
-        ) : (
-          <span className="text-gray-300" aria-hidden>
-            ↕
-          </span>
-        )}
-      </span>
-    </th>
+    <SharedSortableTh dir={activeDir} onClick={() => onSort(key)}>
+      <LabelWithTooltip label={children} tooltip={info} />
+    </SharedSortableTh>
   )
 }
 
@@ -948,19 +1067,18 @@ function ThresholdInfo({ thresholds }: { thresholds: BoardThresholds }) {
           </p>
           <ul className="mt-1 space-y-0.5">
             <li>
-              🏆 Top: Impressionen &ge;{' '}
-              <strong>{thresholds.minImpressionenTop}</strong> UND Engagement
-              Rate &ge; <strong>{thresholds.minEngagementTop}%</strong>
+              🏆 Top: ER &ge; <strong>{thresholds.topEr}%</strong> UND in den
+              oberen <strong>{thresholds.topProzent}%</strong> des Profils
             </li>
             <li>
-              📈 Wachstum: Impressionen &ge;{' '}
-              <strong>{thresholds.minImpressionenWachstum}</strong>
+              📈 Wachstum: ER-Verbesserung zum Vormonat &ge;{' '}
+              <strong>{thresholds.wachstumTrend}%</strong>
             </li>
             <li>
-              👀 Beobachten: Impressionen &ge;{' '}
-              <strong>{thresholds.minImpressionenBeobachten}</strong>
+              💤 Schwach: ER &lt; <strong>{thresholds.schwachEr}%</strong> ODER
+              ER-Verschlechterung &ge; <strong>{thresholds.wachstumTrend}%</strong>
             </li>
-            <li>💤 Schwach: unter allen Schwellwerten</li>
+            <li>👀 Solide: alles andere</li>
           </ul>
         </div>
       </div>
@@ -1026,11 +1144,13 @@ function NumField({
   name,
   value,
   onChange,
+  info,
 }: {
   label: string
   name: string
   value: string
   onChange: (v: string) => void
+  info?: string
 }) {
   return (
     <div>
@@ -1038,7 +1158,7 @@ function NumField({
         htmlFor={`single_${name}`}
         className="block text-sm font-medium text-gray-700"
       >
-        {label}
+        <LabelWithTooltip label={label} tooltip={info} />
       </label>
       <input
         id={`single_${name}`}

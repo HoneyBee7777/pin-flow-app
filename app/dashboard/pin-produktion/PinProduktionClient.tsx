@@ -10,6 +10,7 @@ import {
   type ChangeEvent,
   type FormEvent,
 } from 'react'
+import SortableTh from '@/components/SortableTh'
 import {
   addPin,
   deletePin,
@@ -110,6 +111,33 @@ export default function PinProduktionClient(props: Props) {
   const [showCsvImport, setShowCsvImport] = useState(false)
   const [isPending, startTransition] = useTransition()
 
+  // Highlight-Pin aus ?highlight=<id> — temporäre Hervorhebung in der Tabelle.
+  // Wird auf null gesetzt nach 4s oder bei Mausbewegung (mit 800ms Karenzzeit,
+  // damit der Nutzer Zeit hat, den Pin überhaupt wahrzunehmen).
+  const highlightParam = searchParams?.get('highlight') ?? null
+  const [highlightId, setHighlightId] = useState<string | null>(highlightParam)
+  useEffect(() => {
+    if (highlightParam !== null) setHighlightId(highlightParam)
+  }, [highlightParam])
+  useEffect(() => {
+    if (!highlightId) return
+    const el = document.getElementById(`pin-row-${highlightId}`)
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+    let mouseListener: ((e: MouseEvent) => void) | null = null
+    const armMouse = setTimeout(() => {
+      mouseListener = () => setHighlightId(null)
+      window.addEventListener('mousemove', mouseListener, { once: true })
+    }, 800)
+    const fadeTimer = setTimeout(() => setHighlightId(null), 4000)
+    return () => {
+      clearTimeout(armMouse)
+      clearTimeout(fadeTimer)
+      if (mouseListener) window.removeEventListener('mousemove', mouseListener)
+    }
+  }, [highlightId])
+
   const formOpen = showAddForm || editing !== null
 
   function openAdd() {
@@ -188,6 +216,8 @@ export default function PinProduktionClient(props: Props) {
       {showCsvImport && (
         <CsvImport
           contents={props.contents}
+          boards={props.boards}
+          urls={props.urls}
           onClose={() => setShowCsvImport(false)}
         />
       )}
@@ -196,6 +226,9 @@ export default function PinProduktionClient(props: Props) {
         <PinForm
           key={editing?.id ?? 'new'}
           editing={editing}
+          defaultBoardId={
+            editing ? null : (searchParams?.get('board') ?? null)
+          }
           contents={props.contents}
           keywords={props.keywords}
           boards={props.boards}
@@ -222,6 +255,10 @@ export default function PinProduktionClient(props: Props) {
 
       <PinTable
         pins={props.pins}
+        boards={props.boards}
+        vorlagen={props.vorlagen}
+        urls={props.urls}
+        highlightId={highlightId}
         onEdit={openEdit}
         onDelete={onDelete}
         deleteDisabled={isPending}
@@ -233,47 +270,418 @@ export default function PinProduktionClient(props: Props) {
 // ===========================================================
 // Tabelle
 // ===========================================================
+type SortKey =
+  | 'titel'
+  | 'board'
+  | 'status'
+  | 'datum'
+  | 'strategie'
+  | 'format'
+
+type DatumFilter =
+  | ''
+  | 'week'
+  | 'month'
+  | 'past'
+  | 'future'
+  | 'none'
+
+type Filters = {
+  search: string
+  status: '' | Status
+  datum: DatumFilter
+  strategie: '' | StrategieTyp
+  conversion: '' | ConversionZiel
+  format: '' | PinFormat
+  boardId: string
+  vorlageId: string
+  urlId: string
+}
+
+const EMPTY_FILTERS: Filters = {
+  search: '',
+  status: '',
+  datum: '',
+  strategie: '',
+  conversion: '',
+  format: '',
+  boardId: '',
+  vorlageId: '',
+  urlId: '',
+}
+
+const DATUM_LABEL: Record<Exclude<DatumFilter, ''>, string> = {
+  week: 'Diese Woche',
+  month: 'Diesen Monat',
+  past: 'Vergangene',
+  future: 'Zukünftige',
+  none: 'Kein Datum',
+}
+
+// Liefert Montag (inkl.) und folgenden Montag (excl.) der laufenden Woche als
+// ISO-Date-Strings, lokale Zeitzone. ISO 8601 / DE: Woche beginnt am Montag.
+function currentWeekRange(): { start: string; endExcl: string } {
+  const now = new Date()
+  const day = now.getDay() // 0 = So, 1 = Mo, …
+  const diffToMonday = (day + 6) % 7
+  const monday = new Date(now)
+  monday.setHours(0, 0, 0, 0)
+  monday.setDate(now.getDate() - diffToMonday)
+  const nextMonday = new Date(monday)
+  nextMonday.setDate(monday.getDate() + 7)
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  return { start: fmt(monday), endExcl: fmt(nextMonday) }
+}
+
+function currentMonthRange(): { start: string; endExcl: string } {
+  const now = new Date()
+  const start = new Date(now.getFullYear(), now.getMonth(), 1)
+  const endExcl = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  return { start: fmt(start), endExcl: fmt(endExcl) }
+}
+
+function todayLocalIso(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 function PinTable({
   pins,
+  boards,
+  vorlagen,
+  urls,
+  highlightId,
   onEdit,
   onDelete,
   deleteDisabled,
 }: {
   pins: PinWithRelations[]
+  boards: BoardOption[]
+  vorlagen: CanvaVorlageOption[]
+  urls: ZielUrlOption[]
+  highlightId: string | null
   onEdit: (pin: PinWithRelations) => void
   onDelete: (id: string) => void
   deleteDisabled: boolean
 }) {
+  const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS)
+  const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' } | null>(
+    null
+  )
+
+  // Wenn ein Highlight-Sprung von außen kommt, Filter zurücksetzen — sonst
+  // könnte der gesuchte Pin durch einen aktiven Filter ausgeblendet sein.
+  useEffect(() => {
+    if (highlightId) setFilters(EMPTY_FILTERS)
+  }, [highlightId])
+
+  function setFilter<K extends keyof Filters>(key: K, value: Filters[K]) {
+    setFilters((prev) => ({ ...prev, [key]: value }))
+  }
+
+  function resetFilters() {
+    setFilters(EMPTY_FILTERS)
+  }
+
+  function toggleSort(key: SortKey) {
+    setSort((cur) => {
+      if (!cur || cur.key !== key) return { key, dir: 'asc' }
+      if (cur.dir === 'asc') return { key, dir: 'desc' }
+      return null
+    })
+  }
+
+  function dirOf(key: SortKey): 'asc' | 'desc' | null {
+    return sort && sort.key === key ? sort.dir : null
+  }
+
+  const activeFilterCount = useMemo(
+    () =>
+      (Object.keys(filters) as (keyof Filters)[]).filter((k) => filters[k] !== '')
+        .length,
+    [filters]
+  )
+
+  const filteredPins = useMemo(() => {
+    const week = currentWeekRange()
+    const month = currentMonthRange()
+    const today = todayLocalIso()
+    const searchTerm = filters.search.trim().toLowerCase()
+    return pins.filter((p) => {
+      if (searchTerm) {
+        const haystack = [
+          p.titel,
+          p.hook,
+          p.beschreibung,
+          p.call_to_action,
+          p.board?.name,
+          p.content?.titel,
+          p.url?.titel,
+          p.url?.url,
+          p.vorlage?.name,
+          p.saison_event?.event_name,
+          ...p.keywords.map((k) => k.keyword),
+        ]
+          .filter((v): v is string => typeof v === 'string' && v.length > 0)
+          .join(' ')
+          .toLowerCase()
+        if (!haystack.includes(searchTerm)) return false
+      }
+      if (filters.status && p.status !== filters.status) return false
+      if (filters.strategie && p.strategie_typ !== filters.strategie) return false
+      if (filters.conversion && p.conversion_ziel !== filters.conversion)
+        return false
+      if (filters.format && p.pin_format !== filters.format) return false
+      if (filters.boardId && p.board_id !== filters.boardId) return false
+      if (filters.vorlageId && p.canva_vorlage_id !== filters.vorlageId)
+        return false
+      if (filters.urlId && p.ziel_url_id !== filters.urlId) return false
+      if (filters.datum) {
+        const d = p.geplante_veroeffentlichung
+        if (filters.datum === 'none') {
+          if (d) return false
+        } else if (!d) {
+          return false
+        } else if (filters.datum === 'week') {
+          if (d < week.start || d >= week.endExcl) return false
+        } else if (filters.datum === 'month') {
+          if (d < month.start || d >= month.endExcl) return false
+        } else if (filters.datum === 'past') {
+          if (d >= today) return false
+        } else if (filters.datum === 'future') {
+          if (d < today) return false
+        }
+      }
+      return true
+    })
+  }, [pins, filters])
+
+  const sortedPins = useMemo(() => {
+    if (!sort) return filteredPins
+    const dir = sort.dir === 'asc' ? 1 : -1
+    const arr = [...filteredPins]
+    arr.sort((a, b) => {
+      switch (sort.key) {
+        case 'titel': {
+          const aN = (a.titel ?? '').toLowerCase()
+          const bN = (b.titel ?? '').toLowerCase()
+          if (aN === '' && bN !== '') return 1
+          if (bN === '' && aN !== '') return -1
+          return aN.localeCompare(bN, 'de') * dir
+        }
+        case 'board': {
+          const aN = a.board?.name?.toLowerCase() ?? ''
+          const bN = b.board?.name?.toLowerCase() ?? ''
+          if (aN === '' && bN !== '') return 1
+          if (bN === '' && aN !== '') return -1
+          return aN.localeCompare(bN, 'de') * dir
+        }
+        case 'status': {
+          const ai = STATUS.indexOf(a.status)
+          const bi = STATUS.indexOf(b.status)
+          return (ai - bi) * dir
+        }
+        case 'datum': {
+          const aD = a.geplante_veroeffentlichung ?? ''
+          const bD = b.geplante_veroeffentlichung ?? ''
+          if (aD === '' && bD !== '') return 1
+          if (bD === '' && aD !== '') return -1
+          return aD.localeCompare(bD) * dir
+        }
+        case 'strategie': {
+          const ai = a.strategie_typ
+            ? STRATEGIE_TYPEN.indexOf(a.strategie_typ)
+            : Infinity
+          const bi = b.strategie_typ
+            ? STRATEGIE_TYPEN.indexOf(b.strategie_typ)
+            : Infinity
+          if (ai === Infinity && bi !== Infinity) return 1
+          if (bi === Infinity && ai !== Infinity) return -1
+          return (ai - bi) * dir
+        }
+        case 'format': {
+          const ai = a.pin_format ? PIN_FORMATE.indexOf(a.pin_format) : Infinity
+          const bi = b.pin_format ? PIN_FORMATE.indexOf(b.pin_format) : Infinity
+          if (ai === Infinity && bi !== Infinity) return 1
+          if (bi === Infinity && ai !== Infinity) return -1
+          return (ai - bi) * dir
+        }
+      }
+    })
+    return arr
+  }, [filteredPins, sort])
+
   return (
-    <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm">
-      <table className="min-w-full divide-y divide-gray-200">
-        <thead className="bg-gray-50">
-          <tr>
-            <Th>Titel</Th>
-            <Th>Hook</Th>
-            <Th>Status</Th>
-            <Th>Veröffentlichung</Th>
-            <Th>Strategie</Th>
-            <Th>Conversion</Th>
-            <Th>Format</Th>
-            <Th>Vorlage</Th>
-            <Th>URL</Th>
-            <Th align="right">Aktion</Th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-100">
-          {pins.length === 0 ? (
-            <tr>
-              <td
-                colSpan={10}
-                className="px-4 py-8 text-center text-sm text-gray-500"
+    <div className="space-y-3">
+      <div className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
+        <div className="flex flex-wrap items-end gap-3">
+          <FilterSearch
+            value={filters.search}
+            onChange={(v) => setFilter('search', v)}
+          />
+          <FilterSelect
+            label="Status"
+            value={filters.status}
+            onChange={(v) => setFilter('status', v as Filters['status'])}
+            options={[
+              { value: '', label: 'Alle' },
+              ...STATUS.map((s) => ({ value: s, label: STATUS_LABEL[s] })),
+            ]}
+          />
+          <FilterSelect
+            label="Veröffentlichung"
+            value={filters.datum}
+            onChange={(v) => setFilter('datum', v as DatumFilter)}
+            options={[
+              { value: '', label: 'Alle' },
+              { value: 'week', label: DATUM_LABEL.week },
+              { value: 'month', label: DATUM_LABEL.month },
+              { value: 'past', label: DATUM_LABEL.past },
+              { value: 'future', label: DATUM_LABEL.future },
+              { value: 'none', label: DATUM_LABEL.none },
+            ]}
+          />
+          <FilterSelect
+            label="Strategie"
+            value={filters.strategie}
+            onChange={(v) => setFilter('strategie', v as Filters['strategie'])}
+            options={[
+              { value: '', label: 'Alle' },
+              ...STRATEGIE_TYPEN.map((s) => ({
+                value: s,
+                label: STRATEGIE_LABEL[s],
+              })),
+            ]}
+          />
+          <FilterSelect
+            label="Conversion Ziel"
+            value={filters.conversion}
+            onChange={(v) => setFilter('conversion', v as Filters['conversion'])}
+            options={[
+              { value: '', label: 'Alle' },
+              ...CONVERSION_ZIELE.map((c) => ({
+                value: c,
+                label: CONVERSION_LABEL[c],
+              })),
+            ]}
+          />
+          <FilterSelect
+            label="Pin Format"
+            value={filters.format}
+            onChange={(v) => setFilter('format', v as Filters['format'])}
+            options={[
+              { value: '', label: 'Alle' },
+              ...PIN_FORMATE.map((f) => ({
+                value: f,
+                label: PIN_FORMAT_LABEL[f],
+              })),
+            ]}
+          />
+          <FilterSelect
+            label="Board"
+            value={filters.boardId}
+            onChange={(v) => setFilter('boardId', v)}
+            options={[
+              { value: '', label: 'Alle' },
+              ...boards.map((b) => ({ value: b.id, label: b.name })),
+            ]}
+          />
+          <FilterSelect
+            label="Vorlage"
+            value={filters.vorlageId}
+            onChange={(v) => setFilter('vorlageId', v)}
+            options={[
+              { value: '', label: 'Alle' },
+              ...vorlagen.map((v) => ({ value: v.id, label: v.name })),
+            ]}
+          />
+          <FilterSelect
+            label="URL"
+            value={filters.urlId}
+            onChange={(v) => setFilter('urlId', v)}
+            options={[
+              { value: '', label: 'Alle' },
+              ...urls.map((u) => ({ value: u.id, label: u.titel || u.url })),
+            ]}
+          />
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-3 text-xs">
+          <span className="text-gray-600">
+            <span className="font-medium text-gray-900">{sortedPins.length}</span>{' '}
+            von {pins.length} Pins
+          </span>
+          {activeFilterCount > 0 && (
+            <>
+              <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700">
+                {activeFilterCount} Filter aktiv
+              </span>
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="font-medium text-red-600 hover:underline"
               >
-                Noch keine Pins. Lege einen über das Formular an.
-              </td>
+                Alle zurücksetzen
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="max-h-[800px] overflow-auto rounded-lg border border-gray-200 bg-white shadow-sm">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="sticky top-0 z-10 bg-gray-50">
+            <tr>
+              <SortableTh dir={dirOf('titel')} onClick={() => toggleSort('titel')}>
+                Titel
+              </SortableTh>
+              <SortableTh dir={dirOf('board')} onClick={() => toggleSort('board')}>
+                Board
+              </SortableTh>
+              <Th>Hook</Th>
+              <SortableTh dir={dirOf('status')} onClick={() => toggleSort('status')}>
+                Status
+              </SortableTh>
+              <SortableTh dir={dirOf('datum')} onClick={() => toggleSort('datum')}>
+                Veröffentlichung
+              </SortableTh>
+              <SortableTh dir={dirOf('strategie')} onClick={() => toggleSort('strategie')}>
+                Strategie
+              </SortableTh>
+              <Th>Conversion</Th>
+              <SortableTh dir={dirOf('format')} onClick={() => toggleSort('format')}>
+                Format
+              </SortableTh>
+              <Th>Vorlage</Th>
+              <Th>URL</Th>
+              <Th align="right">Aktion</Th>
             </tr>
-          ) : (
-            pins.map((pin) => (
-              <tr key={pin.id} className="align-top hover:bg-gray-50">
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {sortedPins.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={11}
+                  className="px-4 py-8 text-center text-sm text-gray-500"
+                >
+                  {pins.length === 0
+                    ? 'Noch keine Pins. Lege einen über das Formular an.'
+                    : 'Keine Pins entsprechen den aktiven Filtern.'}
+                </td>
+              </tr>
+            ) : (
+              sortedPins.map((pin) => (
+              <tr
+                key={pin.id}
+                id={`pin-row-${pin.id}`}
+                className={`align-top transition-colors duration-700 ${
+                  pin.id === highlightId
+                    ? 'bg-amber-100 ring-2 ring-amber-300 ring-inset'
+                    : 'hover:bg-gray-50'
+                }`}
+              >
                 <td className="max-w-xs px-4 py-3 text-sm font-medium text-gray-900">
                   {pin.titel ?? <span className="text-gray-400">—</span>}
                   {pin.variante_typ && (
@@ -298,6 +706,9 @@ function PinTable({
                       )}
                     </span>
                   )}
+                </td>
+                <td className="max-w-xs px-4 py-3 text-sm text-gray-700">
+                  {pin.board?.name ?? <span className="text-gray-400">—</span>}
                 </td>
                 <td className="max-w-xs px-4 py-3 text-sm text-gray-700">
                   {pin.hook ?? <span className="text-gray-400">—</span>}
@@ -350,8 +761,8 @@ function PinTable({
                 </td>
                 <td className="max-w-xs px-4 py-3 text-sm text-gray-700">
                   {pin.url ? (
-                    <span className="truncate" title={pin.url.url}>
-                      {pin.url.titel}
+                    <span className="block [word-break:break-all]" title={pin.url.titel}>
+                      {pin.url.url}
                     </span>
                   ) : (
                     <span className="text-gray-400">—</span>
@@ -379,10 +790,11 @@ function PinTable({
                   </div>
                 </td>
               </tr>
-            ))
-          )}
-        </tbody>
-      </table>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
@@ -403,11 +815,113 @@ function Th({
   )
 }
 
+function FilterSearch({
+  value,
+  onChange,
+}: {
+  value: string
+  onChange: (v: string) => void
+}) {
+  const id = 'filter_suche'
+  return (
+    <div className="min-w-[220px] flex-1 sm:max-w-[320px]">
+      <label htmlFor={id} className="block text-xs font-medium text-gray-600">
+        Suche
+      </label>
+      <div className="relative mt-1">
+        <span
+          className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2 text-gray-400"
+          aria-hidden
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+            className="h-4 w-4"
+          >
+            <path
+              fillRule="evenodd"
+              d="M9 3a6 6 0 104.472 10.03l3.249 3.25a1 1 0 001.414-1.415l-3.249-3.25A6 6 0 009 3zM5 9a4 4 0 118 0 4 4 0 01-8 0z"
+              clipRule="evenodd"
+            />
+          </svg>
+        </span>
+        <input
+          id={id}
+          type="search"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="Titel, Hook, Beschreibung, Keyword …"
+          className="block w-full rounded-md border border-gray-300 bg-white pl-7 pr-7 py-1.5 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+        />
+        {value && (
+          <button
+            type="button"
+            onClick={() => onChange('')}
+            className="absolute inset-y-0 right-0 flex items-center pr-2 text-gray-400 hover:text-gray-600"
+            aria-label="Suche zurücksetzen"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              className="h-4 w-4"
+            >
+              <path
+                fillRule="evenodd"
+                d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                clipRule="evenodd"
+              />
+            </svg>
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function FilterSelect({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  options: { value: string; label: string }[]
+}) {
+  const id = `filter_${label.toLowerCase().replace(/\s+/g, '_')}`
+  return (
+    <div className="min-w-[140px]">
+      <label
+        htmlFor={id}
+        className="block text-xs font-medium text-gray-600"
+      >
+        {label}
+      </label>
+      <select
+        id={id}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  )
+}
+
 // ===========================================================
 // Formular (zwei-stufig)
 // ===========================================================
 function PinForm({
   editing,
+  defaultBoardId,
   contents,
   keywords,
   boards,
@@ -419,6 +933,7 @@ function PinForm({
   onClose,
 }: {
   editing: PinWithRelations | null
+  defaultBoardId?: string | null
   contents: ContentOption[]
   keywords: KeywordOption[]
   boards: BoardOption[]
@@ -437,7 +952,9 @@ function PinForm({
   const [keywordIds, setKeywordIds] = useState<string[]>(
     editing?.keywords.map((k) => k.id) ?? []
   )
-  const [boardId, setBoardId] = useState(editing?.board_id ?? '')
+  const [boardId, setBoardId] = useState(
+    editing?.board_id ?? defaultBoardId ?? ''
+  )
   const [strategieTyp, setStrategieTyp] = useState<StrategieTyp | ''>(
     editing?.strategie_typ ?? ''
   )
@@ -1487,15 +2004,70 @@ function Counter({
 // ===========================================================
 // CSV-Import
 // ===========================================================
-const CSV_EXPECTED_COLUMNS = [
-  'titel',
-  'hook',
-  'beschreibung',
-  'call_to_action',
-  'pin_format',
-  'status',
-  'geplante_veroeffentlichung',
-] as const
+type CsvFieldKey =
+  | 'titel'
+  | 'hook'
+  | 'beschreibung'
+  | 'call_to_action'
+  | 'pin_format'
+  | 'status'
+  | 'geplante_veroeffentlichung'
+  | 'board'
+  | 'ziel_url'
+  | 'strategie_typ'
+  | 'conversion_ziel'
+
+// In Vorlage und Hinweistext sichtbare Spalten-Namen (Reihenfolge wird so ausgegeben).
+const CSV_TEMPLATE_COLUMNS: Array<{ key: CsvFieldKey; display: string }> = [
+  { key: 'titel', display: 'Titel' },
+  { key: 'hook', display: 'Hook' },
+  { key: 'beschreibung', display: 'Beschreibung' },
+  { key: 'call_to_action', display: 'Call to Action' },
+  { key: 'pin_format', display: 'Pin Format' },
+  { key: 'status', display: 'Status' },
+  { key: 'geplante_veroeffentlichung', display: 'Geplantes Veröffentlichungsdatum' },
+  { key: 'board', display: 'Board' },
+  { key: 'ziel_url', display: 'Ziel URL' },
+  { key: 'strategie_typ', display: 'Strategie Typ' },
+  { key: 'conversion_ziel', display: 'Conversion Ziel' },
+]
+
+// Akzeptierte Header-Schreibweisen → CsvFieldKey. Vergleich erfolgt
+// case-insensitive mit gestrichenen Bindestrichen/Leerzeichen.
+function normHeader(s: string): string {
+  return s
+    .trim()
+    .toLowerCase()
+    .replace(/ä/g, 'ae')
+    .replace(/ö/g, 'oe')
+    .replace(/ü/g, 'ue')
+    .replace(/ß/g, 'ss')
+    .replace(/[\s_\-/]+/g, '')
+}
+
+const CSV_HEADER_ALIASES: Record<string, CsvFieldKey> = {
+  titel: 'titel',
+  title: 'titel',
+  hook: 'hook',
+  beschreibung: 'beschreibung',
+  description: 'beschreibung',
+  calltoaction: 'call_to_action',
+  cta: 'call_to_action',
+  pinformat: 'pin_format',
+  format: 'pin_format',
+  status: 'status',
+  geplantesveroeffentlichungsdatum: 'geplante_veroeffentlichung',
+  veroeffentlichungsdatum: 'geplante_veroeffentlichung',
+  geplanteveroeffentlichung: 'geplante_veroeffentlichung',
+  datum: 'geplante_veroeffentlichung',
+  board: 'board',
+  zielurl: 'ziel_url',
+  url: 'ziel_url',
+  strategietyp: 'strategie_typ',
+  strategie: 'strategie_typ',
+  conversionziel: 'conversion_ziel',
+  conversion: 'conversion_ziel',
+}
 
 function parseCsv(text: string): string[][] {
   const rows: string[][] = []
@@ -1559,21 +2131,182 @@ function normalizePinFormat(v: string): PinFormat | null {
   const lower = v.trim().toLowerCase()
   for (const k of PIN_FORMATE) if (lower === k) return k
   if (lower === 'karussell') return 'carousel'
-  if (lower === 'infographic' || lower === 'info-grafik') return 'infografik'
+  if (lower === 'infographic' || lower === 'info-grafik' || lower === 'infogr.')
+    return 'infografik'
+  return null
+}
+
+function normalizeStrategie(v: string): StrategieTyp | null {
+  const lower = v.trim().toLowerCase().replace(/[\s-]+/g, '_')
+  if (lower === 'blog_content' || lower === 'blogcontent') return 'blog_content'
+  if (lower === 'affiliate') return 'affiliate'
+  if (lower === 'produkt' || lower === 'product') return 'produkt'
+  return null
+}
+
+function normalizeConversion(v: string): ConversionZiel | null {
+  const lower = v.trim().toLowerCase()
+  if (lower === 'traffic') return 'traffic'
+  if (lower === 'lead' || lower === 'leads') return 'lead'
+  if (lower === 'sales' || lower === 'sale' || lower === 'verkauf')
+    return 'sales'
+  return null
+}
+
+const GERMAN_MONTHS: Record<string, number> = {
+  januar: 1,
+  februar: 2,
+  märz: 3,
+  maerz: 3,
+  april: 4,
+  mai: 5,
+  juni: 6,
+  juli: 7,
+  august: 8,
+  september: 9,
+  oktober: 10,
+  november: 11,
+  dezember: 12,
+}
+
+function pad2(n: number | string): string {
+  return String(n).padStart(2, '0')
+}
+
+// Validiert (Y, M, D) als reales Datum (z.B. 31.02. → invalid).
+function buildIso(
+  y: number | string,
+  m: number | string,
+  d: number | string
+): string | null {
+  const yi = Number(y)
+  const mi = Number(m)
+  const di = Number(d)
+  if (
+    !Number.isInteger(yi) ||
+    !Number.isInteger(mi) ||
+    !Number.isInteger(di) ||
+    yi < 1900 ||
+    yi > 2100 ||
+    mi < 1 ||
+    mi > 12 ||
+    di < 1 ||
+    di > 31
+  )
+    return null
+  const iso = `${yi}-${pad2(mi)}-${pad2(di)}`
+  const dt = new Date(`${iso}T00:00:00Z`)
+  if (
+    Number.isNaN(dt.getTime()) ||
+    dt.getUTCFullYear() !== yi ||
+    dt.getUTCMonth() + 1 !== mi ||
+    dt.getUTCDate() !== di
+  )
+    return null
+  return iso
+}
+
+// Erkennt mehrere übliche Datumsformate und liefert YYYY-MM-DD (oder null).
+//   - YYYY-MM-DD (ISO)
+//   - DD.MM.YYYY / DD-MM-YYYY (deutsch)
+//   - YYYY/MM/DD und YYYY.MM.DD
+//   - DD/MM/YYYY und MM/DD/YYYY (Heuristik: wenn ein Teil > 12, ist die
+//     andere Position eindeutig der Tag; sonst Default DD/MM)
+//   - D. MMMM YYYY und DD. MMMM YYYY (deutsch ausgeschrieben)
+function normalizeDate(input: string): string | null {
+  // Erst alle Whitespace-Varianten (inkl. NBSP  , Narrow NBSP  ,
+  // Tabs, en-/em-spaces) auf ein einzelnes ASCII-Space kollabieren — Excel
+  // und Word liefern oft NBSPs, die der Default `\s` nicht zuverlässig
+  // matcht und die Format-Erkennung sonst still scheitern lässt.
+  const v = input
+    .replace(/[\s\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000]+/g, ' ')
+    .trim()
+  if (!v) return null
+
+  // ISO
+  const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(v)
+  if (iso) return buildIso(iso[1], iso[2], iso[3])
+
+  // DD.MM.YYYY
+  const de = /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/.exec(v)
+  if (de) return buildIso(de[3], de[2], de[1])
+
+  // DD-MM-YYYY (deutsch mit Bindestrichen)
+  const deDash = /^(\d{1,2})-(\d{1,2})-(\d{4})$/.exec(v)
+  if (deDash) return buildIso(deDash[3], deDash[2], deDash[1])
+
+  // YYYY/MM/DD
+  const isoSlash = /^(\d{4})\/(\d{1,2})\/(\d{1,2})$/.exec(v)
+  if (isoSlash) return buildIso(isoSlash[1], isoSlash[2], isoSlash[3])
+
+  // YYYY.MM.DD
+  const isoDot = /^(\d{4})\.(\d{1,2})\.(\d{1,2})$/.exec(v)
+  if (isoDot) return buildIso(isoDot[1], isoDot[2], isoDot[3])
+
+  // Slash-Format (DD/MM/YYYY oder MM/DD/YYYY)
+  const slash = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(v)
+  if (slash) {
+    const a = Number(slash[1])
+    const b = Number(slash[2])
+    const y = slash[3]
+    if (a > 12 && b <= 12) return buildIso(y, b, a) // a = Tag
+    if (b > 12 && a <= 12) return buildIso(y, a, b) // a = Monat
+    return buildIso(y, b, a) // mehrdeutig → DD/MM bevorzugt
+  }
+
+  // D. MMMM YYYY (Tag. Monatsname Jahr — deutsch ausgeschrieben).
+  // Punkt nach dem Tag und Spaces drumherum sind beide optional, damit
+  // sowohl "1. Februar 2026" als auch "1.Februar 2026" oder
+  // "01. Februar 2026" zuverlässig matchen.
+  const written = /^(\d{1,2})\.?\s*([A-Za-zäöüÄÖÜ]+)\s+(\d{4})$/.exec(v)
+  if (written) {
+    const m = GERMAN_MONTHS[written[2].toLowerCase()]
+    if (m) return buildIso(written[3], m, written[1])
+  }
+
+  // Notfall-Fallback: alle Tokens isolieren und nach (Tag, Monatsname,
+  // Jahr) suchen — auch wenn das ursprüngliche Format komplett ungewöhnlich
+  // ist (z.B. "1 Februar 2026" ohne Punkt, "1.Feb.2026" usw.).
+  const tokens = v.split(/[\s.,/-]+/).filter(Boolean)
+  if (tokens.length >= 3) {
+    let day: number | null = null
+    let month: number | null = null
+    let year: number | null = null
+    for (const t of tokens) {
+      if (/^\d{4}$/.test(t)) year = Number(t)
+      else if (/^\d{1,2}$/.test(t) && day === null) day = Number(t)
+      else {
+        const mn = GERMAN_MONTHS[t.toLowerCase()]
+        if (mn) month = mn
+      }
+    }
+    if (day !== null && month !== null && year !== null) {
+      return buildIso(year, month, day)
+    }
+  }
+
   return null
 }
 
 function CsvImport({
   contents,
+  boards,
+  urls,
   onClose,
 }: {
   contents: ContentOption[]
+  boards: BoardOption[]
+  urls: ZielUrlOption[]
   onClose: () => void
 }) {
   const [contentId, setContentId] = useState('')
   const [parsed, setParsed] = useState<ImportPinRow[] | null>(null)
+  const [rawDates, setRawDates] = useState<string[]>([])
   const [parseError, setParseError] = useState<string | null>(null)
   const [skippedRows, setSkippedRows] = useState<string[]>([])
+  const [warnings, setWarnings] = useState<string[]>([])
+  const [missingBoards, setMissingBoards] = useState<string[]>([])
+  const [missingUrls, setMissingUrls] = useState<string[]>([])
   const [isPending, startTransition] = useTransition()
   const [feedback, setFeedback] = useState<{
     error?: string
@@ -1582,8 +2315,18 @@ function CsvImport({
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   function downloadTemplate() {
-    const header = CSV_EXPECTED_COLUMNS.join(',') + '\n'
-    const blob = new Blob([header], { type: 'text/csv;charset=utf-8' })
+    // Beispielzeile mit Datum im erwarteten Format. Ohne Titel landet die
+    // Beispielzeile beim Import als „Kein Titel — Zeile übersprungen" — das
+    // ist gewollt: der User soll die Zeile durch eigene Daten ersetzen.
+    const exampleByKey: Partial<Record<CsvFieldKey, string>> = {
+      geplante_veroeffentlichung: '26.04.2026',
+    }
+    const header = CSV_TEMPLATE_COLUMNS.map((c) => c.display).join(',')
+    const example = CSV_TEMPLATE_COLUMNS.map(
+      (c) => exampleByKey[c.key] ?? ''
+    ).join(',')
+    const csv = `${header}\n${example}\n`
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -1598,96 +2341,232 @@ function CsvImport({
     const file = e.target.files?.[0]
     setParseError(null)
     setSkippedRows([])
+    setWarnings([])
+    setMissingBoards([])
+    setMissingUrls([])
     setParsed(null)
+    setRawDates([])
     setFeedback({})
     if (!file) return
 
     const reader = new FileReader()
     reader.onload = () => {
-      const text = String(reader.result ?? '')
+      // Excel/LibreOffice schreiben gerne ein BOM (﻿) an den Anfang.
+      // parseCsv würde es sonst in die erste Header-Zelle aufnehmen.
+      const raw = String(reader.result ?? '')
+      const text = raw.replace(/^﻿/, '')
       const lines = parseCsv(text)
       if (lines.length === 0) {
         setParseError('CSV ist leer.')
         return
       }
-      const header = lines[0].map((s) => s.trim().toLowerCase())
-      for (const col of CSV_EXPECTED_COLUMNS) {
-        if (!header.includes(col)) {
-          setParseError(`Spalte „${col}" fehlt im Header.`)
-          return
-        }
+      // Header → CsvFieldKey mapping (Position pro Schlüssel).
+      const headerIdx: Partial<Record<CsvFieldKey, number>> = {}
+      lines[0].forEach((cell, i) => {
+        const key = CSV_HEADER_ALIASES[normHeader(cell)]
+        if (key && headerIdx[key] === undefined) headerIdx[key] = i
+      })
+      // Diagnose-Log — hilft bei nicht erkannten Spalten / Datumsfeldern.
+      console.log('[CSV-IMPORT] Header roh:', lines[0])
+      console.log(
+        '[CSV-IMPORT] Header normalisiert:',
+        lines[0].map((c) => normHeader(c))
+      )
+      console.log('[CSV-IMPORT] Erkannte Spalten-Positionen:', headerIdx)
+      // Pflicht: Titel (alle anderen Spalten dürfen fehlen).
+      if (headerIdx.titel === undefined) {
+        setParseError('Spalte „Titel" fehlt im Header.')
+        return
       }
-      const idx: Record<string, number> = {}
-      for (const col of CSV_EXPECTED_COLUMNS) idx[col] = header.indexOf(col)
+
+      // Lookup-Tabellen: Board-Name (case-insensitive) und URL (Substring-Match).
+      const boardByName = new Map<string, BoardOption>()
+      for (const b of boards) boardByName.set(b.name.trim().toLowerCase(), b)
 
       const rows: ImportPinRow[] = []
+      const rowsRawDate: string[] = []
       const errors: string[] = []
+      const warns: string[] = []
+      const boardsNotFound = new Set<string>()
+      const urlsNotFound = new Set<string>()
 
       for (let i = 1; i < lines.length; i++) {
         const line = lines[i]
-        const titel = (line[idx.titel] ?? '').trim()
-        const hook = (line[idx.hook] ?? '').trim()
-        const beschreibung = (line[idx.beschreibung] ?? '').trim()
-        const cta = (line[idx.call_to_action] ?? '').trim()
-        const formatRaw = (line[idx.pin_format] ?? '').trim()
-        const statusRaw = (line[idx.status] ?? '').trim()
-        const datumRaw = (line[idx.geplante_veroeffentlichung] ?? '').trim()
+        const get = (k: CsvFieldKey): string => {
+          const ix = headerIdx[k]
+          return ix === undefined ? '' : (line[ix] ?? '').trim()
+        }
         const lineNo = i + 1
+        const titel = get('titel')
+        const hook = get('hook')
+        const beschreibung = get('beschreibung')
+        const cta = get('call_to_action')
+        const formatRaw = get('pin_format')
+        const statusRaw = get('status')
+        const datumRaw = get('geplante_veroeffentlichung')
+        const boardRaw = get('board')
+        const urlRaw = get('ziel_url')
+        const strategieRaw = get('strategie_typ')
+        const conversionRaw = get('conversion_ziel')
 
-        const status = normalizeStatus(statusRaw)
-        if (!status) {
-          errors.push(
-            `Zeile ${lineNo}: Status „${statusRaw}" ungültig (erwartet: Entwurf / Geplant / Veröffentlicht)`
+        // Komplett leere Zeilen überspringen (kein Fehler).
+        if (
+          !titel &&
+          !hook &&
+          !beschreibung &&
+          !cta &&
+          !formatRaw &&
+          !statusRaw &&
+          !datumRaw &&
+          !boardRaw &&
+          !urlRaw &&
+          !strategieRaw &&
+          !conversionRaw
+        )
+          continue
+
+        // KRITISCHER FEHLER (Zeile wird übersprungen): nur fehlender Titel.
+        // Alle anderen Felder sind optional und werden bei Leerwert als NULL
+        // gespeichert. Status fällt bei Leerwert still auf „entwurf" zurück.
+        if (!titel) {
+          errors.push(`Zeile ${lineNo}: Kein Titel — Zeile übersprungen`)
+          continue
+        }
+        let status: Status = 'entwurf'
+        if (statusRaw) {
+          const normalized = normalizeStatus(statusRaw)
+          if (normalized) {
+            status = normalized
+          } else {
+            warns.push(
+              `Zeile ${lineNo}: Status „${statusRaw}" unbekannt — als Entwurf importiert`
+            )
+          }
+        }
+
+        // WARNUNGEN (Pin wird trotzdem importiert, ggf. mit Korrektur):
+        let titelOut = titel
+        if (titelOut.length > 100) {
+          warns.push(
+            `Zeile ${lineNo}: Titel auf 100 Zeichen gekürzt — bitte prüfen`
           )
-          continue
+          titelOut = titelOut.slice(0, 100)
         }
-        const pin_format = formatRaw ? normalizePinFormat(formatRaw) : null
-        if (formatRaw && !pin_format) {
-          errors.push(`Zeile ${lineNo}: Pin-Format „${formatRaw}" ungültig`)
-          continue
+
+        let beschreibungOut = beschreibung
+        if (beschreibungOut.length > 500) {
+          warns.push(
+            `Zeile ${lineNo}: Beschreibung auf 500 Zeichen gekürzt — bitte prüfen`
+          )
+          beschreibungOut = beschreibungOut.slice(0, 500)
         }
+
+        if (hook && hook.split(/\s+/).filter(Boolean).length > 10) {
+          warns.push(
+            `Zeile ${lineNo}: Hook hat mehr als 10 Wörter — bitte nach dem Import kürzen`
+          )
+        }
+
+        let pin_format: PinFormat | null = null
+        if (formatRaw) {
+          pin_format = normalizePinFormat(formatRaw)
+          if (!pin_format) {
+            warns.push(
+              `Zeile ${lineNo}: Pin-Format „${formatRaw}" unbekannt — Feld leer gelassen`
+            )
+          }
+        }
+
+        let strategie_typ: StrategieTyp | null = null
+        if (strategieRaw) {
+          strategie_typ = normalizeStrategie(strategieRaw)
+          if (!strategie_typ) {
+            warns.push(
+              `Zeile ${lineNo}: Strategie-Typ „${strategieRaw}" unbekannt — Feld leer gelassen (erwartet: Blog-Content / Affiliate / Produkt)`
+            )
+          }
+        }
+
+        let conversion_ziel: ConversionZiel | null = null
+        if (conversionRaw) {
+          conversion_ziel = normalizeConversion(conversionRaw)
+          if (!conversion_ziel) {
+            warns.push(
+              `Zeile ${lineNo}: Conversion-Ziel „${conversionRaw}" unbekannt — Feld leer gelassen (erwartet: Traffic / Lead / Sales)`
+            )
+          }
+        }
+
         let datum: string | null = null
         if (datumRaw) {
-          if (!/^\d{4}-\d{2}-\d{2}$/.test(datumRaw)) {
-            errors.push(
-              `Zeile ${lineNo}: Datum „${datumRaw}" muss YYYY-MM-DD sein`
-            )
-            continue
-          }
-          datum = datumRaw
-        }
-        if (titel.length > 100) {
-          errors.push(`Zeile ${lineNo}: Titel zu lang (max. 100 Zeichen)`)
-          continue
-        }
-        if (beschreibung.length > 500) {
-          errors.push(
-            `Zeile ${lineNo}: Beschreibung zu lang (max. 500 Zeichen)`
+          const iso = normalizeDate(datumRaw)
+          console.log(
+            `[CSV-IMPORT] Zeile ${lineNo} Datum-Rohwert „${datumRaw}" → ${iso ?? 'nicht erkannt'}`
           )
-          continue
+          if (iso) {
+            datum = iso
+          } else {
+            warns.push(
+              `Zeile ${lineNo}: Datum „${datumRaw}" konnte nicht erkannt werden — bitte im Format DD.MM.YYYY angeben`
+            )
+          }
         }
-        if (hook && hook.split(/\s+/).filter(Boolean).length > 10) {
-          errors.push(`Zeile ${lineNo}: Hook zu lang (max. 10 Wörter)`)
-          continue
+
+        // Board-Lookup (kein Hard-Fail — fehlende Boards in Warnung sammeln).
+        let board_id: string | null = null
+        if (boardRaw) {
+          const match = boardByName.get(boardRaw.toLowerCase())
+          if (match) {
+            board_id = match.id
+          } else {
+            boardsNotFound.add(boardRaw)
+          }
         }
+
+        // URL-Lookup: erste ZielUrl die den eingegebenen String enthält
+        // ODER deren `url` im eingegebenen String enthalten ist.
+        let ziel_url_id: string | null = null
+        if (urlRaw) {
+          const needle = urlRaw.toLowerCase()
+          const match = urls.find((u) => {
+            const u_url = (u.url ?? '').toLowerCase()
+            if (!u_url) return false
+            return u_url.includes(needle) || needle.includes(u_url)
+          })
+          if (match) {
+            ziel_url_id = match.id
+          } else {
+            urlsNotFound.add(urlRaw)
+          }
+        }
+
         rows.push({
-          titel: titel || null,
+          titel: titelOut || null,
           hook: hook || null,
-          beschreibung: beschreibung || null,
+          beschreibung: beschreibungOut || null,
           call_to_action: cta || null,
           pin_format,
           status,
           geplante_veroeffentlichung: datum,
+          board_id,
+          ziel_url_id,
+          strategie_typ,
+          conversion_ziel,
         })
+        rowsRawDate.push(datumRaw)
       }
       setSkippedRows(errors)
+      setWarnings(warns)
+      setMissingBoards(Array.from(boardsNotFound).sort())
+      setMissingUrls(Array.from(urlsNotFound).sort())
       setParsed(rows)
+      setRawDates(rowsRawDate)
     }
     reader.readAsText(file, 'utf-8')
   }
 
   function doImport() {
-    if (!contentId || !parsed || parsed.length === 0) return
+    if (!parsed || parsed.length === 0) return
     setFeedback({})
     startTransition(async () => {
       const result = await importPins({ contentId, rows: parsed })
@@ -1695,8 +2574,9 @@ function CsvImport({
         setFeedback({ error: result.error })
       } else {
         setFeedback({ imported: result.imported })
+        // Parsed/Skipped/Missing nicht leeren — die Zusammenfassung
+        // soll nach dem Import sichtbar bleiben.
         setParsed(null)
-        setSkippedRows([])
         if (fileInputRef.current) fileInputRef.current.value = ''
       }
     })
@@ -1720,7 +2600,7 @@ function CsvImport({
           className="block text-sm font-medium text-gray-700"
         >
           Content-Inhalt für alle importierten Pins{' '}
-          <span className="text-red-600">*</span>
+          <span className="text-xs font-normal text-gray-500">(optional)</span>
         </label>
         <select
           id="import_content_id"
@@ -1728,9 +2608,7 @@ function CsvImport({
           onChange={(e) => setContentId(e.target.value)}
           className={inputCls}
         >
-          <option value="" disabled>
-            Bitte wählen…
-          </option>
+          <option value="">— ohne Content-Inhalt —</option>
           {contents.map((c) => (
             <option key={c.id} value={c.id}>
               {c.titel}
@@ -1741,10 +2619,10 @@ function CsvImport({
 
       <div className="rounded-md border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600">
         <p className="font-medium">
-          Erwartete Spalten (Reihenfolge egal, Header muss passen):
+          Erwartete Spalten (Reihenfolge egal, Überschrift muss passen):
         </p>
-        <p className="mt-1 break-all font-mono">
-          {CSV_EXPECTED_COLUMNS.join(', ')}
+        <p className="mt-1">
+          {CSV_TEMPLATE_COLUMNS.map((c) => c.display).join(', ')}
         </p>
         <p className="mt-2">
           <button
@@ -1777,25 +2655,95 @@ function CsvImport({
       {parseError && <p className="text-sm text-red-700">{parseError}</p>}
 
       {skippedRows.length > 0 && (
-        <div className="rounded-md border border-yellow-200 bg-yellow-50 p-3 text-xs text-yellow-800">
+        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-800">
           <p className="font-medium">
-            {skippedRows.length} Zeile(n) übersprungen:
+            {skippedRows.length} Zeile(n) übersprungen (Fehler):
           </p>
           <ul className="mt-1 list-disc pl-5">
-            {skippedRows.slice(0, 5).map((e, i) => (
+            {skippedRows.slice(0, 8).map((e, i) => (
               <li key={i}>{e}</li>
             ))}
-            {skippedRows.length > 5 && (
-              <li>… und {skippedRows.length - 5} weitere</li>
+            {skippedRows.length > 8 && (
+              <li>… und {skippedRows.length - 8} weitere</li>
             )}
           </ul>
         </div>
       )}
 
-      {parsed && parsed.length > 0 && (
+      {warnings.length > 0 && (
+        <div className="rounded-md border border-yellow-200 bg-yellow-50 p-3 text-xs text-yellow-800">
+          <p className="font-medium">
+            {warnings.length} Warnung(en) — Pins werden trotzdem importiert:
+          </p>
+          <ul className="mt-1 list-disc pl-5">
+            {warnings.slice(0, 8).map((e, i) => (
+              <li key={i}>{e}</li>
+            ))}
+            {warnings.length > 8 && (
+              <li>… und {warnings.length - 8} weitere</li>
+            )}
+          </ul>
+        </div>
+      )}
+
+      {missingBoards.length > 0 && (
+        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+          <p className="font-medium">
+            {missingBoards.length} Board(s) nicht gefunden — Pins werden ohne
+            Board-Zuordnung importiert:
+          </p>
+          <p className="mt-1 break-all">{missingBoards.join(', ')}</p>
+        </div>
+      )}
+
+      {missingUrls.length > 0 && (
+        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+          <p className="font-medium">
+            {missingUrls.length} URL(s) nicht gefunden — Pins werden ohne
+            URL-Zuordnung importiert:
+          </p>
+          <p className="mt-1 break-all">{missingUrls.join(', ')}</p>
+        </div>
+      )}
+
+      {parsed && parsed.length > 0 && (() => {
+        const emptyCounts = {
+          hook: parsed.filter((r) => !r.hook).length,
+          beschreibung: parsed.filter((r) => !r.beschreibung).length,
+          board: parsed.filter((r) => !r.board_id).length,
+          ziel_url: parsed.filter((r) => !r.ziel_url_id).length,
+          strategie: parsed.filter((r) => !r.strategie_typ).length,
+          conversion: parsed.filter((r) => !r.conversion_ziel).length,
+          datum: parsed.filter((r) => !r.geplante_veroeffentlichung).length,
+        }
+        const emptyEntries: { label: string; count: number; suffix: string }[] = [
+          { label: 'Hook', count: emptyCounts.hook, suffix: 'leer' },
+          { label: 'Beschreibung', count: emptyCounts.beschreibung, suffix: 'leer' },
+          { label: 'Board', count: emptyCounts.board, suffix: 'nicht zugeordnet' },
+          { label: 'Ziel URL', count: emptyCounts.ziel_url, suffix: 'nicht zugeordnet' },
+          { label: 'Strategie Typ', count: emptyCounts.strategie, suffix: 'leer' },
+          { label: 'Conversion Ziel', count: emptyCounts.conversion, suffix: 'leer' },
+          { label: 'Veröffentlichungsdatum', count: emptyCounts.datum, suffix: 'leer' },
+        ].filter((e) => e.count > 0)
+        return (
         <div>
+          {emptyEntries.length > 0 && (
+            <div className="mb-3 rounded-md border border-yellow-200 bg-yellow-50 p-3 text-xs text-yellow-900">
+              <p className="font-medium">
+                Hinweis: Folgende Felder sind bei einigen Pins leer und können
+                nach dem Import nachgepflegt werden:
+              </p>
+              <ul className="mt-1 list-disc pl-5">
+                {emptyEntries.map((e) => (
+                  <li key={e.label}>
+                    {e.label}: bei {e.count} Pin{e.count === 1 ? '' : 's'} {e.suffix}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <p className="text-sm font-medium text-gray-700">
-            Vorschau: {parsed.length} Pin(s)
+            Vorschau: {parsed.length} Pin(s) — so werden sie importiert
           </p>
           <div className="mt-2 overflow-x-auto rounded-md border border-gray-200">
             <table className="min-w-full divide-y divide-gray-200 text-xs">
@@ -1803,25 +2751,97 @@ function CsvImport({
                 <tr>
                   <th className="px-2 py-1.5 text-left">Titel</th>
                   <th className="px-2 py-1.5 text-left">Hook</th>
+                  <th className="px-2 py-1.5 text-left">Beschreibung</th>
+                  <th className="px-2 py-1.5 text-left">Call to Action</th>
+                  <th className="px-2 py-1.5 text-left">Pin Format</th>
                   <th className="px-2 py-1.5 text-left">Status</th>
-                  <th className="px-2 py-1.5 text-left">Format</th>
-                  <th className="px-2 py-1.5 text-left">Datum</th>
+                  <th className="px-2 py-1.5 text-left">
+                    Geplantes Veröffentlichungsdatum
+                  </th>
+                  <th className="px-2 py-1.5 text-left">Board</th>
+                  <th className="px-2 py-1.5 text-left">Ziel URL</th>
+                  <th className="px-2 py-1.5 text-left">Strategie Typ</th>
+                  <th className="px-2 py-1.5 text-left">Conversion Ziel</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {parsed.slice(0, 20).map((r, i) => (
-                  <tr key={i}>
-                    <td className="px-2 py-1.5">{r.titel ?? '—'}</td>
-                    <td className="px-2 py-1.5">{r.hook ?? '—'}</td>
-                    <td className="px-2 py-1.5">{STATUS_LABEL[r.status]}</td>
-                    <td className="px-2 py-1.5">
-                      {r.pin_format ? PIN_FORMAT_LABEL[r.pin_format] : '—'}
-                    </td>
-                    <td className="px-2 py-1.5">
-                      {r.geplante_veroeffentlichung ?? '—'}
-                    </td>
-                  </tr>
-                ))}
+                {parsed.slice(0, 20).map((r, i) => {
+                  const boardName = r.board_id
+                    ? (boards.find((b) => b.id === r.board_id)?.name ?? '—')
+                    : '—'
+                  const urlValue = r.ziel_url_id
+                    ? (() => {
+                        const u = urls.find((x) => x.id === r.ziel_url_id)
+                        return u ? (u.titel ?? u.url) : '—'
+                      })()
+                    : '—'
+                  const rawDate = rawDates[i] ?? ''
+                  const datePretty = r.geplante_veroeffentlichung
+                    ? formatDateDe(r.geplante_veroeffentlichung)
+                    : rawDate
+                      ? '—'
+                      : '—'
+                  const dateMismatch =
+                    !!rawDate &&
+                    !!r.geplante_veroeffentlichung &&
+                    rawDate !== datePretty
+                  return (
+                    <tr key={i}>
+                      <td className="max-w-[180px] truncate px-2 py-1.5">
+                        {r.titel ?? '—'}
+                      </td>
+                      <td className="max-w-[180px] truncate px-2 py-1.5">
+                        {r.hook ?? '—'}
+                      </td>
+                      <td className="max-w-[260px] truncate px-2 py-1.5">
+                        {r.beschreibung ?? '—'}
+                      </td>
+                      <td className="max-w-[160px] truncate px-2 py-1.5">
+                        {r.call_to_action ?? '—'}
+                      </td>
+                      <td className="px-2 py-1.5">
+                        {r.pin_format ? PIN_FORMAT_LABEL[r.pin_format] : '—'}
+                      </td>
+                      <td className="px-2 py-1.5">{STATUS_LABEL[r.status]}</td>
+                      <td
+                        className="whitespace-nowrap px-2 py-1.5"
+                        title={
+                          rawDate
+                            ? `Original aus CSV: „${rawDate}"`
+                            : undefined
+                        }
+                      >
+                        <div>{datePretty}</div>
+                        {dateMismatch && (
+                          <div className="text-[10px] text-gray-500">
+                            aus „{rawDate}"
+                          </div>
+                        )}
+                        {rawDate && !r.geplante_veroeffentlichung && (
+                          <div className="text-[10px] text-amber-700">
+                            „{rawDate}" nicht erkannt
+                          </div>
+                        )}
+                      </td>
+                      <td className="max-w-[160px] truncate px-2 py-1.5">
+                        {boardName}
+                      </td>
+                      <td className="max-w-[200px] truncate px-2 py-1.5">
+                        {urlValue}
+                      </td>
+                      <td className="px-2 py-1.5">
+                        {r.strategie_typ
+                          ? STRATEGIE_LABEL[r.strategie_typ]
+                          : '—'}
+                      </td>
+                      <td className="px-2 py-1.5">
+                        {r.conversion_ziel
+                          ? CONVERSION_LABEL[r.conversion_ziel]
+                          : '—'}
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -1831,24 +2851,58 @@ function CsvImport({
             </p>
           )}
         </div>
-      )}
+        )
+      })()}
 
       {feedback.error && (
         <p className="text-sm text-red-700">{feedback.error}</p>
       )}
       {feedback.imported !== undefined && !feedback.error && (
-        <p className="text-sm text-green-700">
-          ✓ {feedback.imported} Pin(s) erfolgreich importiert.
-        </p>
+        <div className="rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-900">
+          <p className="font-semibold">Import-Zusammenfassung</p>
+          <ul className="mt-1 space-y-0.5">
+            <li>✓ {feedback.imported} Pin(s) erfolgreich importiert</li>
+            <li>
+              {missingBoards.length} Board(s) nicht gefunden
+              {missingBoards.length > 0 && (
+                <>: {missingBoards.join(', ')}</>
+              )}
+            </li>
+            <li>
+              {missingUrls.length} URL(s) nicht gefunden
+              {missingUrls.length > 0 && <>: {missingUrls.join(', ')}</>}
+            </li>
+            <li>
+              {warnings.length} Warnung(en)
+              {warnings.length > 0 && (
+                <>
+                  : {warnings.slice(0, 5).join(' · ')}
+                  {warnings.length > 5
+                    ? ` · … und ${warnings.length - 5} weitere`
+                    : ''}
+                </>
+              )}
+            </li>
+            <li>
+              {skippedRows.length} Zeile(n) übersprungen (Fehler)
+              {skippedRows.length > 0 && (
+                <>
+                  : {skippedRows.slice(0, 5).join(' · ')}
+                  {skippedRows.length > 5
+                    ? ` · … und ${skippedRows.length - 5} weitere`
+                    : ''}
+                </>
+              )}
+            </li>
+          </ul>
+        </div>
       )}
 
       <div className="flex gap-2 pt-2">
         <button
           type="button"
           onClick={doImport}
-          disabled={
-            !contentId || !parsed || parsed.length === 0 || isPending
-          }
+          disabled={!parsed || parsed.length === 0 || isPending}
           className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
         >
           {isPending

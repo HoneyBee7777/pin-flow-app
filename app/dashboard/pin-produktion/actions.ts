@@ -303,10 +303,14 @@ export type ImportPinRow = {
   pin_format: PinFormat | null
   status: Status
   geplante_veroeffentlichung: string | null
+  board_id: string | null
+  ziel_url_id: string | null
+  strategie_typ: StrategieTyp | null
+  conversion_ziel: ConversionZiel | null
 }
 
 export async function importPins(args: {
-  contentId: string
+  contentId: string | null
   rows: ImportPinRow[]
 }): Promise<{ error?: string; imported?: number }> {
   const supabase = createClient()
@@ -315,30 +319,32 @@ export async function importPins(args: {
   } = await supabase.auth.getUser()
   if (!user) return { error: 'Nicht angemeldet.' }
 
-  if (!args.contentId)
-    return { error: 'Bitte einen Content-Inhalt für den Import wählen.' }
   if (!args.rows || args.rows.length === 0)
     return { error: 'Keine Zeilen zu importieren.' }
 
+  const contentId = args.contentId?.trim() || null
+
+  // Strikte Hard-Fails nur für Werte, die als Enum-Constraints in der DB
+  // verankert sind. Längen-/Wortzahl-Checks werden vom Client (CSV-Import)
+  // bereits in Warnungen + Truncates übersetzt, damit der Import nie als
+  // Ganzes abbricht. Hier defensiv truncieren falls ein Client das mal
+  // umgeht.
   for (let i = 0; i < args.rows.length; i++) {
     const r = args.rows[i]
     const lineNo = i + 2
-    if (r.titel && r.titel.length > 100)
-      return { error: `Zeile ${lineNo}: Titel darf max. 100 Zeichen haben.` }
-    if (r.beschreibung && r.beschreibung.length > 500)
-      return {
-        error: `Zeile ${lineNo}: Beschreibung darf max. 500 Zeichen haben.`,
-      }
-    if (r.hook) {
-      const wc = r.hook.trim().split(/\s+/).filter(Boolean).length
-      if (wc > 10)
-        return { error: `Zeile ${lineNo}: Hook darf max. 10 Wörter haben.` }
-    }
     if (!isStatus(r.status))
       return { error: `Zeile ${lineNo}: Status "${r.status}" ungültig.` }
     if (r.pin_format && !isPinFormat(r.pin_format))
       return {
         error: `Zeile ${lineNo}: Pin-Format "${r.pin_format}" ungültig.`,
+      }
+    if (r.strategie_typ && !isStrategie(r.strategie_typ))
+      return {
+        error: `Zeile ${lineNo}: Strategie-Typ "${r.strategie_typ}" ungültig.`,
+      }
+    if (r.conversion_ziel && !isConversion(r.conversion_ziel))
+      return {
+        error: `Zeile ${lineNo}: Conversion-Ziel "${r.conversion_ziel}" ungültig.`,
       }
     if (
       r.geplante_veroeffentlichung &&
@@ -351,14 +357,18 @@ export async function importPins(args: {
 
   const inserts = args.rows.map((r) => ({
     user_id: user.id,
-    content_id: args.contentId,
-    titel: r.titel,
+    content_id: contentId,
+    titel: r.titel ? r.titel.slice(0, 100) : r.titel,
     hook: r.hook,
-    beschreibung: r.beschreibung,
+    beschreibung: r.beschreibung ? r.beschreibung.slice(0, 500) : r.beschreibung,
     call_to_action: r.call_to_action,
     pin_format: r.pin_format,
     status: r.status,
     geplante_veroeffentlichung: r.geplante_veroeffentlichung,
+    board_id: r.board_id,
+    ziel_url_id: r.ziel_url_id,
+    strategie_typ: r.strategie_typ,
+    conversion_ziel: r.conversion_ziel,
   }))
 
   const { error } = await supabase.from('pins').insert(inserts)

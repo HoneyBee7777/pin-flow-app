@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import BoardsTab from './BoardsTab'
+import { useSearchParams } from 'next/navigation'
+import BoardsTab, { type BoardWithoutAnalytics } from './BoardsTab'
 import PinsTab from './PinsTab'
 import ProfilTab from './ProfilTab'
 import type {
@@ -22,6 +23,10 @@ const TABS: Array<{ id: Tab; label: string }> = [
   { id: 'boards', label: 'Boards' },
 ]
 
+function isTab(v: string | null | undefined): v is Tab {
+  return v === 'profil' || v === 'pins' || v === 'boards'
+}
+
 export default function AnalyticsClient({
   profilAnalytics,
   pinterestAnalyticsUrl,
@@ -32,6 +37,7 @@ export default function AnalyticsClient({
   boards,
   boardAnalytics,
   boardThresholds,
+  publicBoardsWithoutAnalytics,
 }: {
   profilAnalytics: ProfilAnalyticsWithGrowth[]
   pinterestAnalyticsUrl: string | null
@@ -42,8 +48,11 @@ export default function AnalyticsClient({
   boards: BoardOption[]
   boardAnalytics: BoardAnalyticsRow[]
   boardThresholds: BoardThresholds
+  publicBoardsWithoutAnalytics: BoardWithoutAnalytics[]
 }) {
-  const [tab, setTab] = useState<Tab>('profil')
+  const searchParams = useSearchParams()
+  const initialTab = searchParams?.get('tab')
+  const [tab, setTab] = useState<Tab>(isTab(initialTab) ? initialTab : 'profil')
 
   return (
     <div className="space-y-6">
@@ -90,6 +99,7 @@ export default function AnalyticsClient({
           boards={boards}
           boardAnalytics={boardAnalytics}
           thresholds={boardThresholds}
+          publicBoardsWithoutAnalytics={publicBoardsWithoutAnalytics}
         />
       )}
     </div>

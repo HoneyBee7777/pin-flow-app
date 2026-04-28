@@ -144,6 +144,7 @@ type BoardAnalyticsFields = {
   ausgehende_klicks: number
   saves: number
   engagement: number
+  anzahl_pins: number
 }
 
 function readBoardAnalyticsFields(
@@ -160,6 +161,7 @@ function readBoardAnalyticsFields(
     ausgehende_klicks: parseInt0(get('ausgehende_klicks')),
     saves: parseInt0(get('saves')),
     engagement: parseInt0(get('engagement')),
+    anzahl_pins: parseInt0(get('anzahl_pins')),
   }
   for (const [name, val] of Object.entries(fields)) {
     if (!Number.isInteger(val) || val < 0)
@@ -208,6 +210,7 @@ export type BoardAnalyticsBulkRow = {
   ausgehende_klicks: number
   saves: number
   engagement: number
+  anzahl_pins: number
 }
 
 export async function saveBoardAnalyticsBulk(args: {
@@ -231,7 +234,8 @@ export async function saveBoardAnalyticsBulk(args: {
         (r.klicks_auf_pins || 0) +
         (r.ausgehende_klicks || 0) +
         (r.saves || 0) +
-        (r.engagement || 0)
+        (r.engagement || 0) +
+        (r.anzahl_pins || 0)
       return sum > 0
     })
     .map((r) => {
@@ -241,6 +245,7 @@ export async function saveBoardAnalyticsBulk(args: {
         'ausgehende_klicks',
         'saves',
         'engagement',
+        'anzahl_pins',
       ] as const) {
         const v = r[key]
         if (!Number.isInteger(v) || v < 0)
@@ -255,6 +260,7 @@ export async function saveBoardAnalyticsBulk(args: {
         ausgehende_klicks: r.ausgehende_klicks,
         saves: r.saves,
         engagement: r.engagement,
+        anzahl_pins: r.anzahl_pins,
       }
     })
 

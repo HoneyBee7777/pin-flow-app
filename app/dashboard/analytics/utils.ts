@@ -396,6 +396,7 @@ export type BoardAnalyticsEntry = {
   ausgehende_klicks: number
   saves: number
   engagement: number
+  anzahl_pins: number | null
   created_at: string
 }
 
@@ -414,79 +415,85 @@ export const BOARD_STATUS_BADGE: Record<BoardStatus, string> = {
   inaktiv: 'bg-red-100 text-red-700',
 }
 
-export const BOARD_SCORE = [
-  'top',
-  'wachstum',
-  'beobachten',
-  'schwach',
-] as const
+export const BOARD_SCORE = ['top', 'wachstum', 'solide', 'schwach'] as const
 export type BoardScore = (typeof BOARD_SCORE)[number]
 
 export const BOARD_SCORE_LABEL: Record<BoardScore, string> = {
   top: '🏆 Top Board',
   wachstum: '📈 Wachstum',
-  beobachten: '👀 Beobachten',
+  solide: '👀 Solide',
   schwach: '💤 Schwach',
 }
 
 export const BOARD_SCORE_BADGE: Record<BoardScore, string> = {
   top: 'bg-emerald-100 text-emerald-700',
   wachstum: 'bg-blue-100 text-blue-700',
-  beobachten: 'bg-cyan-100 text-cyan-700',
+  solide: 'bg-slate-100 text-slate-700',
   schwach: 'bg-gray-100 text-gray-700',
 }
 
 export type BoardThresholds = {
+  // Status-Schwellwerte (basierend auf letztem Pin-Datum)
   wenigAktiv: number
   inaktiv: number
-  minImpressionenTop: number
-  minEngagementTop: number
-  minImpressionenWachstum: number
-  minImpressionenBeobachten: number
+  // Hybrid-Score-Schwellwerte
+  topEr: number          // ER ab dem ein Board "Top" sein darf (z.B. 3.0)
+  topProzent: number     // oberste X % des Profils zählen als "Top" (z.B. 30)
+  schwachEr: number      // ER unter dem ein Board als "Schwach" gilt (z.B. 1.5)
+  wachstumTrend: number  // %-Veränderung zum Vormonat für Wachstum/Trend-Schwach (z.B. 20)
 }
 
 export const BOARD_THRESHOLDS: BoardThresholds = {
-  wenigAktiv: 30,
-  inaktiv: 60,
-  minImpressionenTop: 1000,
-  minEngagementTop: 2.0,
-  minImpressionenWachstum: 500,
-  minImpressionenBeobachten: 100,
+  // Aktiv = letzter Pin <14 Tage; Wenig aktiv = 15–30; Inaktiv = >30.
+  wenigAktiv: 14,
+  inaktiv: 30,
+  topEr: 3.0,
+  topProzent: 30.0,
+  schwachEr: 1.5,
+  wachstumTrend: 20.0,
 }
 
 export type EinstellungenSchwellwerteBoard = {
   schwellwert_board_wenig_aktiv: number | null
   schwellwert_board_inaktiv: number | null
-  schwellwert_board_min_impressionen_top: number | null
-  schwellwert_board_min_engagement_top: number | string | null
-  schwellwert_board_min_impressionen_wachstum: number | null
-  schwellwert_board_min_impressionen_beobachten: number | null
+  schwellwert_board_top_er: number | string | null
+  schwellwert_board_top_prozent: number | string | null
+  schwellwert_board_schwach_er: number | string | null
+  schwellwert_board_wachstum_trend: number | string | null
+}
+
+function numOrFallback(
+  raw: number | string | null | undefined,
+  fallback: number
+): number {
+  if (raw === null || raw === undefined) return fallback
+  const n = Number(raw)
+  return Number.isFinite(n) ? n : fallback
 }
 
 export function boardThresholdsFromSettings(
   settings: Partial<EinstellungenSchwellwerteBoard> | null | undefined
 ): BoardThresholds {
-  const eRaw = settings?.schwellwert_board_min_engagement_top
-  const eNum =
-    eRaw === null || eRaw === undefined
-      ? BOARD_THRESHOLDS.minEngagementTop
-      : Number(eRaw)
   return {
     wenigAktiv:
       settings?.schwellwert_board_wenig_aktiv ?? BOARD_THRESHOLDS.wenigAktiv,
     inaktiv: settings?.schwellwert_board_inaktiv ?? BOARD_THRESHOLDS.inaktiv,
-    minImpressionenTop:
-      settings?.schwellwert_board_min_impressionen_top ??
-      BOARD_THRESHOLDS.minImpressionenTop,
-    minEngagementTop: Number.isFinite(eNum)
-      ? eNum
-      : BOARD_THRESHOLDS.minEngagementTop,
-    minImpressionenWachstum:
-      settings?.schwellwert_board_min_impressionen_wachstum ??
-      BOARD_THRESHOLDS.minImpressionenWachstum,
-    minImpressionenBeobachten:
-      settings?.schwellwert_board_min_impressionen_beobachten ??
-      BOARD_THRESHOLDS.minImpressionenBeobachten,
+    topEr: numOrFallback(
+      settings?.schwellwert_board_top_er,
+      BOARD_THRESHOLDS.topEr
+    ),
+    topProzent: numOrFallback(
+      settings?.schwellwert_board_top_prozent,
+      BOARD_THRESHOLDS.topProzent
+    ),
+    schwachEr: numOrFallback(
+      settings?.schwellwert_board_schwach_er,
+      BOARD_THRESHOLDS.schwachEr
+    ),
+    wachstumTrend: numOrFallback(
+      settings?.schwellwert_board_wachstum_trend,
+      BOARD_THRESHOLDS.wachstumTrend
+    ),
   }
 }
 
@@ -508,41 +515,145 @@ export function calcBoardEngagementRate(
   return (interaktionen / impressionen) * 100
 }
 
-export function scoreBoard(args: {
-  impressionen: number
-  engagementRate: number | null
+// Cutoff-ER für die "Top X %" des Profils. Liefert die Untergrenze, ab der ein
+// Board zu den oberen X % aller Boards zählt. Bei < 1 Board → null (kein Cutoff).
+export function topPercentCutoff(
+  allErs: number[],
+  topProzent: number
+): number | null {
+  if (allErs.length === 0) return null
+  const sorted = [...allErs].sort((a, b) => b - a) // DESC
+  const cutIdx = Math.max(1, Math.ceil((sorted.length * topProzent) / 100))
+  return sorted[cutIdx - 1]
+}
+
+// Hybrid-Score (Single Source of Truth für Dashboard + Analytics).
+// Prüfreihenfolge — erstes Match gewinnt:
+//   1. TOP      → er >= topEr UND er >= topPercentCutoff(allErs, topProzent)
+//   2. WACHSTUM → trend (%) >= wachstumTrend  (nur wenn Vormonat verfügbar)
+//   3. SCHWACH  → er < schwachEr ODER trend (%) <= -wachstumTrend
+//   4. SOLIDE   → alles andere (Catch-All)
+//
+// `dataInsufficient` ist true, wenn kein Vormonat zum Trend-Vergleich
+// vorhanden ist — UI kann das nutzen, um „Noch zu wenig Daten für Trend"
+// als Tooltip neben dem „Solide"-Badge anzuzeigen.
+export function scoreBoardHybrid(args: {
+  er: number | null
+  erVormonat: number | null
+  topCutoffEr: number | null
   thresholds: BoardThresholds
-}): BoardScore {
-  const r = args.engagementRate ?? 0
+}): { score: BoardScore; dataInsufficient: boolean; trendPct: number | null } {
+  const { er, erVormonat, topCutoffEr, thresholds } = args
+  const trendPct =
+    er !== null && erVormonat !== null && erVormonat > 0
+      ? ((er - erVormonat) / erVormonat) * 100
+      : null
+  const dataInsufficient = trendPct === null
+
+  if (er === null) {
+    return { score: 'schwach', dataInsufficient, trendPct }
+  }
+
+  // 1. Top
   if (
-    args.impressionen >= args.thresholds.minImpressionenTop &&
-    r >= args.thresholds.minEngagementTop
-  )
-    return 'top'
-  if (args.impressionen >= args.thresholds.minImpressionenWachstum)
-    return 'wachstum'
-  if (args.impressionen >= args.thresholds.minImpressionenBeobachten)
-    return 'beobachten'
-  return 'schwach'
+    er >= thresholds.topEr &&
+    topCutoffEr !== null &&
+    er >= topCutoffEr
+  ) {
+    return { score: 'top', dataInsufficient, trendPct }
+  }
+
+  // 2. Wachstum (nur mit Vormonat)
+  if (trendPct !== null && trendPct >= thresholds.wachstumTrend) {
+    return { score: 'wachstum', dataInsufficient, trendPct }
+  }
+
+  // 3. Schwach
+  const schwachByEr = er < thresholds.schwachEr
+  const schwachByTrend =
+    trendPct !== null && trendPct <= -thresholds.wachstumTrend
+  if (schwachByEr || schwachByTrend) {
+    return { score: 'schwach', dataInsufficient, trendPct }
+  }
+
+  // 4. Solide (Catch-All)
+  return { score: 'solide', dataInsufficient, trendPct }
 }
 
 export function boardHandlung(args: {
   score: BoardScore
   status: BoardStatus
+  dataInsufficient?: boolean
 }): string | null {
-  if (args.score === 'schwach')
-    return '🔍 Keywords in Board-Beschreibung optimieren & mehr Pins hinzufügen'
-  if (args.status === 'inaktiv')
-    return '🚨 Board reaktivieren — mindestens 3 neue Pins pro Woche'
-  if (args.status === 'wenig_aktiv')
-    return '📌 Board aktiver bespielen — regelmäßiger pinnen'
-  if (args.score === 'beobachten')
-    return '⏸ Weiter beobachten — noch zu wenig Daten für klare Entscheidung'
-  if (args.score === 'wachstum')
-    return '🚀 Momentum nutzen — mehr Pins zu diesem Thema produzieren'
   if (args.score === 'top')
-    return '⭐ Skalieren — ähnliche Boards aufbauen & Keyword-Cluster erweitern'
+    return 'Skalieren — ähnliche Boards aufbauen & Keyword-Cluster erweitern'
+  if (args.score === 'wachstum')
+    return 'Momentum nutzen — Frequenz halten und mehr Pins zu diesem Thema produzieren'
+  if (args.score === 'schwach')
+    return 'Keywords in Board-Beschreibung optimieren. Board-Namen nur ändern wenn Board dauerhaft schwach bleibt.'
+  if (args.score === 'solide') {
+    if (args.dataInsufficient)
+      return 'Noch zu wenig Daten für Trend-Berechnung — Board macht seinen Job.'
+    return 'Weiter beobachten — Board macht seinen Job. Mit mehr Pins könnte es Top werden.'
+  }
   return null
+}
+
+// Score-Tooltip pro Board — erklärt warum dieses Board in seinem Score landet,
+// inklusive aktueller ER, Vormonats-ER, Trend, und Handlungsempfehlung.
+// `short = true` lässt die Handlung weg (für Dashboard-Cards mit Action-Button).
+export function boardScoreTooltip(args: {
+  score: BoardScore
+  er: number | null
+  erVormonat: number | null
+  trendPct: number | null
+  dataInsufficient: boolean
+  thresholds: BoardThresholds
+  short?: boolean
+}): string {
+  const fmt = (v: number | null, digits = 1): string =>
+    v === null || !Number.isFinite(v) ? '—' : `${v.toFixed(digits)}%`
+  const fmtSigned = (v: number | null): string =>
+    v === null || !Number.isFinite(v)
+      ? '—'
+      : `${v >= 0 ? '+' : ''}${v.toFixed(0)}%`
+  const er = args.er
+  const erV = args.erVormonat
+  const t = args.trendPct
+  const th = args.thresholds
+
+  switch (args.score) {
+    case 'top': {
+      const base = `ER ${fmt(er)} — Schwellwert erreicht (≥ ${fmt(th.topEr, 1)}) UND in den oberen ${th.topProzent.toFixed(0)}% deines Profils. Bedeutet: Dieses Board hat thematische Autorität bewiesen.`
+      if (args.short) return base
+      return `${base} Handlung: Ähnliche Boards aufbauen und Keyword-Cluster erweitern.`
+    }
+    case 'wachstum': {
+      const base = `ER von ${fmt(erV)} auf ${fmt(er)} gestiegen (${fmtSigned(t)} zum Vormonat) — starkes Momentum-Signal.`
+      if (args.short) return base
+      return `${base} Handlung: Frequenz halten und mehr Pins zu diesem Thema produzieren.`
+    }
+    case 'solide': {
+      if (args.dataInsufficient) {
+        return 'Nur ein Analytics-Eintrag vorhanden — noch zu wenig Daten für Trend-Berechnung. Nächsten Monat erneut eintragen.'
+      }
+      const base = `ER ${fmt(er)} — Board performt im normalen Bereich.`
+      if (args.short) return base
+      return `${base} Handlung: Weiter beobachten — mit mehr Pins oder optimierten Keywords könnte es Top werden.`
+    }
+    case 'schwach': {
+      const byEr = er !== null && er < th.schwachEr
+      if (byEr) {
+        const base = `ER ${fmt(er)} liegt unter dem Schwellwert (< ${fmt(th.schwachEr, 1)}).`
+        if (args.short) return base
+        return `${base} Handlung: Keywords in Board-Beschreibung optimieren.`
+      }
+      // Trend-getriebener Schwach-Fall
+      const base = `ER von ${fmt(erV)} auf ${fmt(er)} gefallen (${fmtSigned(t)} zum Vormonat).`
+      if (args.short) return base
+      return `${base} Handlung: Ursache prüfen — zu wenig neue Pins oder falsche Keywords?`
+    }
+  }
 }
 
 export type BoardAnalyticsRow = {
@@ -553,5 +664,8 @@ export type BoardAnalyticsRow = {
   status: BoardStatus
   score: BoardScore
   engagementRate: number | null
+  engagementRateVormonat: number | null
+  trendPct: number | null
+  dataInsufficient: boolean
   handlung: string | null
 }

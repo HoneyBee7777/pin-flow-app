@@ -1,6 +1,13 @@
 'use client'
 
-import { useMemo, useState, useTransition, type FormEvent } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useState,
+  useTransition,
+  type FormEvent,
+} from 'react'
+import { useSearchParams } from 'next/navigation'
 import { addBoard, deleteBoard, updateBoard } from './actions'
 
 export type StrategieFokus =
@@ -35,6 +42,37 @@ export type Board = {
   created_at: string
   keywords: Array<{ id: string; keyword: string }>
   contents: Array<{ id: string; titel: string }>
+}
+
+export type BoardPin = {
+  id: string
+  titel: string | null
+  status: 'entwurf' | 'geplant' | 'veroeffentlicht'
+  geplante_veroeffentlichung: string | null
+  ctr: number | null
+}
+
+const PIN_STATUS_LABEL: Record<BoardPin['status'], string> = {
+  entwurf: 'Entwurf',
+  geplant: 'Geplant',
+  veroeffentlicht: 'Veröffentlicht',
+}
+
+const PIN_STATUS_BADGE: Record<BoardPin['status'], string> = {
+  entwurf: 'bg-gray-100 text-gray-700',
+  geplant: 'bg-blue-100 text-blue-700',
+  veroeffentlicht: 'bg-green-100 text-green-700',
+}
+
+function formatBoardPinDate(d: string | null): string {
+  if (!d) return '—'
+  const dt = new Date(d.length === 10 ? `${d}T00:00:00Z` : d)
+  if (Number.isNaN(dt.getTime())) return '—'
+  return dt.toLocaleDateString('de-DE', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })
 }
 
 const KATEGORIEN = [
@@ -105,13 +143,32 @@ export default function BoardsClient({
   boards,
   availableKeywords,
   availableContents,
+  pinsByBoardId = {},
 }: {
   boards: Board[]
   availableKeywords: KeywordOption[]
   availableContents: ContentOption[]
+  pinsByBoardId?: Record<string, BoardPin[]>
 }) {
-  const [showAddForm, setShowAddForm] = useState(false)
-  const [editing, setEditing] = useState<Board | null>(null)
+  const searchParams = useSearchParams()
+  const [showAddForm, setShowAddForm] = useState(
+    () => searchParams?.get('new') === '1'
+  )
+  const [editing, setEditing] = useState<Board | null>(() => {
+    const editId = searchParams?.get('edit')
+    if (!editId) return null
+    return boards.find((b) => b.id === editId) ?? null
+  })
+
+  const editParam = searchParams?.get('edit') ?? null
+  useEffect(() => {
+    if (!editParam) return
+    const target = boards.find((b) => b.id === editParam)
+    if (target && target.id !== editing?.id) {
+      setEditing(target)
+      setShowAddForm(false)
+    }
+  }, [editParam, boards, editing?.id])
   const [formError, setFormError] = useState<string | null>(null)
   const [keywordFilter, setKeywordFilter] = useState('')
   const [contentFilter, setContentFilter] = useState('')
@@ -122,6 +179,7 @@ export default function BoardsClient({
     new Set()
   )
   const [isPending, startTransition] = useTransition()
+  const [expandedBoardId, setExpandedBoardId] = useState<string | null>(null)
 
   const formOpen = showAddForm || editing !== null
 
@@ -473,12 +531,15 @@ export default function BoardsClient({
         </form>
       )}
 
-      <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+      <div className="max-h-[600px] overflow-auto rounded-lg border border-gray-200 bg-white shadow-sm">
         <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+          <thead className="sticky top-0 z-10 bg-gray-50">
             <tr>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Name
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Pins
               </th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Kategorie
@@ -507,23 +568,50 @@ export default function BoardsClient({
             {boards.length === 0 ? (
               <tr>
                 <td
-                  colSpan={8}
+                  colSpan={9}
                   className="px-4 py-8 text-center text-sm text-gray-500"
                 >
                   Noch keine Boards. Erstelle dein erstes.
                 </td>
               </tr>
             ) : (
-              boards.map((board) => (
-                <tr key={board.id} className="align-top hover:bg-gray-50">
-                  <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                    {board.name}
-                    {board.beschreibung && (
-                      <p className="mt-1 text-xs font-normal text-gray-500">
-                        {board.beschreibung}
-                      </p>
-                    )}
-                  </td>
+              boards.flatMap((board) => {
+                const isExpanded = expandedBoardId === board.id
+                const boardPins = pinsByBoardId[board.id] ?? []
+                const boardRow = (
+                  <tr key={board.id} className="align-top hover:bg-gray-50">
+                    <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                      {board.name}
+                      {board.beschreibung && (
+                        <p className="mt-1 text-xs font-normal text-gray-500">
+                          {board.beschreibung}
+                        </p>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-700">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExpandedBoardId(isExpanded ? null : board.id)
+                        }
+                        aria-expanded={isExpanded}
+                        aria-label={
+                          isExpanded ? 'Pins ausblenden' : 'Pins anzeigen'
+                        }
+                        className="inline-flex items-center gap-2 hover:text-gray-900"
+                      >
+                        <span
+                          className="text-2xl leading-none text-gray-400"
+                          aria-hidden
+                        >
+                          {isExpanded ? '▾' : '▸'}
+                        </span>
+                        <span>
+                          {boardPins.length}{' '}
+                          {boardPins.length === 1 ? 'Pin' : 'Pins'}
+                        </span>
+                      </button>
+                    </td>
                   <td className="px-4 py-3 text-sm text-gray-700">
                     {board.kategorie ?? '—'}
                   </td>
@@ -616,7 +704,65 @@ export default function BoardsClient({
                     </div>
                   </td>
                 </tr>
-              ))
+                )
+                if (!isExpanded) return [boardRow]
+                return [
+                  boardRow,
+                  <tr
+                    key={`${board.id}-pins`}
+                    className="bg-gray-50/60"
+                  >
+                    <td colSpan={9} className="px-4 py-3">
+                      {boardPins.length === 0 ? (
+                        <p className="text-sm text-gray-500">
+                          Noch keine Pins für dieses Board
+                        </p>
+                      ) : (
+                        <div className="overflow-x-auto rounded-md border border-gray-200 bg-white">
+                          <table className="min-w-full divide-y divide-gray-200 text-sm">
+                            <thead className="bg-gray-50">
+                              <tr>
+                                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                  Pin-Titel
+                                </th>
+                                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                  Status
+                                </th>
+                                <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                  Veröffentlichungsdatum
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                              {boardPins.map((p) => (
+                                <tr key={p.id}>
+                                  <td className="px-3 py-2 text-gray-900">
+                                    {p.titel ?? (
+                                      <span className="text-gray-400">—</span>
+                                    )}
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    <span
+                                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${PIN_STATUS_BADGE[p.status]}`}
+                                    >
+                                      {PIN_STATUS_LABEL[p.status]}
+                                    </span>
+                                  </td>
+                                  <td className="px-3 py-2 text-gray-700">
+                                    {formatBoardPinDate(
+                                      p.geplante_veroeffentlichung
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </td>
+                  </tr>,
+                ]
+              })
             )}
           </tbody>
         </table>

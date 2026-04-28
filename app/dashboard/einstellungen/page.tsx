@@ -16,9 +16,8 @@ export default async function EinstellungenPage() {
        schwellwert_beobachtung, schwellwert_min_klicks,
        schwellwert_alter_recycling, schwellwert_ctr, schwellwert_impressionen,
        schwellwert_board_wenig_aktiv, schwellwert_board_inaktiv,
-       schwellwert_board_min_impressionen_top, schwellwert_board_min_engagement_top,
-       schwellwert_board_min_impressionen_wachstum,
-       schwellwert_board_min_impressionen_beobachten`
+       schwellwert_board_top_er, schwellwert_board_top_prozent,
+       schwellwert_board_schwach_er, schwellwert_board_wachstum_trend`
     )
     .eq('user_id', user.id)
     .maybeSingle()
@@ -61,17 +60,26 @@ export default async function EinstellungenPage() {
         initialBoardSchwellwerte={{
           wenigAktiv: data?.schwellwert_board_wenig_aktiv ?? null,
           inaktiv: data?.schwellwert_board_inaktiv ?? null,
-          minImpressionenTop:
-            data?.schwellwert_board_min_impressionen_top ?? null,
-          minEngagementTop:
-            data?.schwellwert_board_min_engagement_top === null ||
-            data?.schwellwert_board_min_engagement_top === undefined
+          topEr:
+            data?.schwellwert_board_top_er === null ||
+            data?.schwellwert_board_top_er === undefined
               ? null
-              : Number(data.schwellwert_board_min_engagement_top),
-          minImpressionenWachstum:
-            data?.schwellwert_board_min_impressionen_wachstum ?? null,
-          minImpressionenBeobachten:
-            data?.schwellwert_board_min_impressionen_beobachten ?? null,
+              : Number(data.schwellwert_board_top_er),
+          topProzent:
+            data?.schwellwert_board_top_prozent === null ||
+            data?.schwellwert_board_top_prozent === undefined
+              ? null
+              : Number(data.schwellwert_board_top_prozent),
+          schwachEr:
+            data?.schwellwert_board_schwach_er === null ||
+            data?.schwellwert_board_schwach_er === undefined
+              ? null
+              : Number(data.schwellwert_board_schwach_er),
+          wachstumTrend:
+            data?.schwellwert_board_wachstum_trend === null ||
+            data?.schwellwert_board_wachstum_trend === undefined
+              ? null
+              : Number(data.schwellwert_board_wachstum_trend),
         }}
       />
     </div>

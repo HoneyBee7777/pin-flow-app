@@ -8,6 +8,7 @@ import {
   type FormEvent,
 } from 'react'
 import { deletePinAnalytics, savePinAnalytics } from './actions'
+import SharedSortableTh from '@/components/SortableTh'
 import {
   diffDays,
   formatDateDe,
@@ -512,9 +513,9 @@ function PinAnalyticsTable({
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm">
+    <div className="max-h-[800px] overflow-auto rounded-lg border border-gray-200 bg-white shadow-sm">
       <table className="min-w-full divide-y divide-gray-200">
-        <thead className="bg-gray-50">
+        <thead className="sticky top-0 z-10 bg-gray-50">
           <tr>
             <SortableTh
               sortKey="titel"
@@ -708,26 +709,11 @@ function SortableTh({
   onSort: (key: SortKey) => void
   children: React.ReactNode
 }) {
-  const isActive = current === key
+  const activeDir = current === key ? dir : null
   return (
-    <th
-      scope="col"
-      onClick={() => onSort(key)}
-      className="cursor-pointer select-none px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 hover:bg-gray-100"
-    >
-      <span className="inline-flex items-center gap-1">
-        {children}
-        {isActive ? (
-          <span className="text-gray-700" aria-hidden>
-            {dir === 'asc' ? '↑' : '↓'}
-          </span>
-        ) : (
-          <span className="text-gray-300" aria-hidden>
-            ↕
-          </span>
-        )}
-      </span>
-    </th>
+    <SharedSortableTh dir={activeDir} onClick={() => onSort(key)}>
+      {children}
+    </SharedSortableTh>
   )
 }
 

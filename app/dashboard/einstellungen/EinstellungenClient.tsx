@@ -20,10 +20,10 @@ export type InitialPersoenlicheLinks = {
 export type InitialBoardSchwellwerte = {
   wenigAktiv: number | null
   inaktiv: number | null
-  minImpressionenTop: number | null
-  minEngagementTop: number | null
-  minImpressionenWachstum: number | null
-  minImpressionenBeobachten: number | null
+  topEr: number | null
+  topProzent: number | null
+  schwachEr: number | null
+  wachstumTrend: number | null
 }
 
 export default function EinstellungenClient({
@@ -445,6 +445,7 @@ function SchwellwertField({
   onChange,
   step,
   help,
+  orientation,
 }: {
   label: string
   name: string
@@ -452,6 +453,7 @@ function SchwellwertField({
   onChange: (v: string) => void
   step: number
   help: string
+  orientation?: string
 }) {
   return (
     <div>
@@ -472,6 +474,9 @@ function SchwellwertField({
         className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500 md:max-w-xs"
       />
       <p className="mt-1 text-xs text-gray-500">{help}</p>
+      {orientation && (
+        <p className="mt-0.5 text-xs italic text-gray-400">{orientation}</p>
+      )}
     </div>
   )
 }
@@ -487,23 +492,17 @@ function BoardSchwellwerteSection({
   const [inaktiv, setInaktiv] = useState(
     initial.inaktiv !== null ? String(initial.inaktiv) : '60'
   )
-  const [minImpTop, setMinImpTop] = useState(
-    initial.minImpressionenTop !== null
-      ? String(initial.minImpressionenTop)
-      : '1000'
+  const [topEr, setTopEr] = useState(
+    initial.topEr !== null ? String(initial.topEr) : '3.0'
   )
-  const [minEngTop, setMinEngTop] = useState(
-    initial.minEngagementTop !== null ? String(initial.minEngagementTop) : '2.0'
+  const [topProzent, setTopProzent] = useState(
+    initial.topProzent !== null ? String(initial.topProzent) : '30.0'
   )
-  const [minImpWachstum, setMinImpWachstum] = useState(
-    initial.minImpressionenWachstum !== null
-      ? String(initial.minImpressionenWachstum)
-      : '500'
+  const [schwachEr, setSchwachEr] = useState(
+    initial.schwachEr !== null ? String(initial.schwachEr) : '1.5'
   )
-  const [minImpBeobachten, setMinImpBeobachten] = useState(
-    initial.minImpressionenBeobachten !== null
-      ? String(initial.minImpressionenBeobachten)
-      : '100'
+  const [wachstumTrend, setWachstumTrend] = useState(
+    initial.wachstumTrend !== null ? String(initial.wachstumTrend) : '20.0'
   )
   const [isPending, startTransition] = useTransition()
   const [feedback, setFeedback] = useState<{
@@ -548,6 +547,7 @@ function BoardSchwellwerteSection({
               onChange={setWenigAktiv}
               step={1}
               help={'Ab wie vielen Tagen ohne neuen Pin gilt ein Board als „wenig aktiv"?'}
+              orientation="Orientierung: Anfänger 30 Tage | Erfahren 14 Tage | Profi 7 Tage"
             />
             <SchwellwertField
               label="Inaktiv ab (Tage)"
@@ -556,6 +556,7 @@ function BoardSchwellwerteSection({
               onChange={setInaktiv}
               step={1}
               help={'Ab wie vielen Tagen ohne neuen Pin gilt ein Board als „inaktiv"?'}
+              orientation="Orientierung: Anfänger 60 Tage | Erfahren 30 Tage | Profi 14 Tage"
             />
           </div>
         </div>
@@ -566,36 +567,40 @@ function BoardSchwellwerteSection({
           </p>
           <div className="mt-2 space-y-4">
             <SchwellwertField
-              label="Mindest-Impressionen für Top Board"
-              name="schwellwert_board_min_impressionen_top"
-              value={minImpTop}
-              onChange={setMinImpTop}
-              step={1}
-              help={'Ab wie vielen Impressionen kann ein Board „Top" werden? (zusätzlich muss Engagement Rate hoch genug sein)'}
-            />
-            <SchwellwertField
-              label="Mindest-Engagement Rate für Top Board (%)"
-              name="schwellwert_board_min_engagement_top"
-              value={minEngTop}
-              onChange={setMinEngTop}
+              label="Top Board ER Schwellwert (%)"
+              name="schwellwert_board_top_er"
+              value={topEr}
+              onChange={setTopEr}
               step={0.1}
-              help={'Ab welcher Engagement Rate gilt ein Board als „Top"? Engagement Rate = (Interaktionen ÷ Impressionen) × 100.'}
+              help={'Mindest-Engagement Rate, ab der ein Board als „Top" gelten darf (zusätzlich muss es in den oberen X% des Profils liegen).'}
+              orientation="Orientierung: Anfänger 1,5% | Erfahren 3% | Profi 5% — Pinterest Durchschnitt: 0,3-0,8%"
             />
             <SchwellwertField
-              label="Mindest-Impressionen für Wachstum"
-              name="schwellwert_board_min_impressionen_wachstum"
-              value={minImpWachstum}
-              onChange={setMinImpWachstum}
+              label="Top Board Profil-Prozent (%)"
+              name="schwellwert_board_top_prozent"
+              value={topProzent}
+              onChange={setTopProzent}
               step={1}
-              help={'Ab wie vielen Impressionen gilt ein Board als „Wachstum"?'}
+              help={'Anteil der besten Boards (nach ER), die als „Top" gelten dürfen.'}
+              orientation="Orientierung: obere 30% des eigenen Profils — verhindert dass alle Boards als Top markiert werden"
             />
             <SchwellwertField
-              label="Mindest-Impressionen für Beobachten"
-              name="schwellwert_board_min_impressionen_beobachten"
-              value={minImpBeobachten}
-              onChange={setMinImpBeobachten}
+              label="Schwach ER Schwellwert (%)"
+              name="schwellwert_board_schwach_er"
+              value={schwachEr}
+              onChange={setSchwachEr}
+              step={0.1}
+              help={'Engagement Rate unter diesem Wert → Board gilt als „Schwach".'}
+              orientation="Orientierung: Anfänger 0,8% | Erfahren 1,5% | Profi 2%"
+            />
+            <SchwellwertField
+              label="Wachstums-Trend Schwellwert (%)"
+              name="schwellwert_board_wachstum_trend"
+              value={wachstumTrend}
+              onChange={setWachstumTrend}
               step={1}
-              help={'Ab wie vielen Impressionen gilt ein Board als „Beobachten"? Darunter zählt es als „Schwach".'}
+              help={'Mindest-Verbesserung der ER zum Vormonat, damit ein Board als „Wachstum" gilt. Gleicher Wert als Verschlechterung → „Schwach" (Trend-Schwach).'}
+              orientation="Orientierung: 20% Verbesserung zum Vormonat gilt als Wachstums-Signal"
             />
           </div>
         </div>
