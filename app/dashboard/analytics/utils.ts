@@ -221,6 +221,7 @@ export type PinOption = {
   created_at: string
   geplante_veroeffentlichung: string | null
   pinterest_pin_url?: string | null
+  board_id?: string | null
 }
 
 export type PinAnalyticsEntry = {

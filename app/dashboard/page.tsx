@@ -135,6 +135,14 @@ type ActionablePin = {
   pinterestUrl: string | null
   diagnose: PinDiagnose
   handlung: string
+  // Board-Verknüpfung — wird nach Berechnung der Board-Gesundheit gesetzt.
+  // Felder bleiben null bis zum Enrich-Pass; siehe Block „Board-Verknüpfung".
+  boardId: string | null
+  boardName: string | null
+  // 'Top' | 'Wachstum' | 'Solide' | 'Schwach' | 'Schlafend' | null (= Board ohne Analytics)
+  boardScoreLabel: string | null
+  boardIsWeak: boolean
+  boardHasAnalytics: boolean
 }
 
 type BoardDashHealth = {
@@ -158,6 +166,11 @@ type BoardDashHealth = {
 }
 
 type BoardCat = BoardScore | 'schlafende_top'
+
+type WinItem =
+  | { kind: 'pin'; titel: string; growthPct: number }
+  | { kind: 'board'; boardName: string; from: string; to: string }
+  | { kind: 'react'; boardName: string; impressionGrowthPct: number | null }
 
 type BoardMetricKind = 'er' | 'erChange' | 'impressionen' | 'klicks'
 
@@ -457,7 +470,7 @@ export default async function DashboardPage() {
       .from('pins_analytics')
       .select(
         `id, pin_id, datum, impressionen, klicks, saves, created_at,
-         pins ( id, titel, status, created_at, geplante_veroeffentlichung, pinterest_pin_url )`
+         pins ( id, titel, status, created_at, geplante_veroeffentlichung, pinterest_pin_url, board_id )`
       )
       .order('datum', { ascending: false }),
     supabase
@@ -484,8 +497,7 @@ export default async function DashboardPage() {
       .eq('user_id', user.id),
     supabase
       .from('pins')
-      .select('id, created_at, geplante_veroeffentlichung, board_id')
-      .eq('status', 'veroeffentlicht'),
+      .select('id, status, created_at, geplante_veroeffentlichung, board_id'),
     supabase.from('boards').select('id, name, pinterest_url, created_at'),
     supabase
       .from('board_analytics')
@@ -676,6 +688,7 @@ export default async function DashboardPage() {
   // ===== Bestand: Pins & Boards =====
   type PinRow = {
     id: string
+    status: string
     created_at: string
     geplante_veroeffentlichung: string | null
     board_id: string | null
@@ -686,10 +699,23 @@ export default async function DashboardPage() {
     pinterest_url: string | null
     created_at: string
   }
-  const pinsPublishedRows = (pinsPublishedCountRes.data ?? []) as PinRow[]
+  // Alle Pins (jede Statusstufe) — Basis für Pin-Zählung pro Board.
+  // Veröffentlichte Pins separat herausgefiltert für lastPinByBoard etc.
+  const allPinsRows = (pinsPublishedCountRes.data ?? []) as PinRow[]
+  const pinsPublishedRows = allPinsRows.filter(
+    (p) => p.status === 'veroeffentlicht'
+  )
   const boardsRows = (boardsCountRes.data ?? []) as BoardRow[]
   const veroeffentlichtePinsCount = pinsPublishedRows.length
   const boardsCount = boardsRows.length
+
+  // Pins pro Board zählen (alle Status-Stufen — Entwurf, geplant, veröffentlicht).
+  // Wird in Board-Gesundheit als „Pins in deiner Datenbank auf diesem Board" angezeigt.
+  const pinsCountByBoard = new Map<string, number>()
+  for (const p of allPinsRows) {
+    if (!p.board_id) continue
+    pinsCountByBoard.set(p.board_id, (pinsCountByBoard.get(p.board_id) ?? 0) + 1)
+  }
 
   // ===== Top Pins (nach Klicks) =====
   const topPins = [...actionable]
@@ -927,6 +953,161 @@ export default async function DashboardPage() {
   const boardsOhneAnalyticsCount = boardsOhneAnalytics.length
   const boardsLeerCount = boardsLeer.length
 
+  // ===== Wins der letzten 30 Tage =====
+  // Drei regelbasierte Wins. Sektion wird nur ab 2 Monaten Profil-Analytics
+  // angezeigt — vorher fehlt die Vergleichsbasis.
+  const SCORE_RANK: Record<BoardScore, number> = {
+    schwach: 0,
+    solide: 1,
+    wachstum: 2,
+    top: 3,
+  }
+  const SCORE_LABEL: Record<BoardScore, string> = {
+    schwach: 'Schwach',
+    solide: 'Solide',
+    wachstum: 'Wachstum',
+    top: 'Top',
+  }
+
+  // Per-Pin: neuester + vorheriger Analytics-Eintrag (rawPinAnalytics ist DESC).
+  const latestPaByPin = new Map<string, RawPinAnalyticsRow>()
+  const prevPaByPin = new Map<string, RawPinAnalyticsRow>()
+  for (const r of rawPinAnalytics) {
+    if (!latestPaByPin.has(r.pin_id)) latestPaByPin.set(r.pin_id, r)
+    else if (!prevPaByPin.has(r.pin_id)) prevPaByPin.set(r.pin_id, r)
+  }
+
+  // Win 1 — Pin mit größter Klick-Steigerung gegenüber Vormonat (≥50% Pflicht,
+  // sonst „schwacher" Win — wird gefiltert, damit nur echte Erfolge erscheinen).
+  const WIN_PIN_MIN_GROWTH_PCT = 50
+  let winPin: WinItem | null = null
+  let winPinPct = 0
+  latestPaByPin.forEach((latestPa, pinId) => {
+    const prevPa = prevPaByPin.get(pinId)
+    if (!prevPa || prevPa.klicks <= 0) return
+    const growth = ((latestPa.klicks - prevPa.klicks) / prevPa.klicks) * 100
+    if (growth < WIN_PIN_MIN_GROWTH_PCT) return
+    if (growth > winPinPct) {
+      winPinPct = growth
+      const titel = (latestPa.pins?.titel ?? '').trim() || '(ohne Titel)'
+      winPin = { kind: 'pin', titel, growthPct: growth }
+    }
+  })
+
+  // Vor-Vormonats-Eintrag pro Board (für vorherigen Score).
+  const prevPrevBaByBoard = new Map<string, BoardAnalyticsRaw>()
+  {
+    const seenLatest = new Set<string>()
+    const seenPrev = new Set<string>()
+    for (const r of boardAnalyticsRaw) {
+      if (!seenLatest.has(r.board_id)) {
+        seenLatest.add(r.board_id)
+      } else if (!seenPrev.has(r.board_id)) {
+        seenPrev.add(r.board_id)
+      } else if (!prevPrevBaByBoard.has(r.board_id)) {
+        prevPrevBaByBoard.set(r.board_id, r)
+      }
+    }
+  }
+
+  // Win 2 — Board mit Ein-Stufen-Aufstieg von Solide oder Wachstum:
+  // Solide→Wachstum oder Wachstum→Top. Schwach→Solide gilt nicht als Win,
+  // da Solide noch keine echte Stärke ist. Mehrstufige Sprünge werden nicht
+  // gewertet, weil sie meist auf instabile Datenbasis hindeuten.
+  let winBoard: WinItem | null = null
+  for (const b of boardsRows) {
+    const latestBa = latestBaByBoard.get(b.id)
+    const prevBa = prevBaByBoard.get(b.id)
+    if (!latestBa || !prevBa) continue
+    const erNow = calcBoardEngagementRate(latestBa.engagement, latestBa.impressionen)
+    const erPrev = calcBoardEngagementRate(prevBa.engagement, prevBa.impressionen)
+    const prevPrevBa = prevPrevBaByBoard.get(b.id) ?? null
+    const erPrevPrev = prevPrevBa
+      ? calcBoardEngagementRate(prevPrevBa.engagement, prevPrevBa.impressionen)
+      : null
+    const currentScore = scoreBoardHybrid({
+      er: erNow,
+      erVormonat: erPrev,
+      topCutoffEr,
+      thresholds: boardThresholds,
+    }).score
+    const previousScore = scoreBoardHybrid({
+      er: erPrev,
+      erVormonat: erPrevPrev,
+      topCutoffEr,
+      thresholds: boardThresholds,
+    }).score
+    const jump = SCORE_RANK[currentScore] - SCORE_RANK[previousScore]
+    if (jump !== 1) continue
+    if (previousScore !== 'solide' && previousScore !== 'wachstum') continue
+    // Erstes passendes Board nehmen — boardsRows hat keine Ranking-Reihenfolge.
+    winBoard = {
+      kind: 'board',
+      boardName: b.name,
+      from: SCORE_LABEL[previousScore],
+      to: SCORE_LABEL[currentScore],
+    }
+    break
+  }
+
+  // Win 3 — Reaktivierung: neuester Pin in den letzten 30 Tagen, davor Lücke >30 Tage.
+  const publishedDatesByBoard = new Map<string, string[]>()
+  for (const p of pinsPublishedRows) {
+    if (!p.board_id) continue
+    const d = p.geplante_veroeffentlichung
+    if (!d || d > today) continue
+    const arr = publishedDatesByBoard.get(p.board_id) ?? []
+    arr.push(d)
+    publishedDatesByBoard.set(p.board_id, arr)
+  }
+  publishedDatesByBoard.forEach((arr) =>
+    arr.sort((a, b) => (a < b ? 1 : a > b ? -1 : 0))
+  )
+  // Reaktivierung zählt nur, wenn die Impressionen in der ersten Periode nach
+  // dem Reaktivierungs-Pin um mindestens 20% gegenüber der Vor-Periode stiegen.
+  // Sonst war der „Wieder-Pin" zu schwach, um als Win zu zählen.
+  const WIN_REACT_MIN_GROWTH_PCT = 20
+  let winReact: WinItem | null = null
+  let winReactGap = 0
+  publishedDatesByBoard.forEach((dates, boardId) => {
+    if (dates.length < 2) return
+    const newest = dates[0]
+    const second = dates[1]
+    if (diffDays(newest, today) > 30) return
+    const gap = diffDays(second, newest)
+    if (gap <= 30) return
+    const board = boardsRows.find((b) => b.id === boardId)
+    if (!board) return
+    const latestBa = latestBaByBoard.get(boardId)
+    const prevBa = prevBaByBoard.get(boardId)
+    if (!latestBa || !prevBa || prevBa.impressionen <= 0) return
+    const growthPct =
+      ((latestBa.impressionen - prevBa.impressionen) / prevBa.impressionen) * 100
+    if (growthPct < WIN_REACT_MIN_GROWTH_PCT) return
+    if (gap > winReactGap) {
+      winReactGap = gap
+      winReact = {
+        kind: 'react',
+        boardName: board.name,
+        impressionGrowthPct: growthPct,
+      }
+    }
+  })
+
+  const wins: WinItem[] = ([winPin, winBoard, winReact] as (WinItem | null)[])
+    .filter((w): w is WinItem => !!w)
+  const showWins = profilRows.length >= 2
+
+  // [WINS-DEBUG] Sichtbarkeit + Rohdaten der drei Win-Berechnungen.
+  // showWins=false bei <2 Monaten Profil-Analytics → Sektion bleibt leer (Spec).
+  console.log('[WINS-DEBUG]', {
+    showWins,
+    profilRowsCount: profilRows.length,
+    winPin,
+    winBoard,
+    winReact,
+  })
+
   // ===== Aufgaben (Priorität → Datum → erledigt unten) =====
   const aufgabenAll = (aufgabenRes.data ?? []) as Aufgabe[]
   const aufgabenSorted = [...aufgabenAll].sort((a, b) => {
@@ -976,6 +1157,8 @@ export default async function DashboardPage() {
         engagement={latest?.engagement ?? null}
         impressionenGrowth={latest?.impressionen_growth ?? null}
       />
+
+      {showWins && <WinsSection wins={wins} />}
 
       <ProfilPerformanceKpiBar latest={latest} previous={previous} />
 
@@ -1059,6 +1242,55 @@ function DashboardHelp() {
       </div>
     </details>
   )
+}
+
+// ===========================================================
+// Wins der letzten 30 Tage — regelbasierte Mini-Erfolge
+// ===========================================================
+function WinsSection({ wins }: { wins: WinItem[] }) {
+  return (
+    <section className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+      <h2 className="text-sm font-semibold text-gray-900">
+        🎉 Deine Wins der letzten 30 Tage
+      </h2>
+      {wins.length === 0 ? (
+        <p className="mt-2 text-sm text-gray-600">
+          📊 In den letzten 30 Tagen sind die Daten stabil – weiter dranbleiben.
+        </p>
+      ) : (
+        <ul className="mt-2 space-y-1.5">
+          {wins.map((w, idx) => (
+            <li
+              key={idx}
+              className="flex items-start gap-2 border-l-2 border-emerald-200 pl-2 text-sm text-gray-700"
+            >
+              <span aria-hidden>{winIcon(w)}</span>
+              <span>{winText(w)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+
+function winIcon(w: WinItem): string {
+  if (w.kind === 'pin') return '📌'
+  if (w.kind === 'board') return '📋'
+  return '♻️'
+}
+
+function winText(w: WinItem): string {
+  if (w.kind === 'pin') {
+    return `${w.titel} hat sich stark entwickelt – Klicks +${Math.round(w.growthPct)}% gegenüber Vormonat.`
+  }
+  if (w.kind === 'board') {
+    return `Dein Board ${w.boardName} hat den Sprung von ${w.from} zu ${w.to} geschafft.`
+  }
+  if (w.impressionGrowthPct !== null && w.impressionGrowthPct > 0) {
+    return `Du hast ${w.boardName} reaktiviert – seitdem +${Math.round(w.impressionGrowthPct)}% Impressionen.`
+  }
+  return `Du hast ${w.boardName} reaktiviert.`
 }
 
 // ===========================================================
