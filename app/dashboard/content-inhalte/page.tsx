@@ -25,6 +25,7 @@ type RawContentRow = {
     board_id: string
     boards: { id: string; name: string } | null
   }>
+  pins: Array<{ id: string }> | null
 }
 
 export default async function ContentInhaltePage() {
@@ -38,7 +39,8 @@ export default async function ContentInhaltePage() {
         id, titel, typ, strategie_typ, notizen, created_at,
         content_keywords ( keyword_id, keywords ( id, keyword ) ),
         content_urls ( url_id, ziel_urls ( id, titel, url ) ),
-        content_boards ( board_id, boards ( id, name ) )
+        content_boards ( board_id, boards ( id, name ) ),
+        pins!content_id ( id )
       `
       )
       .order('created_at', { ascending: false }),
@@ -77,6 +79,7 @@ export default async function ContentInhaltePage() {
     boards: row.content_boards
       .filter((cb) => cb.boards)
       .map((cb) => ({ id: cb.boards!.id, name: cb.boards!.name })),
+    pinCount: row.pins?.length ?? 0,
   }))
 
   const keywords = (keywordsRes.data ?? []) as KeywordOption[]

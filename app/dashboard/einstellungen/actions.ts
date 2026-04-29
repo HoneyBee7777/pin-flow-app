@@ -47,6 +47,13 @@ export async function saveEinstellungen(
     ['schwellwert_impressionen', 'Mindest-Impressionen'],
     ['schwellwert_board_wenig_aktiv', 'Wenig aktiv ab (Tage)'],
     ['schwellwert_board_inaktiv', 'Inaktiv ab (Tage)'],
+    ['cp_min_pins_gesamt', 'Mindest-Pin-Anzahl pro Inhalt'],
+    [
+      'cp_min_pins_ohne_aktuell',
+      'Mindest-Pin-Anzahl für Sub-Liste „Ohne aktuellen Pin"',
+    ],
+    ['cp_tage_ohne_pin', 'Tage seit letztem Pin'],
+    ['cp_max_pins_goldnugget', 'Maximale Pin-Anzahl für Goldnugget-URLs'],
   ] as const
   for (const [name, label] of intFields) {
     if (!formData.has(name)) continue
@@ -69,6 +76,7 @@ export async function saveEinstellungen(
     ['schwellwert_board_top_prozent', 'Top Board Profil-Prozent'],
     ['schwellwert_board_schwach_er', 'Schwach ER Schwellwert'],
     ['schwellwert_board_wachstum_trend', 'Wachstums-Trend Schwellwert'],
+    ['cp_min_ctr_goldnugget', 'Mindest-CTR für Goldnugget-URLs'],
   ] as const
   for (const [name, label] of decFields) {
     if (!formData.has(name)) continue

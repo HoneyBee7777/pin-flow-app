@@ -17,7 +17,9 @@ export default async function EinstellungenPage() {
        schwellwert_alter_recycling, schwellwert_ctr, schwellwert_impressionen,
        schwellwert_board_wenig_aktiv, schwellwert_board_inaktiv,
        schwellwert_board_top_er, schwellwert_board_top_prozent,
-       schwellwert_board_schwach_er, schwellwert_board_wachstum_trend`
+       schwellwert_board_schwach_er, schwellwert_board_wachstum_trend,
+       cp_min_pins_gesamt, cp_min_pins_ohne_aktuell, cp_tage_ohne_pin,
+       cp_min_ctr_goldnugget, cp_max_pins_goldnugget`
     )
     .eq('user_id', user.id)
     .maybeSingle()
@@ -80,6 +82,17 @@ export default async function EinstellungenPage() {
             data?.schwellwert_board_wachstum_trend === undefined
               ? null
               : Number(data.schwellwert_board_wachstum_trend),
+        }}
+        initialContentPipelineSchwellwerte={{
+          minPinsGesamt: data?.cp_min_pins_gesamt ?? null,
+          minPinsOhneAktuell: data?.cp_min_pins_ohne_aktuell ?? null,
+          tageOhnePin: data?.cp_tage_ohne_pin ?? null,
+          minCtrGoldnugget:
+            data?.cp_min_ctr_goldnugget === null ||
+            data?.cp_min_ctr_goldnugget === undefined
+              ? null
+              : Number(data.cp_min_ctr_goldnugget),
+          maxPinsGoldnugget: data?.cp_max_pins_goldnugget ?? null,
         }}
       />
     </div>

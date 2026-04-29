@@ -1,7 +1,8 @@
 import { createClient } from '@/lib/supabase-server'
 import ZielUrlsClient, {
-  type ZielUrl,
+  type BoardOption,
   type ContentOption,
+  type ZielUrl,
 } from './ZielUrlsClient'
 
 type RawZielUrlRow = {
@@ -16,18 +17,24 @@ type RawZielUrlRow = {
     content_id: string
     content_inhalte: { id: string; titel: string } | null
   }>
+  url_boards: Array<{
+    boards: { id: string; name: string } | null
+  }>
+  pins: Array<{ id: string }> | null
 }
 
 export default async function ZielUrlsPage() {
   const supabase = createClient()
 
-  const [urlsRes, contentsRes] = await Promise.all([
+  const [urlsRes, contentsRes, boardsRes] = await Promise.all([
     supabase
       .from('ziel_urls')
       .select(
         `
         id, url, titel, typ, prioritaet, notizen, created_at,
-        content_urls ( content_id, content_inhalte ( id, titel ) )
+        content_urls ( content_id, content_inhalte ( id, titel ) ),
+        url_boards ( boards ( id, name ) ),
+        pins!ziel_url_id ( id )
       `
       )
       .order('created_at', { ascending: false }),
@@ -35,6 +42,10 @@ export default async function ZielUrlsPage() {
       .from('content_inhalte')
       .select('id, titel')
       .order('titel', { ascending: true }),
+    supabase
+      .from('boards')
+      .select('id, name')
+      .order('name', { ascending: true }),
   ])
 
   const rawRows = (urlsRes.data ?? []) as unknown as RawZielUrlRow[]
@@ -52,12 +63,20 @@ export default async function ZielUrlsPage() {
         id: cu.content_inhalte!.id,
         titel: cu.content_inhalte!.titel,
       })),
+    boards: row.url_boards
+      .filter((ub) => ub.boards)
+      .map((ub) => ({ id: ub.boards!.id, name: ub.boards!.name })),
+    pinCount: row.pins?.length ?? 0,
   }))
 
   const availableContents = (contentsRes.data ?? []) as ContentOption[]
+  const availableBoards = (boardsRes.data ?? []) as BoardOption[]
 
   const loadError =
-    urlsRes.error?.message ?? contentsRes.error?.message ?? null
+    urlsRes.error?.message ??
+    contentsRes.error?.message ??
+    boardsRes.error?.message ??
+    null
 
   return (
     <div className="p-8">
@@ -74,7 +93,11 @@ export default async function ZielUrlsPage() {
         </div>
       )}
 
-      <ZielUrlsClient urls={urls} availableContents={availableContents} />
+      <ZielUrlsClient
+        urls={urls}
+        availableContents={availableContents}
+        availableBoards={availableBoards}
+      />
     </div>
   )
 }

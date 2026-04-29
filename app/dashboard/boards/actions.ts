@@ -63,6 +63,17 @@ function readContentIds(formData: FormData): string[] {
   )
 }
 
+function readUrlIds(formData: FormData): string[] {
+  return Array.from(
+    new Set(
+      formData
+        .getAll('url_ids')
+        .map((v) => String(v))
+        .filter(Boolean)
+    )
+  )
+}
+
 type BoardInput = {
   name: string
   beschreibung: string | null
@@ -127,6 +138,7 @@ export async function addBoard(
   if ('error' in parsed) return { error: parsed.error }
   const keywordIds = readKeywordIds(formData)
   const contentIds = readContentIds(formData)
+  const urlIds = readUrlIds(formData)
 
   const { data: inserted, error } = await supabase
     .from('boards')
@@ -167,8 +179,24 @@ export async function addBoard(
     }
   }
 
+  if (urlIds.length > 0) {
+    const { error: ubError } = await supabase.from('url_boards').insert(
+      urlIds.map((uid) => ({
+        url_id: uid,
+        board_id: inserted.id,
+        user_id: user.id,
+      }))
+    )
+    if (ubError) {
+      return {
+        error: `Board gespeichert, aber Ziel-URLs konnten nicht verknüpft werden: ${ubError.message}`,
+      }
+    }
+  }
+
   revalidatePath('/dashboard/boards')
   revalidatePath('/dashboard/content-inhalte')
+  revalidatePath('/dashboard/ziel-urls')
   return {}
 }
 
@@ -188,6 +216,7 @@ export async function updateBoard(
   if ('error' in parsed) return { error: parsed.error }
   const keywordIds = readKeywordIds(formData)
   const contentIds = readContentIds(formData)
+  const urlIds = readUrlIds(formData)
 
   const { error: updateError } = await supabase
     .from('boards')
@@ -207,6 +236,12 @@ export async function updateBoard(
     .delete()
     .eq('board_id', id)
   if (cbDeleteError) return { error: cbDeleteError.message }
+
+  const { error: ubDeleteError } = await supabase
+    .from('url_boards')
+    .delete()
+    .eq('board_id', id)
+  if (ubDeleteError) return { error: ubDeleteError.message }
 
   if (keywordIds.length > 0) {
     const { error: insertError } = await supabase
@@ -230,8 +265,22 @@ export async function updateBoard(
     if (insertError) return { error: insertError.message }
   }
 
+  if (urlIds.length > 0) {
+    const { error: insertError } = await supabase
+      .from('url_boards')
+      .insert(
+        urlIds.map((uid) => ({
+          url_id: uid,
+          board_id: id,
+          user_id: user.id,
+        }))
+      )
+    if (insertError) return { error: insertError.message }
+  }
+
   revalidatePath('/dashboard/boards')
   revalidatePath('/dashboard/content-inhalte')
+  revalidatePath('/dashboard/ziel-urls')
   return {}
 }
 
@@ -243,4 +292,5 @@ export async function deleteBoard(formData: FormData): Promise<void> {
   await supabase.from('boards').delete().eq('id', id)
   revalidatePath('/dashboard/boards')
   revalidatePath('/dashboard/content-inhalte')
+  revalidatePath('/dashboard/ziel-urls')
 }

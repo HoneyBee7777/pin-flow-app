@@ -27,6 +27,11 @@ export type ContentOption = {
   titel: string
 }
 
+export type UrlOption = {
+  id: string
+  titel: string
+}
+
 export type Board = {
   id: string
   name: string
@@ -42,6 +47,7 @@ export type Board = {
   created_at: string
   keywords: Array<{ id: string; keyword: string }>
   contents: Array<{ id: string; titel: string }>
+  urls: Array<{ id: string; titel: string }>
 }
 
 export type BoardPin = {
@@ -143,11 +149,13 @@ export default function BoardsClient({
   boards,
   availableKeywords,
   availableContents,
+  availableUrls,
   pinsByBoardId = {},
 }: {
   boards: Board[]
   availableKeywords: KeywordOption[]
   availableContents: ContentOption[]
+  availableUrls: UrlOption[]
   pinsByBoardId?: Record<string, BoardPin[]>
 }) {
   const searchParams = useSearchParams()
@@ -172,12 +180,14 @@ export default function BoardsClient({
   const [formError, setFormError] = useState<string | null>(null)
   const [keywordFilter, setKeywordFilter] = useState('')
   const [contentFilter, setContentFilter] = useState('')
+  const [urlFilter, setUrlFilter] = useState('')
   const [selectedKeywordIds, setSelectedKeywordIds] = useState<Set<string>>(
     new Set()
   )
   const [selectedContentIds, setSelectedContentIds] = useState<Set<string>>(
     new Set()
   )
+  const [selectedUrlIds, setSelectedUrlIds] = useState<Set<string>>(new Set())
   const [isPending, startTransition] = useTransition()
   const [expandedBoardId, setExpandedBoardId] = useState<string | null>(null)
 
@@ -199,13 +209,21 @@ export default function BoardsClient({
     )
   }, [contentFilter, availableContents])
 
+  const filteredUrls = useMemo(() => {
+    const q = urlFilter.trim().toLowerCase()
+    if (!q) return availableUrls
+    return availableUrls.filter((u) => u.titel.toLowerCase().includes(q))
+  }, [urlFilter, availableUrls])
+
   function openAdd() {
     setEditing(null)
     setShowAddForm(true)
     setSelectedKeywordIds(new Set())
     setSelectedContentIds(new Set())
+    setSelectedUrlIds(new Set())
     setKeywordFilter('')
     setContentFilter('')
+    setUrlFilter('')
     setFormError(null)
   }
 
@@ -214,8 +232,10 @@ export default function BoardsClient({
     setShowAddForm(false)
     setSelectedKeywordIds(new Set(board.keywords.map((k) => k.id)))
     setSelectedContentIds(new Set(board.contents.map((c) => c.id)))
+    setSelectedUrlIds(new Set(board.urls.map((u) => u.id)))
     setKeywordFilter('')
     setContentFilter('')
+    setUrlFilter('')
     setFormError(null)
   }
 
@@ -224,6 +244,7 @@ export default function BoardsClient({
     setEditing(null)
     setSelectedKeywordIds(new Set())
     setSelectedContentIds(new Set())
+    setSelectedUrlIds(new Set())
     setFormError(null)
   }
 
@@ -245,6 +266,15 @@ export default function BoardsClient({
     })
   }
 
+  function toggleUrl(id: string) {
+    setSelectedUrlIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
   async function onSubmitForm(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setFormError(null)
@@ -252,8 +282,10 @@ export default function BoardsClient({
     const formData = new FormData(form)
     formData.delete('keyword_ids')
     formData.delete('content_ids')
+    formData.delete('url_ids')
     selectedKeywordIds.forEach((id) => formData.append('keyword_ids', id))
     selectedContentIds.forEach((id) => formData.append('content_ids', id))
+    selectedUrlIds.forEach((id) => formData.append('url_ids', id))
 
     const result = editing
       ? await (() => {
@@ -511,6 +543,50 @@ export default function BoardsClient({
             </div>
           </div>
 
+          <div>
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <label className="block text-sm font-medium text-gray-700">
+                Ziel-URLs zuordnen
+              </label>
+              {availableUrls.length > 0 && (
+                <input
+                  type="text"
+                  value={urlFilter}
+                  onChange={(e) => setUrlFilter(e.target.value)}
+                  placeholder="Filter…"
+                  className="w-48 rounded-md border border-gray-300 px-2 py-1 text-xs focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                />
+              )}
+            </div>
+            <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border border-gray-300 p-3">
+              {availableUrls.length === 0 ? (
+                <p className="text-sm text-gray-500">
+                  Noch keine Ziel-URLs vorhanden — lege erst welche unter
+                  „Ziel-URLs“ an.
+                </p>
+              ) : filteredUrls.length === 0 ? (
+                <p className="text-sm text-gray-500">
+                  Keine Treffer für „{urlFilter}“.
+                </p>
+              ) : (
+                filteredUrls.map((u) => (
+                  <label
+                    key={u.id}
+                    className="flex items-center gap-2 rounded px-1 py-1 text-sm hover:bg-gray-50"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedUrlIds.has(u.id)}
+                      onChange={() => toggleUrl(u.id)}
+                      className="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
+                    />
+                    <span className="flex-1 text-gray-900">{u.titel}</span>
+                  </label>
+                ))
+              )}
+            </div>
+          </div>
+
           {formError && <p className="text-sm text-red-700">{formError}</p>}
 
           <div className="flex gap-2">
@@ -559,6 +635,9 @@ export default function BoardsClient({
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Inhalte
               </th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Ziel-URLs
+              </th>
               <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Aktion
               </th>
@@ -568,7 +647,7 @@ export default function BoardsClient({
             {boards.length === 0 ? (
               <tr>
                 <td
-                  colSpan={9}
+                  colSpan={10}
                   className="px-4 py-8 text-center text-sm text-gray-500"
                 >
                   Noch keine Boards. Erstelle dein erstes.
@@ -682,6 +761,22 @@ export default function BoardsClient({
                       </div>
                     )}
                   </td>
+                  <td className="px-4 py-3 text-sm">
+                    {board.urls.length === 0 ? (
+                      <span className="text-gray-400">—</span>
+                    ) : (
+                      <div className="flex flex-wrap gap-1">
+                        {board.urls.map((u) => (
+                          <span
+                            key={u.id}
+                            className="inline-flex items-center rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-700"
+                          >
+                            {u.titel}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-right text-sm">
                     <div className="flex items-center justify-end gap-3">
                       <button
@@ -712,7 +807,7 @@ export default function BoardsClient({
                     key={`${board.id}-pins`}
                     className="bg-gray-50/60"
                   >
-                    <td colSpan={9} className="px-4 py-3">
+                    <td colSpan={10} className="px-4 py-3">
                       {boardPins.length === 0 ? (
                         <p className="text-sm text-gray-500">
                           Noch keine Pins für dieses Board

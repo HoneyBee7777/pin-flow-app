@@ -36,6 +36,17 @@ function readContentIds(formData: FormData): string[] {
   )
 }
 
+function readBoardIds(formData: FormData): string[] {
+  return Array.from(
+    new Set(
+      formData
+        .getAll('board_ids')
+        .map((v) => String(v))
+        .filter(Boolean)
+    )
+  )
+}
+
 export async function addZielUrl(
   formData: FormData
 ): Promise<{ error?: string }> {
@@ -51,6 +62,7 @@ export async function addZielUrl(
   const prioritaet = String(formData.get('prioritaet') ?? '')
   const notizen = String(formData.get('notizen') ?? '').trim() || null
   const contentIds = readContentIds(formData)
+  const boardIds = readBoardIds(formData)
 
   if (!url) return { error: 'URL darf nicht leer sein.' }
   if (!titel) return { error: 'Titel darf nicht leer sein.' }
@@ -89,8 +101,24 @@ export async function addZielUrl(
     }
   }
 
+  if (boardIds.length > 0) {
+    const { error: ubError } = await supabase.from('url_boards').insert(
+      boardIds.map((bid) => ({
+        url_id: inserted.id,
+        board_id: bid,
+        user_id: user.id,
+      }))
+    )
+    if (ubError) {
+      return {
+        error: `URL gespeichert, aber Board-Verknüpfungen konnten nicht angelegt werden: ${ubError.message}`,
+      }
+    }
+  }
+
   revalidatePath('/dashboard/ziel-urls')
   revalidatePath('/dashboard/content-inhalte')
+  revalidatePath('/dashboard/boards')
   return {}
 }
 
@@ -112,6 +140,7 @@ export async function updateZielUrl(
   const prioritaet = String(formData.get('prioritaet') ?? '')
   const notizen = String(formData.get('notizen') ?? '').trim() || null
   const contentIds = readContentIds(formData)
+  const boardIds = readBoardIds(formData)
 
   if (!url) return { error: 'URL darf nicht leer sein.' }
   if (!titel) return { error: 'Titel darf nicht leer sein.' }
@@ -139,8 +168,28 @@ export async function updateZielUrl(
     if (insertError) return { error: insertError.message }
   }
 
+  const { error: deleteBoardsError } = await supabase
+    .from('url_boards')
+    .delete()
+    .eq('url_id', id)
+  if (deleteBoardsError) return { error: deleteBoardsError.message }
+
+  if (boardIds.length > 0) {
+    const { error: insertBoardsError } = await supabase
+      .from('url_boards')
+      .insert(
+        boardIds.map((bid) => ({
+          url_id: id,
+          board_id: bid,
+          user_id: user.id,
+        }))
+      )
+    if (insertBoardsError) return { error: insertBoardsError.message }
+  }
+
   revalidatePath('/dashboard/ziel-urls')
   revalidatePath('/dashboard/content-inhalte')
+  revalidatePath('/dashboard/boards')
   return {}
 }
 
@@ -152,6 +201,7 @@ export async function deleteZielUrl(formData: FormData): Promise<void> {
   await supabase.from('ziel_urls').delete().eq('id', id)
   revalidatePath('/dashboard/ziel-urls')
   revalidatePath('/dashboard/content-inhalte')
+  revalidatePath('/dashboard/boards')
 }
 
 export async function importZielUrls(

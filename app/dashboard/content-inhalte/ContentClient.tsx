@@ -39,6 +39,7 @@ export type ContentItem = {
   keywords: Array<{ id: string; keyword: string }>
   urls: Array<{ id: string; titel: string; url: string }>
   boards: Array<{ id: string; name: string }>
+  pinCount: number
 }
 
 const TYP_OPTIONS: Array<{ value: ContentTyp; label: string }> = [
@@ -530,6 +531,9 @@ export default function ContentClient({
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Strategie
               </th>
+              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Pins
+              </th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Keywords
               </th>
@@ -548,7 +552,7 @@ export default function ContentClient({
             {items.length === 0 ? (
               <tr>
                 <td
-                  colSpan={7}
+                  colSpan={8}
                   className="px-4 py-8 text-center text-sm text-gray-500"
                 >
                   Noch keine Inhalte. Lege deinen ersten an.
@@ -578,6 +582,9 @@ export default function ContentClient({
                     >
                       {STRATEGIE_LABEL[item.strategie_typ]}
                     </span>
+                  </td>
+                  <td className="px-4 py-3 text-right text-sm font-medium tabular-nums text-gray-900">
+                    {item.pinCount}
                   </td>
                   <td className="px-4 py-3 text-sm">
                     {item.keywords.length === 0 ? (

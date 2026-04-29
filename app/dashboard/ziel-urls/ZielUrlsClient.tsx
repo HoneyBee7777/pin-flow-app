@@ -24,6 +24,11 @@ export type ContentOption = {
   titel: string
 }
 
+export type BoardOption = {
+  id: string
+  name: string
+}
+
 export type ZielUrl = {
   id: string
   url: string
@@ -33,6 +38,8 @@ export type ZielUrl = {
   notizen: string | null
   created_at: string
   contents: Array<{ id: string; titel: string }>
+  boards: Array<{ id: string; name: string }>
+  pinCount: number
 }
 
 const TYP_OPTIONS: Array<{ value: ZielUrlTyp; label: string }> = [
@@ -105,9 +112,11 @@ function PencilIcon() {
 export default function ZielUrlsClient({
   urls,
   availableContents,
+  availableBoards,
 }: {
   urls: ZielUrl[]
   availableContents: ContentOption[]
+  availableBoards: BoardOption[]
 }) {
   const [showAddForm, setShowAddForm] = useState(false)
   const [showImport, setShowImport] = useState(false)
@@ -117,6 +126,10 @@ export default function ZielUrlsClient({
   const [importError, setImportError] = useState<string | null>(null)
   const [contentFilter, setContentFilter] = useState('')
   const [selectedContentIds, setSelectedContentIds] = useState<Set<string>>(
+    new Set()
+  )
+  const [boardFilter, setBoardFilter] = useState('')
+  const [selectedBoardIds, setSelectedBoardIds] = useState<Set<string>>(
     new Set()
   )
   const [isPending, startTransition] = useTransition()
@@ -131,12 +144,20 @@ export default function ZielUrlsClient({
     )
   }, [contentFilter, availableContents])
 
+  const filteredBoards = useMemo(() => {
+    const q = boardFilter.trim().toLowerCase()
+    if (!q) return availableBoards
+    return availableBoards.filter((b) => b.name.toLowerCase().includes(q))
+  }, [boardFilter, availableBoards])
+
   function openAdd() {
     setEditing(null)
     setShowAddForm(true)
     setShowImport(false)
     setSelectedContentIds(new Set())
     setContentFilter('')
+    setSelectedBoardIds(new Set())
+    setBoardFilter('')
     setFormError(null)
   }
 
@@ -146,6 +167,8 @@ export default function ZielUrlsClient({
     setShowImport(false)
     setSelectedContentIds(new Set(u.contents.map((c) => c.id)))
     setContentFilter('')
+    setSelectedBoardIds(new Set(u.boards.map((b) => b.id)))
+    setBoardFilter('')
     setFormError(null)
   }
 
@@ -153,11 +176,21 @@ export default function ZielUrlsClient({
     setShowAddForm(false)
     setEditing(null)
     setSelectedContentIds(new Set())
+    setSelectedBoardIds(new Set())
     setFormError(null)
   }
 
   function toggleContent(id: string) {
     setSelectedContentIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function toggleBoard(id: string) {
+    setSelectedBoardIds((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
@@ -172,6 +205,8 @@ export default function ZielUrlsClient({
     const formData = new FormData(form)
     formData.delete('content_ids')
     selectedContentIds.forEach((id) => formData.append('content_ids', id))
+    formData.delete('board_ids')
+    selectedBoardIds.forEach((id) => formData.append('board_ids', id))
     const result = editing
       ? await (() => {
           formData.set('id', editing.id)
@@ -383,6 +418,50 @@ export default function ZielUrlsClient({
           </div>
 
           <div>
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <label className="block text-sm font-medium text-gray-700">
+                Boards zuordnen
+              </label>
+              {availableBoards.length > 0 && (
+                <input
+                  type="text"
+                  value={boardFilter}
+                  onChange={(e) => setBoardFilter(e.target.value)}
+                  placeholder="Filter…"
+                  className="w-48 rounded-md border border-gray-300 px-2 py-1 text-xs focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                />
+              )}
+            </div>
+            <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border border-gray-300 p-3">
+              {availableBoards.length === 0 ? (
+                <p className="text-sm text-gray-500">
+                  Noch keine Boards vorhanden — lege erst welche unter „Boards“
+                  an.
+                </p>
+              ) : filteredBoards.length === 0 ? (
+                <p className="text-sm text-gray-500">
+                  Keine Treffer für „{boardFilter}“.
+                </p>
+              ) : (
+                filteredBoards.map((b) => (
+                  <label
+                    key={b.id}
+                    className="flex items-center gap-2 rounded px-1 py-1 text-sm hover:bg-gray-50"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedBoardIds.has(b.id)}
+                      onChange={() => toggleBoard(b.id)}
+                      className="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
+                    />
+                    <span className="flex-1 text-gray-900">{b.name}</span>
+                  </label>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div>
             <label
               htmlFor="notizen"
               className="block text-sm font-medium text-gray-700"
@@ -541,8 +620,14 @@ export default function ZielUrlsClient({
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Priorität
               </th>
+              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Pins
+              </th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Inhalte
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Boards
               </th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Notizen
@@ -556,7 +641,7 @@ export default function ZielUrlsClient({
             {urls.length === 0 ? (
               <tr>
                 <td
-                  colSpan={7}
+                  colSpan={9}
                   className="px-4 py-8 text-center text-sm text-gray-500"
                 >
                   Noch keine URLs. Füge eine hinzu oder importiere mehrere.
@@ -597,6 +682,9 @@ export default function ZielUrlsClient({
                       {PRIO_LABEL[u.prioritaet]}
                     </span>
                   </td>
+                  <td className="px-4 py-3 text-right text-sm font-medium tabular-nums text-gray-900">
+                    {u.pinCount}
+                  </td>
                   <td className="px-4 py-3 text-sm">
                     {u.contents.length === 0 ? (
                       <span className="text-gray-400">—</span>
@@ -608,6 +696,22 @@ export default function ZielUrlsClient({
                             className="inline-flex items-center rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-700"
                           >
                             {c.titel}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-sm">
+                    {u.boards.length === 0 ? (
+                      <span className="text-gray-400">—</span>
+                    ) : (
+                      <div className="flex flex-wrap gap-1">
+                        {u.boards.map((b) => (
+                          <span
+                            key={b.id}
+                            className="inline-flex items-center rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-700"
+                          >
+                            {b.name}
                           </span>
                         ))}
                       </div>

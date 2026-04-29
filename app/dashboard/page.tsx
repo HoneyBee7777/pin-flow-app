@@ -13,8 +13,6 @@ import {
   formatGrowth,
   formatPercent,
   formatZahl,
-  PIN_DIAGNOSE_BADGE,
-  PIN_DIAGNOSE_LABEL,
   PIN_HANDLUNG,
   boardScoreTooltip,
   scoreBoardHybrid,
@@ -34,10 +32,7 @@ import {
 } from './analytics/utils'
 import {
   computeStatus,
-  type EventStatus,
   type SaisonEvent,
-  type SaisonTyp,
-  type StatusInfo,
 } from './saison-kalender/utils'
 import PerformanceChart, { type ChartPoint } from './PerformanceChart'
 import AufgabenSection, { type Aufgabe } from './AufgabenSection'
@@ -47,69 +42,56 @@ import HandlungsbedarfPinRow, {
 } from './HandlungsbedarfPinRow'
 import BearbeitetRow, { type BearbeitetRowData } from './BearbeitetRow'
 
-type ContentPipelineUrl = {
+// Pin-Pipeline-Defaults — greifen, wenn `einstellungen` für den User
+// (noch) keine Zeile bzw. NULL-Werte enthält. Nutzer-Werte werden in
+// /dashboard/einstellungen unter „Content-Pipeline-Schwellwerte" gepflegt.
+const PIPELINE_DEFAULT_MIN_PINS_GESAMT = 3
+const PIPELINE_DEFAULT_MIN_PINS_OHNE_AKTUELL = 3
+const PIPELINE_DEFAULT_TAGE_OHNE_PIN = 30
+const PIPELINE_DEFAULT_MIN_CTR_GOLDNUGGET = 1.5
+const PIPELINE_DEFAULT_MAX_PINS_GOLDNUGGET = 5
+
+type PipelineThresholds = {
+  minPinsGesamt: number
+  minPinsOhneAktuell: number
+  tageOhnePin: number
+  minCtrGoldnugget: number
+  maxPinsGoldnugget: number
+}
+
+type PinPipelineInhalt = {
   id: string
   titel: string
-  prioritaet: 'hoch' | 'mittel' | 'niedrig'
   pinCount: number
+  letzterPinTage: number | null
+  boardNames: string[]
+  keywords: string[]
+  primaryUrl: string | null
 }
 
-type UnusedKeyword = {
-  id: string
-  keyword: string
-  typ: 'haupt' | 'mid_tail' | 'longtail'
+type UrlPotenzialRow = {
+  basisUrl: string
+  displayTitle: string
+  pinCount: number
+  ctr: number
+  boardNames: string[]
 }
 
-type UpcomingEvent = {
+type KanbanEvent = {
   id: string
   event_name: string
-  event_datum: string | null
-  statusInfo: StatusInfo
+  event_datum: string
+  pinStart: string
+  pinEnd: string
+  suchbeginnTage: number
+  countdownDays: number
 }
 
-const URGENCY_ORDER: Record<EventStatus, number> = {
-  jetzt_produzieren: 0,
-  jetzt_pinnen: 1,
-  hochphase: 2,
-  noch_zeit: 3,
-  evergreen: 4,
-  abgeschlossen: 5,
-}
-
-const KEYWORD_TYP_LABEL: Record<UnusedKeyword['typ'], string> = {
-  haupt: 'Haupt',
-  mid_tail: 'Mid-Tail',
-  longtail: 'Longtail',
-}
-
-const KEYWORD_TYP_EMOJI: Record<UnusedKeyword['typ'], string> = {
-  haupt: '🔴',
-  mid_tail: '🟡',
-  longtail: '🟢',
-}
-
-const KEYWORD_TYP_BADGE: Record<UnusedKeyword['typ'], string> = {
-  haupt: 'bg-red-100 text-red-700',
-  mid_tail: 'bg-yellow-100 text-yellow-800',
-  longtail: 'bg-green-100 text-green-700',
-}
-
-const PRIO_EMOJI: Record<ContentPipelineUrl['prioritaet'], string> = {
-  hoch: '🔴',
-  mittel: '🟡',
-  niedrig: '🟢',
-}
-
-const PRIO_LABEL: Record<ContentPipelineUrl['prioritaet'], string> = {
-  hoch: 'Hoch',
-  mittel: 'Mittel',
-  niedrig: 'Niedrig',
-}
-
-const PRIO_BADGE: Record<ContentPipelineUrl['prioritaet'], string> = {
-  hoch: 'bg-red-100 text-red-700',
-  mittel: 'bg-yellow-100 text-yellow-800',
-  niedrig: 'bg-green-100 text-green-700',
+type SaisonKanbanColumns = {
+  jetztProduzieren: KanbanEvent[]
+  jetztPinnen: KanbanEvent[]
+  hochphase: KanbanEvent[]
+  nochZeit: KanbanEvent[]
 }
 
 type RawPinAnalyticsRow = {
@@ -474,12 +456,12 @@ export default async function DashboardPage() {
     pinAnalyticsRes,
     saisonRes,
     urlsRes,
-    keywordsRes,
     aufgabenRes,
     erledigtRes,
     pinsPublishedCountRes,
     boardsCountRes,
     boardAnalyticsRes,
+    contentInhalteRes,
   ] = await Promise.all([
     supabase
       .from('profil_analytics')
@@ -496,7 +478,9 @@ export default async function DashboardPage() {
          schwellwert_alter_recycling, schwellwert_ctr, schwellwert_impressionen,
          schwellwert_board_wenig_aktiv, schwellwert_board_inaktiv,
          schwellwert_board_top_er, schwellwert_board_top_prozent,
-         schwellwert_board_schwach_er, schwellwert_board_wachstum_trend`
+         schwellwert_board_schwach_er, schwellwert_board_wachstum_trend,
+         cp_min_pins_gesamt, cp_min_pins_ohne_aktuell, cp_tage_ohne_pin,
+         cp_min_ctr_goldnugget, cp_max_pins_goldnugget`
       )
       .eq('user_id', user.id)
       .maybeSingle(),
@@ -521,12 +505,7 @@ export default async function DashboardPage() {
         'id, event_name, event_datum, saison_typ, suchbeginn_tage, notizen, datum_variabel, created_at'
       )
       .order('event_datum', { ascending: true, nullsFirst: false }),
-    supabase
-      .from('ziel_urls')
-      .select('id, titel, prioritaet, pins ( id )'),
-    supabase
-      .from('keywords')
-      .select('id, keyword, typ, pin_keywords ( pin_id )'),
+    supabase.from('ziel_urls').select('id, titel, url'),
     supabase
       .from('aufgaben')
       .select(
@@ -543,7 +522,9 @@ export default async function DashboardPage() {
     Promise.resolve(
       supabase
         .from('pins')
-        .select('id, status, created_at, geplante_veroeffentlichung, board_id')
+        .select(
+          'id, status, created_at, geplante_veroeffentlichung, board_id, content_id, ziel_url_id'
+        )
     ).catch((err: unknown) => {
       console.error('[Dashboard] pins query failed:', err)
       return { data: [], error: err as Error }
@@ -555,6 +536,20 @@ export default async function DashboardPage() {
         'id, board_id, datum, impressionen, klicks_auf_pins, ausgehende_klicks, saves, engagement, anzahl_pins, created_at'
       )
       .order('datum', { ascending: false }),
+    // content_inhalte: Basis für die Pin-Pipeline-Section.
+    // Joins liefern Boards, Keywords und Ziel-URLs pro Inhalt — analog
+    // zu /dashboard/content-inhalte. RLS filtert auf user_id.
+    Promise.resolve(
+      supabase.from('content_inhalte').select(
+        `id, titel,
+         content_keywords ( keywords ( id, keyword ) ),
+         content_urls ( ziel_urls ( id, titel, url ) ),
+         content_boards ( boards ( id, name ) )`
+      )
+    ).catch((err: unknown) => {
+      console.error('[Dashboard] content_inhalte query failed:', err)
+      return { data: [], error: err as Error }
+    }),
   ])
 
   const rows = (profilRes.data ?? []) as ProfilAnalytics[]
@@ -586,6 +581,31 @@ export default async function DashboardPage() {
   const thresholds = thresholdsFromSettings(
     settingsRes.data as Partial<EinstellungenSchwellwerte> | null
   )
+
+  type RawPipelineSettings = {
+    cp_min_pins_gesamt: number | null
+    cp_min_pins_ohne_aktuell: number | null
+    cp_tage_ohne_pin: number | null
+    cp_min_ctr_goldnugget: number | string | null
+    cp_max_pins_goldnugget: number | null
+  }
+  const cpRaw = settingsRes.data as Partial<RawPipelineSettings> | null
+  const pipelineThresholds: PipelineThresholds = {
+    minPinsGesamt:
+      cpRaw?.cp_min_pins_gesamt ?? PIPELINE_DEFAULT_MIN_PINS_GESAMT,
+    minPinsOhneAktuell:
+      cpRaw?.cp_min_pins_ohne_aktuell ??
+      PIPELINE_DEFAULT_MIN_PINS_OHNE_AKTUELL,
+    tageOhnePin: cpRaw?.cp_tage_ohne_pin ?? PIPELINE_DEFAULT_TAGE_OHNE_PIN,
+    minCtrGoldnugget:
+      cpRaw?.cp_min_ctr_goldnugget === null ||
+      cpRaw?.cp_min_ctr_goldnugget === undefined
+        ? PIPELINE_DEFAULT_MIN_CTR_GOLDNUGGET
+        : Number(cpRaw.cp_min_ctr_goldnugget),
+    maxPinsGoldnugget:
+      cpRaw?.cp_max_pins_goldnugget ?? PIPELINE_DEFAULT_MAX_PINS_GOLDNUGGET,
+  }
+
   const today = todayIso()
   const rawPinAnalytics =
     (pinAnalyticsRes.data ?? []) as unknown as RawPinAnalyticsRow[]
@@ -668,65 +688,78 @@ export default async function DashboardPage() {
   // Innerhalb jeder Kategorie: nach Klicks DESC sortieren
   groupedActions.forEach((arr) => arr.sort((a, b) => b.klicks - a.klicks))
 
-  // ===== Saison-Vorschau =====
+  // ===== Saison-Kalender (Kanban) =====
+  // Verwendet die bestehende computeStatus-Logik aus saison-kalender/utils.ts —
+  // dieselbe, die auch die Saison-Kalender-Seite nutzt.
+  // - statusInfo.pinEnd   = event_datum - suchbeginn_tage  (= Suchstart)
+  // - statusInfo.pinStart = pinEnd - 60 (Pinterest Distributions-Zeit)
+  // - statusInfo.prodStart = pinStart - 31
+  // Evergreen, Events ohne Datum sowie abgeschlossene Events werden nicht
+  // angezeigt.
   const saisonRows = (saisonRes.data ?? []) as SaisonEvent[]
-  const upcomingEvents: UpcomingEvent[] = saisonRows
-    .filter((e) => e.saison_typ !== ('evergreen' as SaisonTyp))
-    .map((e) => ({
-      id: e.id,
-      event_name: e.event_name,
-      event_datum: e.event_datum,
-      statusInfo: computeStatus(
-        e.event_datum,
-        e.saison_typ,
-        e.suchbeginn_tage,
-        today
-      ),
-    }))
-    .filter((e) => e.statusInfo.status !== 'abgeschlossen')
-    .sort((a, b) => {
-      const ord =
-        URGENCY_ORDER[a.statusInfo.status] - URGENCY_ORDER[b.statusInfo.status]
-      if (ord !== 0) return ord
-      const aD = a.event_datum ?? '￿'
-      const bD = b.event_datum ?? '￿'
-      return aD.localeCompare(bD)
-    })
-    .slice(0, 5)
-
-  // ===== Content-Pipeline: URLs mit < 3 Pins =====
-  type RawUrlRow = {
-    id: string
-    titel: string
-    prioritaet: ContentPipelineUrl['prioritaet']
-    pins: Array<{ id: string }> | null
+  const saisonKanban: SaisonKanbanColumns = {
+    jetztProduzieren: [],
+    jetztPinnen: [],
+    hochphase: [],
+    nochZeit: [],
   }
-  const urlsUnderfed: ContentPipelineUrl[] = (
-    (urlsRes.data ?? []) as RawUrlRow[]
-  )
-    .map((u) => ({
-      id: u.id,
-      titel: u.titel,
-      prioritaet: u.prioritaet,
-      pinCount: u.pins?.length ?? 0,
-    }))
-    .filter((u) => u.pinCount < 3)
-    .sort((a, b) => a.pinCount - b.pinCount)
-    .slice(0, 5)
 
-  // ===== Content-Pipeline: ungenutzte Keywords =====
-  type RawKwRow = {
-    id: string
-    keyword: string
-    typ: UnusedKeyword['typ']
-    pin_keywords: Array<{ pin_id: string }> | null
+  for (const event of saisonRows) {
+    if (event.saison_typ === 'evergreen') continue
+    if (!event.event_datum) continue
+    if (today >= event.event_datum) continue
+
+    const statusInfo = computeStatus(
+      event.event_datum,
+      event.saison_typ,
+      event.suchbeginn_tage,
+      today
+    )
+    if (!statusInfo.pinStart || !statusInfo.pinEnd || !statusInfo.prodStart) {
+      continue
+    }
+
+    const base = {
+      id: event.id,
+      event_name: event.event_name,
+      event_datum: event.event_datum,
+      pinStart: statusInfo.pinStart,
+      pinEnd: statusInfo.pinEnd,
+      suchbeginnTage: event.suchbeginn_tage ?? 60,
+    }
+
+    if (today >= statusInfo.pinStart && today <= statusInfo.pinEnd) {
+      saisonKanban.jetztPinnen.push({
+        ...base,
+        countdownDays: diffDays(today, event.event_datum),
+      })
+    } else if (today > statusInfo.pinEnd) {
+      saisonKanban.hochphase.push({
+        ...base,
+        countdownDays: diffDays(today, event.event_datum),
+      })
+    } else {
+      const daysToPinStart = diffDays(today, statusInfo.pinStart)
+      if (daysToPinStart <= 30) {
+        saisonKanban.jetztProduzieren.push({
+          ...base,
+          countdownDays: daysToPinStart,
+        })
+      } else {
+        saisonKanban.nochZeit.push({
+          ...base,
+          countdownDays: Math.max(0, diffDays(today, statusInfo.prodStart)),
+        })
+      }
+    }
   }
-  const unusedKeywords: UnusedKeyword[] = (
-    (keywordsRes.data ?? []) as RawKwRow[]
-  )
-    .filter((k) => (k.pin_keywords?.length ?? 0) === 0)
-    .map((k) => ({ id: k.id, keyword: k.keyword, typ: k.typ }))
-    .slice(0, 10)
+
+  const byEventDate = (a: KanbanEvent, b: KanbanEvent) =>
+    a.event_datum.localeCompare(b.event_datum)
+  saisonKanban.jetztProduzieren.sort(byEventDate)
+  saisonKanban.jetztPinnen.sort(byEventDate)
+  saisonKanban.hochphase.sort(byEventDate)
+  saisonKanban.nochZeit.sort(byEventDate)
 
   // ===== Performance-Verlauf (rollierende 12 Monate, ASC für Chart) =====
   const chartPoints: ChartPoint[] = profilRows
@@ -747,6 +780,8 @@ export default async function DashboardPage() {
     created_at: string
     geplante_veroeffentlichung: string | null
     board_id: string | null
+    content_id: string | null
+    ziel_url_id: string | null
   }
   type BoardRow = {
     id: string
@@ -772,10 +807,165 @@ export default async function DashboardPage() {
     pinsCountByBoard.set(p.board_id, (pinsCountByBoard.get(p.board_id) ?? 0) + 1)
   }
 
-  // ===== Top Pins (nach Klicks) =====
-  const topPins = [...actionable]
-    .sort((a, b) => b.klicks - a.klicks)
-    .slice(0, 5)
+  // ===== Pin-Pipeline: Inhalte mit Pin-Bedarf + URLs mit Potenzial =====
+  // Schwellwerte aus `einstellungen` (cp_*) mit Code-Fallback (siehe
+  // pipelineThresholds oben):
+  //   - Sub A: pinCount < minPinsGesamt
+  //   - Sub B: pinCount ≥ minPinsOhneAktuell UND letzter Pin > tageOhnePin
+  //   - Cat 2: avg CTR > minCtrGoldnugget % UND Pin-Count < maxPinsGoldnugget
+  type RawContentInhalt = {
+    id: string
+    titel: string
+    content_keywords: Array<{
+      keywords: { id: string; keyword: string } | null
+    }>
+    content_urls: Array<{
+      ziel_urls: { id: string; titel: string; url: string } | null
+    }>
+    content_boards: Array<{
+      boards: { id: string; name: string } | null
+    }>
+  }
+
+  const contentInhalteRows = (contentInhalteRes.data ?? []) as
+    unknown as RawContentInhalt[]
+
+  // Pins pro content_id sammeln (alle Status-Stufen — auch Drafts zählen).
+  const pinsByContent = new Map<string, PinRow[]>()
+  for (const p of allPinsRows) {
+    if (!p.content_id) continue
+    const arr = pinsByContent.get(p.content_id) ?? []
+    arr.push(p)
+    pinsByContent.set(p.content_id, arr)
+  }
+
+  // Letzter Pin = größtes geplante_veroeffentlichung (Fallback created_at).
+  function pinDateIso(p: PinRow): string {
+    return p.geplante_veroeffentlichung ?? p.created_at.slice(0, 10)
+  }
+
+  const pipelineInhalte: PinPipelineInhalt[] = contentInhalteRows.map((ci) => {
+    const pins = pinsByContent.get(ci.id) ?? []
+    const pinCount = pins.length
+    let letzterPinIso: string | null = null
+    for (const p of pins) {
+      const d = pinDateIso(p)
+      if (letzterPinIso === null || d > letzterPinIso) letzterPinIso = d
+    }
+    const letzterPinTage =
+      letzterPinIso !== null ? Math.max(0, diffDays(letzterPinIso, today)) : null
+    return {
+      id: ci.id,
+      titel: ci.titel,
+      pinCount,
+      letzterPinTage,
+      boardNames: ci.content_boards
+        .filter((cb) => cb.boards)
+        .map((cb) => cb.boards!.name),
+      keywords: ci.content_keywords
+        .filter((ck) => ck.keywords)
+        .map((ck) => ck.keywords!.keyword),
+      primaryUrl:
+        ci.content_urls.find((cu) => cu.ziel_urls)?.ziel_urls?.url ?? null,
+    }
+  })
+
+  const inhaltePinBedarfA = pipelineInhalte
+    .filter((c) => c.pinCount < pipelineThresholds.minPinsGesamt)
+    .sort(
+      (a, b) =>
+        a.pinCount - b.pinCount || a.titel.localeCompare(b.titel, 'de')
+    )
+
+  const inhaltePinBedarfB = pipelineInhalte
+    .filter(
+      (c) =>
+        c.pinCount >= pipelineThresholds.minPinsOhneAktuell &&
+        c.letzterPinTage !== null &&
+        c.letzterPinTage > pipelineThresholds.tageOhnePin
+    )
+    .sort((a, b) => (b.letzterPinTage ?? 0) - (a.letzterPinTage ?? 0))
+
+  // ===== Cat 2: URLs mit Potenzial =====
+  type RawUrlRowWithUrl = {
+    id: string
+    titel: string
+    url: string
+  }
+  const urlsRowsForPipeline = (urlsRes.data ?? []) as RawUrlRowWithUrl[]
+  const urlInfoById = new Map<string, RawUrlRowWithUrl>(
+    urlsRowsForPipeline.map((u) => [u.id, u])
+  )
+
+  // Summe klicks/impressionen pro pin_id über alle Analytics-Rows (Lifetime-CTR).
+  const pinTotals = new Map<string, { klicks: number; impressionen: number }>()
+  for (const row of rawPinAnalytics) {
+    const t = pinTotals.get(row.pin_id) ?? { klicks: 0, impressionen: 0 }
+    t.klicks += row.klicks ?? 0
+    t.impressionen += row.impressionen ?? 0
+    pinTotals.set(row.pin_id, t)
+  }
+
+  // Aggregation pro Basis-URL (Anker-Fragment entfernt) — fasst z.B.
+  // 'soulfulspace.de/blog/yoga' und 'soulfulspace.de/blog/yoga#abschnitt'
+  // zusammen.
+  type BasisUrlGroup = {
+    titel: string
+    pinIds: Set<string>
+    klicks: number
+    impressionen: number
+    boardIds: Set<string>
+  }
+  const byBasis = new Map<string, BasisUrlGroup>()
+  for (const p of allPinsRows) {
+    if (!p.ziel_url_id) continue
+    const info = urlInfoById.get(p.ziel_url_id)
+    if (!info) continue
+    const basis = (info.url ?? '').split('#')[0]
+    if (!basis) continue
+    const g = byBasis.get(basis) ?? {
+      titel: info.titel,
+      pinIds: new Set<string>(),
+      klicks: 0,
+      impressionen: 0,
+      boardIds: new Set<string>(),
+    }
+    g.pinIds.add(p.id)
+    if (p.board_id) g.boardIds.add(p.board_id)
+    const t = pinTotals.get(p.id)
+    if (t) {
+      g.klicks += t.klicks
+      g.impressionen += t.impressionen
+    }
+    byBasis.set(basis, g)
+  }
+
+  const boardNameById = new Map<string, string>(
+    boardsRows.map((b) => [b.id, b.name])
+  )
+  const urlPotenzial: UrlPotenzialRow[] = []
+  byBasis.forEach((g, basisUrl) => {
+    const ctr = g.impressionen > 0 ? (g.klicks / g.impressionen) * 100 : 0
+    if (
+      ctr <= pipelineThresholds.minCtrGoldnugget ||
+      g.pinIds.size >= pipelineThresholds.maxPinsGoldnugget
+    ) {
+      return
+    }
+    const boardNamesArr: string[] = []
+    g.boardIds.forEach((id) => {
+      const name = boardNameById.get(id)
+      if (name) boardNamesArr.push(name)
+    })
+    urlPotenzial.push({
+      basisUrl,
+      displayTitle: g.titel,
+      pinCount: g.pinIds.size,
+      ctr,
+      boardNames: boardNamesArr,
+    })
+  })
+  urlPotenzial.sort((a, b) => b.ctr - a.ctr)
 
   // ===== Board-Gesundheit =====
   type BoardAnalyticsRaw = {
@@ -1255,11 +1445,20 @@ export default async function DashboardPage() {
         impressionenGrowth={latest?.impressionen_growth ?? null}
       />
 
+      <SaisonKalenderSection columns={saisonKanban} />
+
       {showWins && <WinsSection wins={wins} />}
 
       <ProfilPerformanceKpiBar latest={latest} previous={previous} />
 
       <PerformanceVerlaufSection points={chartPoints} />
+
+      <PinPipelineSection
+        inhaltePinBedarfA={inhaltePinBedarfA}
+        inhaltePinBedarfB={inhaltePinBedarfB}
+        urlPotenzial={urlPotenzial}
+        thresholds={pipelineThresholds}
+      />
 
       <HandlungsbedarfSection
         grouped={groupedActions}
@@ -1276,15 +1475,6 @@ export default async function DashboardPage() {
         boardsOhneAnalyticsCount={boardsOhneAnalyticsCount}
         boardsLeerCount={boardsLeerCount}
         pinsCountByBoard={pinsCountByBoard}
-      />
-
-      <MeineTopPinsSection pins={topPins} />
-
-      <SaisonVorschauSection events={upcomingEvents} />
-
-      <ContentPipelineSection
-        urls={urlsUnderfed}
-        keywords={unusedKeywords}
       />
 
       <AufgabenSection tasks={aufgabenSorted} today={today} />
@@ -2063,234 +2253,748 @@ function HandlungsbedarfKategorieCard({
 }
 
 // ===========================================================
-// Saison-Vorschau
+// Saison-Kalender (Kanban)
 // ===========================================================
-function SaisonVorschauSection({ events }: { events: UpcomingEvent[] }) {
+const SAISON_ACCENT = {
+  blue: {
+    headerBg: 'bg-blue-50',
+    border: 'border-blue-200',
+    headerText: 'text-blue-900',
+    countdown: 'text-blue-600',
+  },
+  green: {
+    headerBg: 'bg-green-50',
+    border: 'border-green-200',
+    headerText: 'text-green-900',
+    countdown: 'text-green-600',
+  },
+  orange: {
+    headerBg: 'bg-orange-50',
+    border: 'border-orange-200',
+    headerText: 'text-orange-900',
+    countdown: 'text-orange-600',
+  },
+  gray: {
+    headerBg: 'bg-gray-100',
+    border: 'border-gray-200',
+    headerText: 'text-gray-700',
+    countdown: 'text-gray-600',
+  },
+} as const
+
+type SaisonAccent = keyof typeof SAISON_ACCENT
+// href wird per Event in SaisonCard gebaut (`?open=new&saison_event_id=<id>`),
+// damit das Pin-Produktion-Formular automatisch mit dem Event-Tag öffnet.
+type SaisonAction = { label: string }
+
+function formatCountdown(prefix: string, days: number): string {
+  if (days <= 0) return `${prefix} heute`
+  if (days === 1) return `${prefix} in 1 Tag`
+  return `${prefix} in ${days} Tagen`
+}
+
+function buildSuchstartTooltip(event: KanbanEvent): string {
+  // Suchstart-Datum entspricht statusInfo.pinEnd (= event_datum - suchbeginn_tage).
+  return (
+    `Der Suchbeginn für ${event.event_name} liegt bei ` +
+    `${event.suchbeginnTage} Tagen vor dem Event-Datum. ` +
+    `Ab ${formatDateDe(event.pinEnd)} suchen Pinterest-Nutzer:innen aktiv ` +
+    `nach diesem Thema. Der individuelle Suchstart wird in der ` +
+    `Saison-Kalender-Datenbank pro Event hinterlegt.`
+  )
+}
+
+function SaisonKalenderSection({ columns }: { columns: SaisonKanbanColumns }) {
   return (
     <section>
-      <div className="flex items-baseline justify-between">
-        <h2 className="text-lg font-semibold text-gray-900">
-          Anstehende Events
+      <div>
+        <h2 className="flex items-center text-lg font-semibold text-gray-900">
+          Saisonkalender
+          <InfoTooltip text="Pinterest-Nutzer:innen suchen 6–12 Wochen vor einem Event. Wer zu spät pinnt, verpasst die Welle. Der Saisonkalender zeigt dir auf einen Blick in welcher Phase jedes Event gerade ist." />
         </h2>
+        <p className="mt-1 text-sm text-gray-600">
+          Pinterest-Suchen für saisonale Themen starten 6–12 Wochen vor dem
+          Event – hier siehst du, was wann zu tun ist.
+        </p>
+      </div>
+
+      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <SaisonColumn
+          accent="blue"
+          emoji="🎬"
+          title="Jetzt produzieren"
+          subtitle="Material vorbereiten – Pin-Start naht"
+          events={columns.jetztProduzieren}
+          countdownPrefix="Pin-Start"
+          actionButton={{ label: 'Pins erstellen' }}
+          emptyText="Aktuell kein Event in dieser Phase."
+        />
+        <SaisonColumn
+          accent="green"
+          emoji="📌"
+          title="Jetzt pinnen"
+          subtitle="Pin-Fenster offen – aktiv veröffentlichen"
+          events={columns.jetztPinnen}
+          countdownPrefix="Event"
+          emptyText="Aktuell kein Event in dieser Phase."
+        />
+        <SaisonColumn
+          accent="orange"
+          emoji="🚀"
+          title="Hochphase"
+          subtitle="Nicht mehr neu pinnen – veröffentlichte Pins beobachten"
+          events={columns.hochphase}
+          countdownPrefix="Event"
+          emptyText="Aktuell kein Event in der Hochphase."
+        />
+        <SaisonColumn
+          accent="gray"
+          emoji="⏳"
+          title="Noch Zeit"
+          subtitle="Vormerken & Ideen sammeln – Produktion startet später"
+          events={columns.nochZeit}
+          countdownPrefix="Produktionsstart"
+          actionButton={{ label: 'Pin-Idee speichern' }}
+          emptyText="Keine weiteren Events vorgemerkt."
+        />
+      </div>
+
+      <div className="mt-4 text-right">
         <Link
           href="/dashboard/saison-kalender"
           className="text-xs font-medium text-red-600 hover:underline"
         >
-          → Zum Saison-Kalender
+          Alle Events in der Datenbank verwalten ↗
         </Link>
       </div>
-      {events.length === 0 ? (
-        <div className="mt-3 rounded-md border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
-          Alle Events abgeschlossen 👍
-        </div>
-      ) : (
-        <ul className="mt-3 space-y-2">
-          {events.map((e) => (
-            <li
-              key={e.id}
-              className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm"
-            >
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="font-medium text-gray-900">
-                  {e.event_name}
-                </span>
-                <span
-                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${e.statusInfo.badge}`}
-                >
-                  <span aria-hidden>{e.statusInfo.emoji}</span>
-                  {e.statusInfo.label}
-                </span>
-                {e.statusInfo.countdown && (
-                  <span className="text-xs text-gray-600">
-                    {e.statusInfo.countdown}
-                  </span>
-                )}
-                {e.event_datum && (
-                  <span className="text-xs text-gray-400">
-                    am {formatDateDe(e.event_datum)}
-                  </span>
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
     </section>
   )
 }
 
-// ===========================================================
-// Content-Pipeline
-// ===========================================================
-function ContentPipelineSection({
-  urls,
-  keywords,
+function SaisonColumn({
+  accent,
+  emoji,
+  title,
+  subtitle,
+  events,
+  countdownPrefix,
+  actionButton,
+  emptyText,
 }: {
-  urls: ContentPipelineUrl[]
-  keywords: UnusedKeyword[]
+  accent: SaisonAccent
+  emoji: string
+  title: string
+  subtitle: string
+  events: KanbanEvent[]
+  countdownPrefix: string
+  actionButton?: SaisonAction
+  emptyText: string
+}) {
+  const cls = SAISON_ACCENT[accent]
+  const visible = events.slice(0, 2)
+  const hidden = events.slice(2)
+
+  return (
+    <div
+      className={`flex flex-col rounded-lg border ${cls.border} bg-white shadow-sm`}
+    >
+      <div
+        className={`rounded-t-lg border-b ${cls.border} ${cls.headerBg} px-3 py-2`}
+      >
+        <h3
+          className={`flex items-center gap-1.5 text-sm font-semibold ${cls.headerText}`}
+        >
+          <span aria-hidden>{emoji}</span>
+          {title}
+        </h3>
+        <p className={`mt-0.5 text-xs ${cls.headerText} opacity-80`}>
+          {subtitle}
+        </p>
+      </div>
+      <div className="flex flex-col gap-2 p-3">
+        {events.length === 0 ? (
+          <p className="rounded-md border border-dashed border-gray-200 bg-gray-50 px-3 py-4 text-center text-xs text-gray-500">
+            {emptyText}
+          </p>
+        ) : (
+          <>
+            {visible.map((e) => (
+              <SaisonCard
+                key={e.id}
+                event={e}
+                countdownLabel={formatCountdown(countdownPrefix, e.countdownDays)}
+                countdownClassName={cls.countdown}
+                actionButton={actionButton}
+              />
+            ))}
+            {hidden.length > 0 && (
+              <details className="group">
+                <summary className="cursor-pointer list-none text-xs font-medium text-red-600 hover:underline [&::-webkit-details-marker]:hidden">
+                  <span className="inline group-open:hidden">
+                    ▸ {hidden.length}{' '}
+                    {hidden.length === 1 ? 'weiteres' : 'weitere'}
+                  </span>
+                  <span className="hidden group-open:inline">
+                    ▾ Weniger anzeigen
+                  </span>
+                </summary>
+                <div className="mt-2 flex flex-col gap-2">
+                  {hidden.map((e) => (
+                    <SaisonCard
+                      key={e.id}
+                      event={e}
+                      countdownLabel={formatCountdown(
+                        countdownPrefix,
+                        e.countdownDays
+                      )}
+                      countdownClassName={cls.countdown}
+                      actionButton={actionButton}
+                    />
+                  ))}
+                </div>
+              </details>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function SaisonCard({
+  event,
+  countdownLabel,
+  countdownClassName,
+  actionButton,
+}: {
+  event: KanbanEvent
+  countdownLabel: string
+  countdownClassName: string
+  actionButton?: SaisonAction
 }) {
   return (
-    <section>
-      <h2 className="text-lg font-semibold text-gray-900">Content-Pipeline</h2>
-      <div className="mt-3 grid gap-4 lg:grid-cols-2">
-        <UrlsUnderfedCard urls={urls} />
-        <UnusedKeywordsCard keywords={keywords} />
-      </div>
-    </section>
-  )
-}
-
-function UrlsUnderfedCard({ urls }: { urls: ContentPipelineUrl[] }) {
-  return (
-    <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-      <div className="flex items-baseline justify-between">
-        <h3 className="text-sm font-semibold text-gray-900">
-          URLs die mehr Pins brauchen
-        </h3>
-        <Link
-          href="/dashboard/ziel-urls"
-          className="text-xs font-medium text-red-600 hover:underline"
-        >
-          → Alle URLs
-        </Link>
-      </div>
-      {urls.length === 0 ? (
-        <p className="mt-3 rounded-md border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
-          Alle URLs sind gut bespielt 👍
-        </p>
-      ) : (
-        <ul className="mt-3 divide-y divide-gray-100">
-          {urls.map((u) => (
-            <li
-              key={u.id}
-              className="flex items-center justify-between gap-3 py-2 text-sm"
+    <div className="flex min-h-[170px] flex-col justify-between rounded-md border border-gray-200 bg-white p-3 shadow-sm">
+      <div>
+        <div className="flex items-center text-sm font-medium text-gray-900">
+          <span>{event.event_name}</span>
+          <InfoTooltip text={buildSuchstartTooltip(event)} />
+        </div>
+        <div className="mt-0.5 text-xs text-gray-500">
+          {formatDateDe(event.event_datum)}
+        </div>
+        <div className="mt-2 border-t border-gray-100 pt-2 text-xs text-gray-600">
+          Pin-Fenster: {formatDateDe(event.pinStart)} –{' '}
+          {formatDateDe(event.pinEnd)}
+        </div>
+        <div className={`mt-2 text-xs font-medium ${countdownClassName}`}>
+          {countdownLabel}
+        </div>
+        {actionButton && (
+          <div className="mt-1.5">
+            <Link
+              href={`/dashboard/pin-produktion?open=new&saison_event_id=${event.id}`}
+              className="inline-flex items-center justify-center rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700"
             >
-              <span className="truncate font-medium text-gray-900">
-                {u.titel}
-              </span>
-              <span className="flex shrink-0 items-center gap-2">
-                <span
-                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${PRIO_BADGE[u.prioritaet]}`}
-                  title={`Priorität: ${PRIO_LABEL[u.prioritaet]}`}
-                >
-                  <span aria-hidden>{PRIO_EMOJI[u.prioritaet]}</span>
-                  {PRIO_LABEL[u.prioritaet]}
-                </span>
-                <span
-                  className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700"
-                  title={`${u.pinCount} Pin${u.pinCount === 1 ? '' : 's'}`}
-                >
-                  {u.pinCount} {u.pinCount === 1 ? 'Pin' : 'Pins'}
-                </span>
-              </span>
-            </li>
-          ))}
-        </ul>
+              {actionButton.label}
+            </Link>
+          </div>
+        )}
+      </div>
+      {!actionButton && (
+        <div aria-hidden className="mt-1.5">
+          <span className="invisible inline-flex items-center justify-center rounded-md px-3 py-1.5 text-xs font-medium">
+            &nbsp;
+          </span>
+        </div>
       )}
     </div>
   )
 }
 
-function UnusedKeywordsCard({ keywords }: { keywords: UnusedKeyword[] }) {
+// ===========================================================
+// Pin-Pipeline (Inhalte mit Pin-Bedarf + URLs mit Potenzial)
+// ===========================================================
+const PIPELINE_HINT_TONE: Record<
+  'blue' | 'green',
+  { bg: string; text: string }
+> = {
+  blue: { bg: 'bg-blue-50 border-blue-200', text: 'text-blue-800' },
+  green: { bg: 'bg-green-50 border-green-200', text: 'text-green-800' },
+}
+
+function PinPipelineSection({
+  inhaltePinBedarfA,
+  inhaltePinBedarfB,
+  urlPotenzial,
+  thresholds,
+}: {
+  inhaltePinBedarfA: PinPipelineInhalt[]
+  inhaltePinBedarfB: PinPipelineInhalt[]
+  urlPotenzial: UrlPotenzialRow[]
+  thresholds: PipelineThresholds
+}) {
+  const cat1Count = inhaltePinBedarfA.length + inhaltePinBedarfB.length
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-      <div className="flex items-baseline justify-between">
-        <h3 className="text-sm font-semibold text-gray-900">
-          Ungenutzte Keywords
-        </h3>
+    <section>
+      <h2 className="text-lg font-semibold text-gray-900">
+        Content Pipeline – Was als nächstes pinnen?
+      </h2>
+      <div className="mt-3 space-y-3">
+        <PinPipelineInhalteCard
+          subA={inhaltePinBedarfA}
+          subB={inhaltePinBedarfB}
+          totalCount={cat1Count}
+          thresholds={thresholds}
+        />
+        <PinPipelineUrlsCard urls={urlPotenzial} thresholds={thresholds} />
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-gray-500">
         <Link
-          href="/dashboard/keywords"
-          className="text-xs font-medium text-red-600 hover:underline"
+          href="/dashboard/einstellungen#content-pipeline-schwellwerte"
+          className="font-medium text-red-600 hover:underline"
         >
-          → Alle Keywords
+          Schwellwerte in den Einstellungen anpassen ↗
         </Link>
       </div>
-      {keywords.length === 0 ? (
-        <p className="mt-3 rounded-md border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
-          Alle Keywords wurden bereits verwendet 👍
-        </p>
+    </section>
+  )
+}
+
+function PinPipelineInhalteCard({
+  subA,
+  subB,
+  totalCount,
+  thresholds,
+}: {
+  subA: PinPipelineInhalt[]
+  subB: PinPipelineInhalt[]
+  totalCount: number
+  thresholds: PipelineThresholds
+}) {
+  const tone = PIPELINE_HINT_TONE.blue
+  return (
+    <details className="group rounded-lg border border-gray-200 bg-white shadow-sm">
+      <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
+        <span className="text-2xl leading-none text-gray-400" aria-hidden>
+          <span className="inline group-open:hidden">▸</span>
+          <span className="hidden group-open:inline">▾</span>
+        </span>
+        <span
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-100 text-base text-blue-700"
+          aria-hidden
+        >
+          📝
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1 text-sm font-medium text-gray-900">
+            <LabelWithTooltip
+              label="Inhalte mit Pin-Bedarf"
+              tooltip="Pinterest belohnt kontinuierliche Pin-Produktion pro Inhalt. Pro Inhalt sollten alle 3-4 Wochen neue Pin-Varianten erscheinen."
+            />
+          </div>
+          <p className="mt-0.5 text-xs text-gray-600">
+            Inhalte aus deiner Content-Datenbank, die mehr Pin-Material brauchen
+            – größter Hebel für Reichweite.
+          </p>
+        </div>
+        <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-700">
+          {totalCount}
+        </span>
+      </summary>
+
+      <div className="border-t border-gray-200">
+        <div
+          className={`space-y-1 border-b px-4 py-2 text-xs font-medium ${tone.bg} ${tone.text}`}
+        >
+          <div>
+            💡 Der Hebel: Pinterest belohnt frische Pin-Varianten pro Inhalt.
+            Wer pro Inhalt regelmäßig neue Pins mit anderen Hooks produziert,
+            maximiert die Reichweite jedes einzelnen Themas.
+          </div>
+          <div>
+            🎯 So gehst du vor: Pro Inhalt mindestens alle 3-4 Wochen eine
+            neue Pin-Variante produzieren. Verschiedene Hooks und Designs für
+            denselben Inhalt ausspielen.
+          </div>
+        </div>
+
+        <div className="divide-y divide-gray-200">
+          <PinPipelineInhalteSubList
+            heading="🆕 INHALTE MIT ZU WENIGEN PINS"
+            items={subA}
+            kind="few_pins"
+            emptyText="Aktuell keine Inhalte mit zu wenigen Pins – stark, alle Themen haben Material."
+            thresholds={thresholds}
+          />
+          <PinPipelineInhalteSubList
+            heading="💤 INHALTE OHNE AKTUELLEN PIN"
+            items={subB}
+            kind="stale"
+            emptyText="Aktuell keine Inhalte mit langer Pin-Pause – alle Themen werden regelmäßig bepinnt."
+            thresholds={thresholds}
+          />
+        </div>
+      </div>
+    </details>
+  )
+}
+
+function PinPipelineInhalteSubList({
+  heading,
+  items,
+  kind,
+  emptyText,
+  thresholds,
+}: {
+  heading: string
+  items: PinPipelineInhalt[]
+  kind: 'few_pins' | 'stale'
+  emptyText: string
+  thresholds: PipelineThresholds
+}) {
+  const visibleLimit = 3
+  const visible = items.slice(0, visibleLimit)
+  const remaining = items.length - visible.length
+  const tooltip =
+    kind === 'few_pins'
+      ? `Inhalte mit weniger als ${thresholds.minPinsGesamt} Pins insgesamt. ` +
+        'Pinterest belohnt mehrere Pin-Varianten pro Inhalt – idealerweise ' +
+        '3+ Hooks und Designs für denselben Inhalt. Hinweis: Jeder Inhalt ' +
+        'erscheint nur in einer Sub-Liste. Schwellwert in den Einstellungen ' +
+        'anpassbar.'
+      : `Inhalte mit ausreichend Pins (${thresholds.minPinsOhneAktuell}+ insgesamt), bei denen ` +
+        `aber seit über ${thresholds.tageOhnePin} Tagen kein neuer Pin mehr ` +
+        'veröffentlicht wurde. Pinterest belohnt kontinuierliche Aktivität ' +
+        'pro Inhalt. Hinweis: Inhalte mit zu wenigen Pins erscheinen in ' +
+        'Sub-Liste A, auch wenn der letzte Pin lange zurückliegt. ' +
+        'Schwellwerte in den Einstellungen anpassbar.'
+
+  return (
+    <details className="group/sub">
+      <summary className="flex cursor-pointer list-none items-center gap-2 bg-gray-50 py-2 pl-8 pr-4 hover:bg-gray-100 [&::-webkit-details-marker]:hidden">
+        <span className="text-base leading-none text-gray-400" aria-hidden>
+          <span className="inline group-open/sub:hidden">▸</span>
+          <span className="hidden group-open/sub:inline">▾</span>
+        </span>
+        <span className="flex flex-1 items-center text-[13px] font-semibold uppercase tracking-wide text-gray-700">
+          {heading}
+          <InfoTooltip text={tooltip} />
+        </span>
+        <span className="inline-flex items-center rounded-full bg-gray-200 px-2 py-0.5 text-xs font-semibold text-gray-700">
+          {items.length}
+        </span>
+      </summary>
+
+      {items.length === 0 ? (
+        <div className="border-t border-gray-100 px-4 py-4 text-center text-sm text-green-700">
+          {emptyText}
+        </div>
       ) : (
-        <div className="mt-3 flex flex-wrap gap-2">
-          {keywords.map((k) => (
+        <div className="border-t border-gray-100">
+          <ul className="divide-y divide-gray-100">
+            {visible.map((c) => (
+              <PinPipelineInhaltRow
+                key={c.id}
+                item={c}
+                kind={kind}
+                thresholds={thresholds}
+              />
+            ))}
+          </ul>
+          {remaining > 0 && (
+            <details className="group/more border-t border-gray-100">
+              <summary className="cursor-pointer list-none px-4 py-2 text-xs font-medium text-red-600 hover:underline [&::-webkit-details-marker]:hidden">
+                <span className="inline group-open/more:hidden">
+                  ▸ {remaining} weitere Inhalte anzeigen
+                </span>
+                <span className="hidden group-open/more:inline">
+                  ▾ Weniger anzeigen
+                </span>
+              </summary>
+              <ul className="divide-y divide-gray-100">
+                {items.slice(visibleLimit).map((c) => (
+                  <PinPipelineInhaltRow
+                    key={c.id}
+                    item={c}
+                    kind={kind}
+                    thresholds={thresholds}
+                  />
+                ))}
+              </ul>
+            </details>
+          )}
+        </div>
+      )}
+    </details>
+  )
+}
+
+function PinPipelineInhaltRow({
+  item,
+  kind,
+  thresholds,
+}: {
+  item: PinPipelineInhalt
+  kind: 'few_pins' | 'stale'
+  thresholds: PipelineThresholds
+}) {
+  const meta =
+    item.pinCount === 0
+      ? '0 Pins · Noch kein Pin'
+      : `${item.pinCount} Pin${item.pinCount === 1 ? '' : 's'}` +
+        (item.letzterPinTage !== null
+          ? ` · Letzter Pin: vor ${item.letzterPinTage} Tag${
+              item.letzterPinTage === 1 ? '' : 'en'
+            }`
+          : '')
+  const pinPlural = item.pinCount === 1 ? '' : 's'
+  // Sub A (few_pins) hat zwei Varianten:
+  //   - Letzter Pin > tageOhnePin → orange (zusätzliches Stale-Signal)
+  //   - sonst → gelb (reines Volumen-Signal)
+  // Sub B (stale) ist immer orange.
+  const fewPinsIsStale =
+    kind === 'few_pins' &&
+    item.letzterPinTage !== null &&
+    item.letzterPinTage > thresholds.tageOhnePin
+  const hint =
+    kind === 'stale'
+      ? `📊 Letzter Pin vor ${item.letzterPinTage ?? 0} Tagen – kontinuierliche Pin-Produktion fehlt, neue Variante mit anderem Hook produzieren.`
+      : fewPinsIsStale
+        ? `📊 Nur ${item.pinCount} Pin${pinPlural} und seit ${item.letzterPinTage} Tagen kein neuer – kontinuierliche Pin-Produktion fehlt.`
+        : `📊 Nur ${item.pinCount} Pin${pinPlural} – pro Inhalt sollten ${thresholds.minPinsGesamt}+ Varianten existieren.`
+  const hintBoxCls =
+    kind === 'stale' || fewPinsIsStale
+      ? 'bg-orange-50 text-orange-800'
+      : 'bg-yellow-50 text-yellow-800'
+  const visibleBoards = item.boardNames.slice(0, 2)
+  const hiddenBoards = item.boardNames.slice(2)
+  const hasKeywords = item.keywords.length > 0
+  const keywordChips = item.keywords.slice(0, 3)
+  return (
+    <li className="space-y-2 px-4 py-3">
+      <div className="text-sm font-medium text-gray-900">{item.titel}</div>
+      <div className="text-xs text-gray-600">{meta}</div>
+      {item.boardNames.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 text-xs">
+          <span className="text-gray-500">Boards:</span>
+          {visibleBoards.map((name) => (
             <span
-              key={k.id}
-              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${KEYWORD_TYP_BADGE[k.typ]}`}
-              title={`${KEYWORD_TYP_LABEL[k.typ]}-Keyword`}
+              key={`b-${name}`}
+              className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs text-purple-700"
             >
-              <span aria-hidden>{KEYWORD_TYP_EMOJI[k.typ]}</span>
-              {k.keyword}
+              {name}
+            </span>
+          ))}
+          {hiddenBoards.length > 0 && (
+            <details className="contents">
+              <summary className="cursor-pointer list-none text-xs font-medium text-red-600 hover:underline [&::-webkit-details-marker]:hidden">
+                + {hiddenBoards.length} weitere
+              </summary>
+              {hiddenBoards.map((name) => (
+                <span
+                  key={`b-${name}`}
+                  className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs text-purple-700"
+                >
+                  {name}
+                </span>
+              ))}
+            </details>
+          )}
+        </div>
+      )}
+      {hasKeywords ? (
+        <div className="flex flex-wrap items-center gap-1.5 text-xs">
+          <span className="text-gray-500">Keywords:</span>
+          {keywordChips.map((kw) => (
+            <span
+              key={`k-${kw}`}
+              className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-700"
+            >
+              {kw}
+            </span>
+          ))}
+        </div>
+      ) : (
+        <div className="text-xs text-gray-500">
+          Keywords: keine hinterlegt – in Content-Datenbank ergänzen, um SEO zu
+          stärken.
+        </div>
+      )}
+      <div className={`rounded-md px-2 py-1.5 text-xs ${hintBoxCls}`}>
+        {hint}
+      </div>
+      <div className="flex flex-wrap gap-2 pt-1">
+        <Link
+          href={`/dashboard/pin-produktion?content_id=${item.id}&open=new`}
+          className="inline-flex items-center justify-center rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700"
+        >
+          Pin erstellen
+        </Link>
+        {item.primaryUrl && (
+          <a
+            href={item.primaryUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+          >
+            Zur Ziel-URL ↗
+          </a>
+        )}
+        <Link
+          href="/dashboard/content-inhalte"
+          className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+        >
+          Zur Content-Datenbank ↗
+        </Link>
+      </div>
+    </li>
+  )
+}
+
+function PinPipelineUrlsCard({
+  urls,
+  thresholds,
+}: {
+  urls: UrlPotenzialRow[]
+  thresholds: PipelineThresholds
+}) {
+  const tone = PIPELINE_HINT_TONE.green
+  const visible = urls.slice(0, 5)
+  const remaining = urls.length - visible.length
+  const ctrText = thresholds.minCtrGoldnugget
+    .toString()
+    .replace('.', ',')
+  const urlsTooltip =
+    `URLs deren Pins eine Ø-CTR über ${ctrText}% haben und gleichzeitig ` +
+    `weniger als ${thresholds.maxPinsGoldnugget} Pins haben. Hier zahlt sich ` +
+    'jeder zusätzliche Pin besonders aus, weil das Thema bewiesen funktioniert. ' +
+    'Pinterest-Durchschnitt liegt bei 0,3-0,8%. Schwellwerte in den ' +
+    'Einstellungen anpassbar.'
+  return (
+    <details className="group rounded-lg border border-gray-200 bg-white shadow-sm">
+      <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
+        <span className="text-2xl leading-none text-gray-400" aria-hidden>
+          <span className="inline group-open:hidden">▸</span>
+          <span className="hidden group-open:inline">▾</span>
+        </span>
+        <span
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-base text-emerald-700"
+          aria-hidden
+        >
+          🔗
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1 text-sm font-medium text-gray-900">
+            <LabelWithTooltip label="URLs mit Potenzial" tooltip={urlsTooltip} />
+          </div>
+          <p className="mt-0.5 text-xs text-gray-600">
+            URLs mit hoher CTR aber wenigen Pins – ungenutztes Goldnugget.
+          </p>
+        </div>
+        <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
+          {urls.length}
+        </span>
+      </summary>
+
+      {urls.length === 0 ? (
+        <div className="border-t border-gray-200 px-4 py-6 text-center text-sm text-gray-600">
+          Aktuell keine URLs mit auffälligem CTR-Potenzial. Bei mehr
+          Datenmaterial werden hier Goldnugget-URLs angezeigt.
+        </div>
+      ) : (
+        <div className="border-t border-gray-200">
+          <div
+            className={`space-y-1 border-b px-4 py-2 text-xs font-medium ${tone.bg} ${tone.text}`}
+          >
+            <div>
+              💡 Der Hebel: Eine URL mit hoher CTR und wenigen Pins ist ein
+              bewiesenes Erfolgs-Thema mit ungenutztem Volumen. Jeder neue Pin
+              auf dieses Thema bringt vorhersehbar Traffic.
+            </div>
+            <div>
+              🎯 So gehst du vor: Identifiziere die Hooks und Designs die bei
+              den bestehenden Pins funktioniert haben. Produziere 3-5 weitere
+              Varianten in derselben Erfolgs-Logik.
+            </div>
+          </div>
+          <ul className="divide-y divide-gray-100">
+            {visible.map((u) => (
+              <PinPipelineUrlRow key={u.basisUrl} url={u} />
+            ))}
+          </ul>
+          {remaining > 0 && (
+            <details className="border-t border-gray-100">
+              <summary className="cursor-pointer list-none px-4 py-2 text-xs font-medium text-red-600 hover:underline">
+                + {remaining} weitere URL{remaining === 1 ? '' : 's'} anzeigen
+              </summary>
+              <ul className="divide-y divide-gray-100">
+                {urls.slice(5).map((u) => (
+                  <PinPipelineUrlRow key={u.basisUrl} url={u} />
+                ))}
+              </ul>
+            </details>
+          )}
+        </div>
+      )}
+    </details>
+  )
+}
+
+function shortenUrl(url: string): string {
+  try {
+    const u = new URL(url)
+    return u.host.replace(/^www\./, '') + (u.pathname === '/' ? '' : u.pathname)
+  } catch {
+    return url
+  }
+}
+
+function PinPipelineUrlRow({ url }: { url: UrlPotenzialRow }) {
+  const display =
+    url.displayTitle && url.displayTitle.trim() !== ''
+      ? url.displayTitle
+      : shortenUrl(url.basisUrl)
+  const ctrText = url.ctr.toFixed(1).replace('.', ',')
+  return (
+    <li className="space-y-2 px-4 py-3">
+      <div className="text-sm font-medium text-gray-900">{display}</div>
+      <div className="text-xs text-gray-600">
+        Ø CTR: <strong className="text-gray-900">{ctrText}%</strong> ·{' '}
+        {url.pinCount} Pin{url.pinCount === 1 ? '' : 's'}
+      </div>
+      {url.boardNames.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 text-xs">
+          <span className="text-gray-500">Boards:</span>
+          {url.boardNames.map((name) => (
+            <span
+              key={name}
+              className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs text-purple-700"
+            >
+              {name}
             </span>
           ))}
         </div>
       )}
-    </div>
-  )
-}
-
-// ===========================================================
-// Performance-Verlauf
-// ===========================================================
-// ===========================================================
-// Meine Top Pins
-// ===========================================================
-function MeineTopPinsSection({ pins }: { pins: ActionablePin[] }) {
-  return (
-    <section>
-      <h2 className="text-lg font-semibold text-gray-900">Meine Top Pins</h2>
-      <div className="mt-3 rounded-lg border border-gray-200 bg-white shadow-sm">
-        {pins.length === 0 ? (
-          <div className="p-4 text-sm text-gray-600">
-            Noch keine Pin-Analytics eingetragen.{' '}
-            <Link
-              href="/dashboard/analytics"
-              className="font-medium text-red-600 hover:underline"
-            >
-              → Zum Analytics-Tab
-            </Link>
-          </div>
-        ) : (
-          <ul className="divide-y divide-gray-100">
-            {pins.map((p) => (
-              <li
-                key={p.id}
-                className="flex flex-wrap items-center gap-2 px-4 py-2 text-sm"
-              >
-                <span className="flex-1 truncate text-gray-900">
-                  {p.titel ?? '—'}
-                </span>
-                <span className="text-xs text-gray-600">
-                  <strong className="text-gray-900">
-                    {formatZahl(p.klicks)}
-                  </strong>{' '}
-                  Klicks
-                </span>
-                <span className="text-xs text-gray-600">
-                  CTR{' '}
-                  <strong className="text-gray-900">
-                    {formatPercent(p.ctr)}
-                  </strong>
-                </span>
-                <span
-                  className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                    PIN_DIAGNOSE_BADGE[p.diagnose]
-                  }`}
-                >
-                  {PIN_DIAGNOSE_LABEL[p.diagnose]}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-        <div className="border-t border-gray-200 px-4 py-2 text-right text-xs">
-          <Link
-            href="/dashboard/analytics"
-            className="font-medium text-red-600 hover:underline"
-          >
-            Alle Pins anzeigen →
-          </Link>
-        </div>
+      <div className="text-xs text-gray-700">
+        📊 Hohe CTR ({ctrText}%) bei wenigen Pins – Erfolg skalieren.
       </div>
-    </section>
+      <div className="flex flex-wrap gap-2 pt-1">
+        <Link
+          href="/dashboard/pin-produktion?open=new"
+          className="inline-flex items-center justify-center rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700"
+        >
+          Pin erstellen
+        </Link>
+        <a
+          href={url.basisUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+        >
+          URL öffnen ↗
+        </a>
+      </div>
+    </li>
   )
 }
 
@@ -2657,14 +3361,10 @@ function BoardKategorieCard({
   const visible = boards.slice(0, 3)
   const remaining = boards.length - visible.length
   const tone = BOARD_HINT_TONE[cat.hintTone]
-  // Schlafende Top-Boards startet aufgeklappt — höchste Priorität für die
-  // Nutzerin (ungenutztes Potenzial). Alle anderen Kategorien zugeklappt.
-  const defaultOpen = cat.key === 'schlafende_top'
 
   return (
     <details
       className="group rounded-lg border border-gray-200 bg-white shadow-sm"
-      open={defaultOpen}
     >
       <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
         <span className="text-2xl leading-none text-gray-400" aria-hidden>

@@ -93,7 +93,9 @@ export default function PinProduktionClient(props: Props) {
     return props.pins.find((p) => p.id === editId) ?? null
   })
   const [showAddForm, setShowAddForm] = useState(
-    () => searchParams?.get('new') === '1'
+    () =>
+      searchParams?.get('new') === '1' ||
+      searchParams?.get('open') === 'new'
   )
 
   // Wenn sich der edit-Param ändert (z.B. nach Server-Action-Redirect),
@@ -229,6 +231,12 @@ export default function PinProduktionClient(props: Props) {
           defaultBoardId={
             editing ? null : (searchParams?.get('board') ?? null)
           }
+          defaultSaisonEventId={
+            editing ? null : (searchParams?.get('saison_event_id') ?? null)
+          }
+          defaultContentId={
+            editing ? null : (searchParams?.get('content_id') ?? null)
+          }
           contents={props.contents}
           keywords={props.keywords}
           boards={props.boards}
@@ -256,6 +264,7 @@ export default function PinProduktionClient(props: Props) {
       <PinTable
         pins={props.pins}
         boards={props.boards}
+        contents={props.contents}
         vorlagen={props.vorlagen}
         urls={props.urls}
         highlightId={highlightId}
@@ -294,6 +303,7 @@ type Filters = {
   conversion: '' | ConversionZiel
   format: '' | PinFormat
   boardId: string
+  contentId: string
   vorlageId: string
   urlId: string
 }
@@ -306,6 +316,7 @@ const EMPTY_FILTERS: Filters = {
   conversion: '',
   format: '',
   boardId: '',
+  contentId: '',
   vorlageId: '',
   urlId: '',
 }
@@ -351,6 +362,7 @@ function todayLocalIso(): string {
 function PinTable({
   pins,
   boards,
+  contents,
   vorlagen,
   urls,
   highlightId,
@@ -360,6 +372,7 @@ function PinTable({
 }: {
   pins: PinWithRelations[]
   boards: BoardOption[]
+  contents: ContentOption[]
   vorlagen: CanvaVorlageOption[]
   urls: ZielUrlOption[]
   highlightId: string | null
@@ -436,6 +449,7 @@ function PinTable({
         return false
       if (filters.format && p.pin_format !== filters.format) return false
       if (filters.boardId && p.board_id !== filters.boardId) return false
+      if (filters.contentId && p.content_id !== filters.contentId) return false
       if (filters.vorlageId && p.canva_vorlage_id !== filters.vorlageId)
         return false
       if (filters.urlId && p.ziel_url_id !== filters.urlId) return false
@@ -590,6 +604,15 @@ function PinTable({
             ]}
           />
           <FilterSelect
+            label="Content"
+            value={filters.contentId}
+            onChange={(v) => setFilter('contentId', v)}
+            options={[
+              { value: '', label: 'Alle' },
+              ...contents.map((c) => ({ value: c.id, label: c.titel })),
+            ]}
+          />
+          <FilterSelect
             label="Vorlage"
             value={filters.vorlageId}
             onChange={(v) => setFilter('vorlageId', v)}
@@ -640,6 +663,7 @@ function PinTable({
               <SortableTh dir={dirOf('board')} onClick={() => toggleSort('board')}>
                 Board
               </SortableTh>
+              <Th>Content</Th>
               <Th>Hook</Th>
               <Th>Beschreibung</Th>
               <SortableTh dir={dirOf('status')} onClick={() => toggleSort('status')}>
@@ -664,7 +688,7 @@ function PinTable({
             {sortedPins.length === 0 ? (
               <tr>
                 <td
-                  colSpan={12}
+                  colSpan={13}
                   className="px-4 py-8 text-center text-sm text-gray-500"
                 >
                   {pins.length === 0
@@ -710,6 +734,11 @@ function PinTable({
                 </td>
                 <td className="max-w-xs px-4 py-3 text-sm text-gray-700">
                   {pin.board?.name ?? <span className="text-gray-400">—</span>}
+                </td>
+                <td className="max-w-xs px-4 py-3 text-sm text-gray-700">
+                  {pin.content?.titel ?? (
+                    <span className="text-gray-400">—</span>
+                  )}
                 </td>
                 <td className="max-w-xs px-4 py-3 text-sm text-gray-700">
                   {pin.hook ?? <span className="text-gray-400">—</span>}
@@ -1051,9 +1080,13 @@ function PinForm({
   comboCount,
   customSignalwoerter,
   onClose,
+  defaultSaisonEventId,
+  defaultContentId,
 }: {
   editing: PinWithRelations | null
   defaultBoardId?: string | null
+  defaultSaisonEventId?: string | null
+  defaultContentId?: string | null
   contents: ContentOption[]
   keywords: KeywordOption[]
   boards: BoardOption[]
@@ -1067,7 +1100,9 @@ function PinForm({
   const isEdit = editing !== null
 
   // Stage 1
-  const [contentId, setContentId] = useState(editing?.content_id ?? '')
+  const [contentId, setContentId] = useState(
+    editing?.content_id ?? defaultContentId ?? ''
+  )
   const [themaKontext, setThemaKontext] = useState('')
   const [keywordIds, setKeywordIds] = useState<string[]>(
     editing?.keywords.map((k) => k.id) ?? []
@@ -1100,7 +1135,7 @@ function PinForm({
   const [urlId, setUrlId] = useState(editing?.ziel_url_id ?? '')
   const [vorlageId, setVorlageId] = useState(editing?.canva_vorlage_id ?? '')
   const [saisonEventId, setSaisonEventId] = useState(
-    editing?.saison_event_id ?? ''
+    editing?.saison_event_id ?? defaultSaisonEventId ?? ''
   )
   const [pinFormat, setPinFormat] = useState<PinFormat | ''>(
     editing?.pin_format ?? ''

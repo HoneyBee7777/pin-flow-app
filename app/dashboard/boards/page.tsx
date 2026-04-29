@@ -4,6 +4,7 @@ import BoardsClient, {
   type BoardPin,
   type ContentOption,
   type KeywordOption,
+  type UrlOption,
 } from './BoardsClient'
 
 type RawBoardRow = {
@@ -27,48 +28,63 @@ type RawBoardRow = {
     content_id: string
     content_inhalte: { id: string; titel: string } | null
   }>
+  url_boards: Array<{
+    url_id: string
+    ziel_urls: { id: string; titel: string } | null
+  }>
 }
 
 export default async function BoardsPage() {
   const supabase = createClient()
 
-  const [boardsRes, keywordsRes, contentsRes, pinsRes, pinAnalyticsRes] =
-    await Promise.all([
-      supabase
-        .from('boards')
-        .select(
-          `
+  const [
+    boardsRes,
+    keywordsRes,
+    contentsRes,
+    urlsRes,
+    pinsRes,
+    pinAnalyticsRes,
+  ] = await Promise.all([
+    supabase
+      .from('boards')
+      .select(
+        `
         id, name, beschreibung, kategorie, pinterest_url, geheim,
         strategie_fokus, impressionen, klicks_auf_pins, ausgehende_klicks,
         saves, created_at,
         board_keywords ( keyword_id, keywords ( id, keyword ) ),
-        content_boards ( content_id, content_inhalte ( id, titel ) )
+        content_boards ( content_id, content_inhalte ( id, titel ) ),
+        url_boards ( url_id, ziel_urls ( id, titel ) )
       `
-        )
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('keywords')
-        .select('id, keyword, typ')
-        .order('keyword', { ascending: true }),
-      supabase
-        .from('content_inhalte')
-        .select('id, titel')
-        .order('titel', { ascending: true }),
-      supabase
-        .from('pins')
-        .select(
-          'id, board_id, titel, status, geplante_veroeffentlichung, created_at'
-        )
-        .not('board_id', 'is', null)
-        .order('geplante_veroeffentlichung', {
-          ascending: false,
-          nullsFirst: false,
-        }),
-      supabase
-        .from('pins_analytics')
-        .select('pin_id, datum, impressionen, klicks')
-        .order('datum', { ascending: false }),
-    ])
+      )
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('keywords')
+      .select('id, keyword, typ')
+      .order('keyword', { ascending: true }),
+    supabase
+      .from('content_inhalte')
+      .select('id, titel')
+      .order('titel', { ascending: true }),
+    supabase
+      .from('ziel_urls')
+      .select('id, titel')
+      .order('titel', { ascending: true }),
+    supabase
+      .from('pins')
+      .select(
+        'id, board_id, titel, status, geplante_veroeffentlichung, created_at'
+      )
+      .not('board_id', 'is', null)
+      .order('geplante_veroeffentlichung', {
+        ascending: false,
+        nullsFirst: false,
+      }),
+    supabase
+      .from('pins_analytics')
+      .select('pin_id, datum, impressionen, klicks')
+      .order('datum', { ascending: false }),
+  ])
 
   const rawRows = (boardsRes.data ?? []) as unknown as RawBoardRow[]
   const boards: Board[] = rawRows.map((row) => ({
@@ -96,10 +112,17 @@ export default async function BoardsPage() {
         id: cb.content_inhalte!.id,
         titel: cb.content_inhalte!.titel,
       })),
+    urls: row.url_boards
+      .filter((ub) => ub.ziel_urls)
+      .map((ub) => ({
+        id: ub.ziel_urls!.id,
+        titel: ub.ziel_urls!.titel,
+      })),
   }))
 
   const availableKeywords = (keywordsRes.data ?? []) as KeywordOption[]
   const availableContents = (contentsRes.data ?? []) as ContentOption[]
+  const availableUrls = (urlsRes.data ?? []) as UrlOption[]
 
   // Pins pro Board mit aktuellster CTR (aus pins_analytics)
   type PinRow = {
@@ -147,6 +170,7 @@ export default async function BoardsPage() {
     boardsRes.error?.message ??
     keywordsRes.error?.message ??
     contentsRes.error?.message ??
+    urlsRes.error?.message ??
     pinsRes.error?.message ??
     pinAnalyticsRes.error?.message ??
     null
@@ -170,6 +194,7 @@ export default async function BoardsPage() {
         boards={boards}
         availableKeywords={availableKeywords}
         availableContents={availableContents}
+        availableUrls={availableUrls}
         pinsByBoardId={pinsByBoardId}
       />
     </div>

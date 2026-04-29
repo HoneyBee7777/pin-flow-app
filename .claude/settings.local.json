@@ -11,7 +11,15 @@
       "Bash(curl -sS -o /tmp/dash.html -w \"HTTP=%{http_code}\\\\n\" http://localhost:3002/dashboard)",
       "Bash(rm -rf .next)",
       "Bash(npx next *)",
-      "Bash(curl *)"
+      "Bash(curl *)",
+      "Bash(echo \"exit=$?\")",
+      "Bash(echo \"tsc=$?\")",
+      "Bash(git stash *)",
+      "Bash(netstat -ano)",
+      "Bash(grep -aoE \"ZIEL-URLS DEBUG[^<]{0,500}\" /tmp/r.html)",
+      "Bash(grep -aoE \"ZIELURLS-DEBUG[^<]{0,2000}\" /tmp/r.html)",
+      "Bash(tasklist)",
+      "Bash(xargs ls *)"
     ]
   }
 }
