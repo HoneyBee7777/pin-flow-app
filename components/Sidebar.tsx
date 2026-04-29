@@ -62,7 +62,10 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Ressourcen',
     collapsible: true,
     defaultOpen: true,
-    items: [{ name: 'Wissen & Prompts', href: '/dashboard/ressourcen' }],
+    items: [
+      { name: 'Wissen & Prompts', href: '/dashboard/ressourcen' },
+      { name: 'Strategie & Ausrichtung', href: '/dashboard/strategie' },
+    ],
   },
 ]
 
