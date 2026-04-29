@@ -1,7 +1,10 @@
 'use client'
 
+import Link from 'next/link'
 import { useState, useTransition, type FormEvent } from 'react'
 import { saveEinstellungen } from './actions'
+import { saveStrategieManual } from '../strategie/actions'
+import { adjustProportional } from '../strategie/lib'
 
 export type InitialSchwellwerte = {
   beobachtung: number | null
@@ -34,6 +37,13 @@ export type InitialContentPipelineSchwellwerte = {
   maxPinsGoldnugget: number | null
 }
 
+export type InitialStrategie = {
+  mix: [number, number, number]
+  ziele: [number, number, number]
+  format: [number, number, number, number]
+  onboardingAbgeschlossen: boolean
+}
+
 export default function EinstellungenClient({
   initialProfilName,
   initialEigeneSignalwoerter,
@@ -42,6 +52,7 @@ export default function EinstellungenClient({
   initialSchwellwerte,
   initialBoardSchwellwerte,
   initialContentPipelineSchwellwerte,
+  initialStrategie,
 }: {
   initialProfilName: string
   initialEigeneSignalwoerter: string
@@ -50,6 +61,7 @@ export default function EinstellungenClient({
   initialSchwellwerte: InitialSchwellwerte
   initialBoardSchwellwerte: InitialBoardSchwellwerte
   initialContentPipelineSchwellwerte: InitialContentPipelineSchwellwerte
+  initialStrategie: InitialStrategie
 }) {
   return (
     <div className="space-y-6">
@@ -62,6 +74,7 @@ export default function EinstellungenClient({
       <ContentPipelineSchwellwerteSection
         initial={initialContentPipelineSchwellwerte}
       />
+      <StrategieSection initial={initialStrategie} />
     </div>
   )
 }
@@ -858,5 +871,226 @@ function ContentPipelineSchwellwerteSection({
         </div>
       </form>
     </section>
+  )
+}
+
+// ============================================================
+// Strategie & Ausrichtung — manuelle Anpassung
+// ============================================================
+
+const STRATEGIE_ACCENTS = {
+  blue: 'accent-blue-500',
+  purple: 'accent-purple-500',
+  green: 'accent-green-500',
+  orange: 'accent-orange-500',
+  gray: 'accent-gray-500',
+  red: 'accent-red-500',
+  yellow: 'accent-yellow-400',
+  pink: 'accent-pink-500',
+} as const
+type StrategieAccent = keyof typeof STRATEGIE_ACCENTS
+
+function StrategieSection({ initial }: { initial: InitialStrategie }) {
+  const [mix, setMix] = useState<[number, number, number]>(initial.mix)
+  const [ziele, setZiele] = useState<[number, number, number]>(initial.ziele)
+  const [format, setFormat] = useState<[number, number, number, number]>(
+    initial.format
+  )
+  const [isPending, startTransition] = useTransition()
+  const [feedback, setFeedback] = useState<{
+    saved?: boolean
+    error?: string
+  }>({})
+
+  const mixSum = mix[0] + mix[1] + mix[2]
+  const zieleSum = ziele[0] + ziele[1] + ziele[2]
+  const formatSum = format[0] + format[1] + format[2] + format[3]
+  const allOk = mixSum === 100 && zieleSum === 100 && formatSum === 100
+
+  function onSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    setFeedback({})
+    if (!allOk) {
+      setFeedback({
+        error: 'Alle drei Gruppen müssen jeweils 100% ergeben.',
+      })
+      return
+    }
+    const formData = new FormData()
+    formData.set('strategie_soll_blog', String(mix[0]))
+    formData.set('strategie_soll_affiliate', String(mix[1]))
+    formData.set('strategie_soll_produkt', String(mix[2]))
+    formData.set('ziel_soll_traffic', String(ziele[0]))
+    formData.set('ziel_soll_lead', String(ziele[1]))
+    formData.set('ziel_soll_sales', String(ziele[2]))
+    formData.set('format_soll_standard', String(format[0]))
+    formData.set('format_soll_video', String(format[1]))
+    formData.set('format_soll_collage', String(format[2]))
+    formData.set('format_soll_carousel', String(format[3]))
+    startTransition(async () => {
+      const result = await saveStrategieManual(formData)
+      if (result.error) setFeedback({ error: result.error })
+      else setFeedback({ saved: true })
+    })
+  }
+
+  return (
+    <section
+      id="strategie"
+      className="scroll-mt-24 rounded-lg border border-gray-200 bg-white p-6 shadow-sm"
+    >
+      <h2 className="text-lg font-semibold text-gray-900">
+        Strategie &amp; Ausrichtung
+      </h2>
+      <p className="mt-1 text-sm text-gray-600">
+        Hier kannst du deine Pinterest-Strategie manuell anpassen. Beim
+        Speichern wird automatisch ein Snapshot deiner vorherigen Strategie
+        archiviert.
+      </p>
+      {!initial.onboardingAbgeschlossen && (
+        <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+          Du hast das geführte Onboarding noch nicht durchlaufen.{' '}
+          <Link
+            href="/dashboard/strategie"
+            className="font-medium underline hover:text-amber-700"
+          >
+            Onboarding jetzt starten ↗
+          </Link>
+        </p>
+      )}
+
+      <form onSubmit={onSubmit} className="mt-4 space-y-6">
+        <StrategieSliderGroup
+          title="Strategie-Mix"
+          channels={[
+            { label: 'Blog/Content', color: 'blue' },
+            { label: 'Affiliate', color: 'purple' },
+            { label: 'Produkt', color: 'green' },
+          ]}
+          values={mix as unknown as number[]}
+          onChange={(v) =>
+            setMix(v as unknown as [number, number, number])
+          }
+        />
+
+        <StrategieSliderGroup
+          title="Conversion-Ziele"
+          channels={[
+            { label: 'Traffic', color: 'blue' },
+            { label: 'Lead', color: 'orange' },
+            { label: 'Sales', color: 'green' },
+          ]}
+          values={ziele as unknown as number[]}
+          onChange={(v) =>
+            setZiele(v as unknown as [number, number, number])
+          }
+        />
+
+        <StrategieSliderGroup
+          title="Pin-Format-Mix"
+          channels={[
+            { label: 'Standard', color: 'gray' },
+            { label: 'Video', color: 'red' },
+            { label: 'Collage', color: 'yellow' },
+            { label: 'Carousel', color: 'pink' },
+          ]}
+          values={format as unknown as number[]}
+          onChange={(v) =>
+            setFormat(v as unknown as [number, number, number, number])
+          }
+        />
+
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="submit"
+            disabled={isPending || !allOk}
+            className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isPending ? 'Speichert…' : 'Strategie speichern'}
+          </button>
+          <Link
+            href="/dashboard/strategie"
+            className="text-sm font-medium text-red-600 hover:underline"
+          >
+            Onboarding wiederholen ↗
+          </Link>
+          {feedback.saved && (
+            <span className="text-sm text-green-700">
+              ✓ Gespeichert (Snapshot archiviert)
+            </span>
+          )}
+          {feedback.error && (
+            <span className="text-sm text-red-700">{feedback.error}</span>
+          )}
+        </div>
+      </form>
+    </section>
+  )
+}
+
+function StrategieSliderGroup({
+  title,
+  channels,
+  values,
+  onChange,
+}: {
+  title: string
+  channels: Array<{ label: string; color: StrategieAccent }>
+  values: number[]
+  onChange: (next: number[]) => void
+}) {
+  const sum = values.reduce((a, b) => a + b, 0)
+  const ok = sum === 100
+  return (
+    <div>
+      <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-900">
+        {title}
+      </h3>
+      <div className="mt-3 space-y-3">
+        {channels.map((c, i) => (
+          <div
+            key={c.label}
+            className="grid items-center gap-2 sm:grid-cols-[140px_1fr_80px]"
+          >
+            <span className="text-sm font-medium text-gray-700">
+              {c.label}
+            </span>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={5}
+              value={values[i]}
+              onChange={(e) =>
+                onChange(
+                  adjustProportional(values, i, Number(e.target.value))
+                )
+              }
+              className={`w-full ${STRATEGIE_ACCENTS[c.color]}`}
+              aria-label={c.label}
+            />
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={5}
+              value={values[i]}
+              onChange={(e) =>
+                onChange(
+                  adjustProportional(values, i, Number(e.target.value))
+                )
+              }
+              className="w-20 rounded-md border border-gray-300 px-2 py-1 text-right text-sm tabular-nums shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+              aria-label={`${c.label} Prozent`}
+            />
+          </div>
+        ))}
+      </div>
+      <p
+        className={`mt-2 text-xs font-medium ${ok ? 'text-green-700' : 'text-red-700'}`}
+      >
+        Summe: {sum}% {ok ? '✓' : '— bitte auf 100% anpassen'}
+      </p>
+    </div>
   )
 }

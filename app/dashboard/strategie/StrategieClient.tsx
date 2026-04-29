@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, type ReactNode } from 'react'
+import type { StrategieRow } from './lib'
+import MyStrategy from './MyStrategy'
 
 type TabKey = 'meine' | 'grundlagen' | 'strategien' | 'design'
 
@@ -11,7 +13,11 @@ const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'design', label: '🎨 Pin-Design & Formate' },
 ]
 
-export default function StrategieClient() {
+export default function StrategieClient({
+  strategie,
+}: {
+  strategie: StrategieRow | null
+}) {
   const [active, setActive] = useState<TabKey>('meine')
 
   return (
@@ -45,7 +51,7 @@ export default function StrategieClient() {
       </div>
 
       <div role="tabpanel">
-        {active === 'meine' && <TabMeineStrategie />}
+        {active === 'meine' && <MyStrategy strategie={strategie} />}
         {active === 'grundlagen' && <TabGrundlagen />}
         {active === 'strategien' && <TabStrategien />}
         {active === 'design' && <TabDesign />}
@@ -173,36 +179,6 @@ function CodeBlock({ children }: { children: ReactNode }) {
     <pre className="overflow-x-auto rounded-md border border-gray-200 bg-gray-50 p-3 font-mono text-xs leading-relaxed text-gray-800">
       {children}
     </pre>
-  )
-}
-
-// ===========================================================
-// Tab 1 — Meine Strategie (Platzhalter)
-// ===========================================================
-
-function TabMeineStrategie() {
-  return (
-    <div className="space-y-4">
-      <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-gray-900">
-          🎯 Meine Strategie
-        </h2>
-        <div className="mt-3 space-y-3 text-sm leading-relaxed text-gray-700">
-          <p>
-            Diese Sektion wird in Kürze fertiggestellt. Hier kannst du dann
-            deine persönliche Pinterest-Strategie definieren – mit einem
-            geführten Onboarding-Prozess, der dir basierend auf deinem Business
-            eine empfohlene Verteilung vorschlägt. Du kannst die Werte
-            jederzeit manuell anpassen.
-          </p>
-          <p>
-            Bis dahin: Lies dir zunächst die Pinterest-Grundlagen, die
-            Strategie-Optionen und die Pin-Design-Prinzipien in den anderen
-            Tabs durch – das ist die Grundlage für deine eigene Strategie.
-          </p>
-        </div>
-      </div>
-    </div>
   )
 }
 

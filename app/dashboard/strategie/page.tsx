@@ -1,6 +1,23 @@
+import { createClient } from '@/lib/supabase-server'
 import StrategieClient from './StrategieClient'
+import { STRATEGIE_SELECT, type StrategieRow } from './lib'
 
-export default function StrategiePage() {
+export default async function StrategiePage() {
+  const supabase = createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  let row: StrategieRow | null = null
+  if (user) {
+    const { data } = await supabase
+      .from('einstellungen')
+      .select(STRATEGIE_SELECT)
+      .eq('user_id', user.id)
+      .maybeSingle()
+    row = (data ?? null) as StrategieRow | null
+  }
+
   return (
     <div className="p-8">
       <header className="mb-6">
@@ -13,7 +30,7 @@ export default function StrategiePage() {
         </p>
       </header>
 
-      <StrategieClient />
+      <StrategieClient strategie={row} />
     </div>
   )
 }

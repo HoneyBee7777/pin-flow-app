@@ -19,7 +19,11 @@ export default async function EinstellungenPage() {
        schwellwert_board_top_er, schwellwert_board_top_prozent,
        schwellwert_board_schwach_er, schwellwert_board_wachstum_trend,
        cp_min_pins_gesamt, cp_min_pins_ohne_aktuell, cp_tage_ohne_pin,
-       cp_min_ctr_goldnugget, cp_max_pins_goldnugget`
+       cp_min_ctr_goldnugget, cp_max_pins_goldnugget,
+       strategie_soll_blog, strategie_soll_affiliate, strategie_soll_produkt,
+       ziel_soll_traffic, ziel_soll_lead, ziel_soll_sales,
+       format_soll_standard, format_soll_video, format_soll_collage, format_soll_carousel,
+       strategie_onboarding_abgeschlossen`
     )
     .eq('user_id', user.id)
     .maybeSingle()
@@ -93,6 +97,26 @@ export default async function EinstellungenPage() {
               ? null
               : Number(data.cp_min_ctr_goldnugget),
           maxPinsGoldnugget: data?.cp_max_pins_goldnugget ?? null,
+        }}
+        initialStrategie={{
+          mix: [
+            data?.strategie_soll_blog ?? 0,
+            data?.strategie_soll_affiliate ?? 0,
+            data?.strategie_soll_produkt ?? 0,
+          ],
+          ziele: [
+            data?.ziel_soll_traffic ?? 0,
+            data?.ziel_soll_lead ?? 0,
+            data?.ziel_soll_sales ?? 0,
+          ],
+          format: [
+            data?.format_soll_standard ?? 60,
+            data?.format_soll_video ?? 20,
+            data?.format_soll_collage ?? 10,
+            data?.format_soll_carousel ?? 10,
+          ],
+          onboardingAbgeschlossen:
+            data?.strategie_onboarding_abgeschlossen === true,
         }}
       />
     </div>
