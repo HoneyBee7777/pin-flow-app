@@ -199,6 +199,77 @@ export function calcUpdateStatus(lastUpdate: string | null): UpdateStatus {
   }
 }
 
+// =====================================================
+// Tri-State Update-Status (Dashboard Hero)
+// Drei Zonen mit konfigurierbaren Schwellwerten aus den Einstellungen.
+// =====================================================
+export type UpdateStatusState = 'gruen' | 'gelb' | 'rot' | 'leer'
+
+export type UpdateStatusTri = {
+  state: UpdateStatusState
+  lastUpdate: string | null
+  nextDue: string | null
+  daysSinceUpdate: number | null
+  // Positiv = Update ist in X Tagen fällig; negativ = Update ist seit X Tagen überfällig.
+  daysUntilDue: number | null
+  intervall: number
+  vorwarnung: number
+}
+
+export const STATUS_DEFAULT_INTERVALL = 31
+export const STATUS_DEFAULT_VORWARNUNG = 7
+
+export function calcUpdateStatusTri(
+  lastUpdate: string | null,
+  intervall: number = STATUS_DEFAULT_INTERVALL,
+  vorwarnung: number = STATUS_DEFAULT_VORWARNUNG
+): UpdateStatusTri {
+  const safeIntervall = Number.isFinite(intervall) && intervall > 0
+    ? intervall
+    : STATUS_DEFAULT_INTERVALL
+  const safeVorwarnung =
+    Number.isFinite(vorwarnung) && vorwarnung >= 0 && vorwarnung < safeIntervall
+      ? vorwarnung
+      : STATUS_DEFAULT_VORWARNUNG
+
+  if (!lastUpdate) {
+    return {
+      state: 'leer',
+      lastUpdate: null,
+      nextDue: null,
+      daysSinceUpdate: null,
+      daysUntilDue: null,
+      intervall: safeIntervall,
+      vorwarnung: safeVorwarnung,
+    }
+  }
+
+  const today = todayIso()
+  const nextDue = addDays(lastUpdate, safeIntervall)
+  const daysSinceUpdate = diffDays(lastUpdate, today)
+  const daysUntilDue = diffDays(today, nextDue)
+
+  // Reihenfolge wichtig: rot vor gelb vor grün.
+  let state: UpdateStatusState
+  if (daysSinceUpdate >= safeIntervall) {
+    state = 'rot'
+  } else if (daysUntilDue <= safeVorwarnung) {
+    state = 'gelb'
+  } else {
+    state = 'gruen'
+  }
+
+  return {
+    state,
+    lastUpdate,
+    nextDue,
+    daysSinceUpdate,
+    daysUntilDue,
+    intervall: safeIntervall,
+    vorwarnung: safeVorwarnung,
+  }
+}
+
 // ===========================================================
 // Pin-Analytics
 // ===========================================================

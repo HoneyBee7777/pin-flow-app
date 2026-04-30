@@ -24,7 +24,8 @@ export default async function EinstellungenPage() {
        ziel_soll_traffic, ziel_soll_lead, ziel_soll_sales,
        format_soll_standard, format_soll_video, format_soll_collage, format_soll_carousel,
        strategie_onboarding_abgeschlossen,
-       strategie_check_schwelle_gelb, strategie_check_schwelle_rot`
+       strategie_check_schwelle_gelb, strategie_check_schwelle_rot,
+       status_update_intervall, status_update_vorwarnung`
     )
     .eq('user_id', user.id)
     .maybeSingle()
@@ -98,6 +99,10 @@ export default async function EinstellungenPage() {
               ? null
               : Number(data.cp_min_ctr_goldnugget),
           maxPinsGoldnugget: data?.cp_max_pins_goldnugget ?? null,
+        }}
+        initialStatusSchwellwerte={{
+          intervall: data?.status_update_intervall ?? 31,
+          vorwarnung: data?.status_update_vorwarnung ?? 7,
         }}
         initialStrategie={{
           mix: [

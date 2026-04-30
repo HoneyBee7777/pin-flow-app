@@ -63,7 +63,7 @@ export default function StrategieCheckSection({
   // Empty-State: keine Pins der letzten 180 Tage
   if (totalPinsImFenster === 0) {
     return (
-      <section>
+      <section id="strategie-check" className="scroll-mt-4">
         <SectionHeader />
         <div className="rounded-lg border border-gray-200 bg-white p-6 text-sm text-gray-600 shadow-sm">
           Noch keine Pin-Daten der letzten {fensterTage} Tage vorhanden. Trage
@@ -74,7 +74,7 @@ export default function StrategieCheckSection({
   }
 
   return (
-    <section>
+    <section id="strategie-check" className="scroll-mt-4">
       <SectionHeader />
 
       <div className="space-y-4 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
@@ -111,7 +111,7 @@ function SectionHeader() {
   return (
     <div className="mb-3">
       <h2 className="text-xl font-semibold text-gray-900">
-        🎯 Strategie-Check
+        Strategie-Check
         <InfoTooltip text="Vergleicht deine in den letzten 180 Tagen erstellten Pins mit deiner hinterlegten Soll-Strategie. So siehst du, ob du tatsächlich das pinnst, was du dir vorgenommen hast." />
       </h2>
       <p className="mt-1 text-sm text-gray-600">
@@ -263,8 +263,8 @@ function Bar({
       />
       {sollClamped !== null && (
         <div
-          className="absolute -top-1 -bottom-1 w-1 rounded-sm bg-gray-900"
-          style={{ left: `calc(${sollClamped}% - 2px)` }}
+          className="absolute -top-1 -bottom-1 w-0.5 rounded-sm bg-gray-900"
+          style={{ left: `calc(${sollClamped}% - 1px)` }}
           aria-label={`Soll: ${formatPct(sollClamped)}`}
         />
       )}

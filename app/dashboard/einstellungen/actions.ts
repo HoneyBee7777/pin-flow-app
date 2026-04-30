@@ -92,6 +92,52 @@ export async function saveEinstellungen(
     updates[name] = n
   }
 
+  // Status-Schwellwerte (Dashboard-Hero): eingeschränkte Range + Cross-Check.
+  // Beide Felder müssen gemeinsam gesendet werden, damit die
+  // Cross-Validierung (vorwarnung < intervall) gegen den jeweils gerade
+  // gesendeten anderen Wert greifen kann.
+  const statusFields = [
+    [
+      'status_update_intervall',
+      'Update-Intervall',
+      7,
+      60,
+    ],
+    [
+      'status_update_vorwarnung',
+      'Update-Vorwarnung',
+      1,
+      14,
+    ],
+  ] as const
+  const statusValues: Record<string, number> = {}
+  for (const [name, label, min, max] of statusFields) {
+    if (!formData.has(name)) continue
+    const raw = String(formData.get(name) ?? '').trim()
+    if (!raw) {
+      return { error: `„${label}" darf nicht leer sein.` }
+    }
+    const n = Number(raw)
+    if (!Number.isInteger(n) || n < min || n > max) {
+      return {
+        error: `„${label}" muss eine ganze Zahl zwischen ${min} und ${max} sein.`,
+      }
+    }
+    statusValues[name] = n
+    updates[name] = n
+  }
+  if (
+    statusValues.status_update_intervall !== undefined &&
+    statusValues.status_update_vorwarnung !== undefined &&
+    statusValues.status_update_vorwarnung >=
+      statusValues.status_update_intervall
+  ) {
+    return {
+      error:
+        '„Update-Vorwarnung" muss kleiner sein als „Update-Intervall".',
+    }
+  }
+
   if (Object.keys(updates).length === 0)
     return { error: 'Keine Änderungen zum Speichern.' }
 

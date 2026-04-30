@@ -67,3 +67,24 @@ input[type='range'].pf-slider::-moz-range-thumb {
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.1);
   cursor: pointer;
 }
+
+/* Highlight-Pulse für Sprungziele aus dem "Heute aktuell"-Briefing.
+   Wird per JS kurz hinzugefügt und nach ~1.8s wieder entfernt. */
+@keyframes briefing-pulse-kf {
+  0% {
+    background-color: rgba(254, 240, 138, 0);
+    box-shadow: 0 0 0 0 rgba(250, 204, 21, 0);
+  }
+  20% {
+    background-color: rgba(254, 240, 138, 0.6);
+    box-shadow: 0 0 0 6px rgba(250, 204, 21, 0.15);
+  }
+  100% {
+    background-color: rgba(254, 240, 138, 0);
+    box-shadow: 0 0 0 0 rgba(250, 204, 21, 0);
+  }
+}
+.briefing-pulse {
+  animation: briefing-pulse-kf 1.8s ease-out;
+  border-radius: 0.5rem;
+}

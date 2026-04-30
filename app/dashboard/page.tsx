@@ -6,6 +6,7 @@ import {
   calcBoardEngagementRate,
   calcCtr,
   calcUpdateStatus,
+  calcUpdateStatusTri,
   diagnoseBoard,
   diagnosePin,
   diffDays,
@@ -29,6 +30,7 @@ import {
   type PinOption,
   type ProfilAnalytics,
   type ProfilAnalyticsWithGrowth,
+  type UpdateStatusTri,
 } from './analytics/utils'
 import {
   computeStatus,
@@ -42,6 +44,8 @@ import HandlungsbedarfPinRow, {
 } from './HandlungsbedarfPinRow'
 import BearbeitetRow, { type BearbeitetRowData } from './BearbeitetRow'
 import StrategieCheckSection from './strategie-check/StrategieCheckSection'
+import BriefingSection from './briefing/BriefingSection'
+import { buildBriefingItems, type BriefingItem } from './briefing/lib'
 import {
   computeStrategieCheck,
   type StrategiePinRow,
@@ -173,6 +177,7 @@ type BoardMetricKind = 'er' | 'erChange' | 'impressionen' | 'klicks'
 
 type BoardCatConfig = {
   key: BoardCat
+  group: 'A' | 'B' // A = Brauchen Aufmerksamkeit, B = Performen gut
   emoji: string
   label: string
   subtitle: string
@@ -193,6 +198,7 @@ type BoardCatConfig = {
 const BOARD_CATEGORIES: BoardCatConfig[] = [
   {
     key: 'schlafende_top',
+    group: 'A',
     emoji: '💤',
     label: 'Schlafende Top-Boards',
     subtitle:
@@ -217,6 +223,7 @@ const BOARD_CATEGORIES: BoardCatConfig[] = [
   },
   {
     key: 'inaktive',
+    group: 'A',
     emoji: '⏸️',
     label: 'Inaktive Boards',
     subtitle:
@@ -241,6 +248,7 @@ const BOARD_CATEGORIES: BoardCatConfig[] = [
   },
   {
     key: 'top',
+    group: 'B',
     emoji: '🏆',
     label: 'Aktive Top Boards',
     subtitle:
@@ -264,6 +272,7 @@ const BOARD_CATEGORIES: BoardCatConfig[] = [
   },
   {
     key: 'wachstum',
+    group: 'B',
     emoji: '📈',
     label: 'Wachstums-Boards',
     subtitle:
@@ -287,6 +296,7 @@ const BOARD_CATEGORIES: BoardCatConfig[] = [
   },
   {
     key: 'solide',
+    group: 'B',
     emoji: '👀',
     label: 'Solide Boards',
     subtitle:
@@ -309,6 +319,7 @@ const BOARD_CATEGORIES: BoardCatConfig[] = [
   },
   {
     key: 'schwach',
+    group: 'A',
     emoji: '📉',
     label: 'Schwache Boards',
     subtitle:
@@ -491,7 +502,8 @@ export default async function DashboardPage() {
          ziel_soll_traffic, ziel_soll_lead, ziel_soll_sales,
          format_soll_standard, format_soll_video, format_soll_collage, format_soll_carousel,
          strategie_onboarding_abgeschlossen,
-         strategie_check_schwelle_gelb, strategie_check_schwelle_rot`
+         strategie_check_schwelle_gelb, strategie_check_schwelle_rot,
+         status_update_intervall, status_update_vorwarnung`
       )
       .eq('user_id', user.id)
       .maybeSingle(),
@@ -570,6 +582,18 @@ export default async function DashboardPage() {
 
   const updateStatus = calcUpdateStatus(
     settingsRes.data?.analytics_update_datum ?? null
+  )
+  // Tri-State (grün/gelb/rot) für Hero-Section. Nutzt User-Schwellwerte
+  // aus Einstellungen (Defaults: 31 Tage Intervall, 7 Tage Vorwarnung).
+  type RawStatusSettings = {
+    status_update_intervall: number | null
+    status_update_vorwarnung: number | null
+  }
+  const statusRaw = settingsRes.data as Partial<RawStatusSettings> | null
+  const updateStatusTri: UpdateStatusTri = calcUpdateStatusTri(
+    settingsRes.data?.analytics_update_datum ?? null,
+    statusRaw?.status_update_intervall ?? undefined,
+    statusRaw?.status_update_vorwarnung ?? undefined
   )
 
   // ===== Begrüßung =====
@@ -1440,6 +1464,52 @@ export default async function DashboardPage() {
     return a.created_at.localeCompare(b.created_at)
   })
 
+  // ===== "Heute aktuell"-Briefing für Hero-Section =====
+  // Aggregiert pro Sektion eine kompakte Aussage. Reine Funktion in
+  // briefing/lib.ts — siehe dort für Schwellwert-Regeln.
+  const saisonMinDaysToPinStart =
+    saisonKanban.jetztProduzieren.length > 0
+      ? saisonKanban.jetztProduzieren.reduce(
+          (min, e) => Math.min(min, e.countdownDays),
+          Number.POSITIVE_INFINITY
+        )
+      : null
+  const briefingItems = buildBriefingItems({
+    saisonJetztProduzierenCount: saisonKanban.jetztProduzieren.length,
+    saisonMinDaysToPinStart:
+      saisonMinDaysToPinStart === null ||
+      !Number.isFinite(saisonMinDaysToPinStart)
+        ? null
+        : saisonMinDaysToPinStart,
+    saisonEventNames: saisonKanban.jetztProduzieren.map((e) => e.event_name),
+    hasAnyBoardAnalytics,
+    schlafendeTopCount: boardsByCategory.schlafende_top.length,
+    aktivitaetsratePct: boardKpis.aktivitaetsratePct,
+    schwacheCount: boardsByCategory.schwach.length,
+    strategieOnboardingDone: strategieCheckResult.onboardingAbgeschlossen,
+    strategieSchwelleRot: strategieCheckResult.schwelleRot,
+    strategieTopCoaching: strategieCheckResult.coachingTop3[0]
+      ? {
+          area: strategieCheckResult.coachingTop3[0].area,
+          label: strategieCheckResult.coachingTop3[0].label,
+          diff: strategieCheckResult.coachingTop3[0].diff,
+          recommendation:
+            strategieCheckResult.coachingTop3[0].recommendation,
+        }
+      : null,
+    hasAnyAnalytics,
+    hiddenGemCount: groupedActions.get('hidden_gem')?.length ?? 0,
+    optimierungCount:
+      groupedActions.get('hohe_impressionen_niedrige_ctr')?.length ?? 0,
+    aktivTopPerformerCount:
+      groupedActions.get('aktiver_top_performer')?.length ?? 0,
+    eingeschlafenerGewinnerCount:
+      groupedActions.get('eingeschlafener_gewinner')?.length ?? 0,
+    inhalteOhneAktuellCount: inhaltePinBedarfB.length,
+    inhalteMitWenigPinsCount: inhaltePinBedarfA.length,
+    urlsPotenzialCount: urlPotenzial.length,
+  })
+
   return (
     <div className="space-y-8 p-8">
       <header>
@@ -1451,31 +1521,40 @@ export default async function DashboardPage() {
         </p>
       </header>
 
-      <UpdateStatusCard
-        lastUpdate={updateStatus.lastUpdate}
-        nextDue={updateStatus.nextDue}
-        isOverdue={updateStatus.isOverdue}
-        daysSinceUpdate={updateStatus.daysSinceUpdate}
+      {/* 1. Hero-Section: Status + Profil-Gesundheit fusioniert */}
+      <HeroSection
+        statusTri={updateStatusTri}
         pinsCount={veroeffentlichtePinsCount}
         boardsCount={boardsCount}
-      />
-
-      <DashboardHelp />
-
-      <ProfilGesundheitWidget
         ctr={latest?.ctr ?? null}
         engagement={latest?.engagement ?? null}
         impressionenGrowth={latest?.impressionen_growth ?? null}
+        briefingItems={briefingItems}
       />
 
+      {/* 2. Phasen-Trenner */}
+      <PhasenTrenner icon="📊" title="Wo stehst du?" />
+
+      {/* 3. Gesamt-Profil-Performance (KPIs + Performance-Verlauf in 3 Spalten) */}
+      <ProfilPerformanceSection
+        latest={latest}
+        previous={previous}
+        chartPoints={chartPoints}
+      />
+
+      {/* 4. Phasen-Trenner */}
+      <PhasenTrenner icon="🎯" title="Pinst du das Richtige?" />
+
+      {/* 5. Strategie-Check */}
+      <StrategieCheckSection result={strategieCheckResult} />
+
+      {/* 6. Phasen-Trenner */}
+      <PhasenTrenner icon="⚡" title="Was tust du heute?" />
+
+      {/* 7. Saisonkalender */}
       <SaisonKalenderSection columns={saisonKanban} />
 
-      {showWins && <WinsSection wins={wins} />}
-
-      <ProfilPerformanceKpiBar latest={latest} previous={previous} />
-
-      <PerformanceVerlaufSection points={chartPoints} />
-
+      {/* 8. Content Pipeline */}
       <PinPipelineSection
         inhaltePinBedarfA={inhaltePinBedarfA}
         inhaltePinBedarfB={inhaltePinBedarfB}
@@ -1483,8 +1562,7 @@ export default async function DashboardPage() {
         thresholds={pipelineThresholds}
       />
 
-      <StrategieCheckSection result={strategieCheckResult} />
-
+      {/* 9. Pin-Handlungsbedarf */}
       <HandlungsbedarfSection
         grouped={groupedActions}
         hasAnyAnalytics={hasAnyAnalytics}
@@ -1492,6 +1570,10 @@ export default async function DashboardPage() {
         today={today}
       />
 
+      {/* 10. Phasen-Trenner */}
+      <PhasenTrenner icon="🏗️" title="Wo verbesserst du strukturell?" />
+
+      {/* 11. Board-Gesundheit */}
       <BoardGesundheitDashboardSection
         byCategory={boardsByCategory}
         kpis={boardKpis}
@@ -1502,58 +1584,17 @@ export default async function DashboardPage() {
         pinsCountByBoard={pinsCountByBoard}
       />
 
+      {/* 12. + 13. Phasen-Trenner + Wins (nur wenn vorhanden) */}
+      {showWins && (
+        <>
+          <PhasenTrenner icon="🎉" title="Was ist gelungen?" />
+          <WinsSection wins={wins} />
+        </>
+      )}
+
+      {/* 14. Aufgaben & Erinnerungen — bleibt ganz unten */}
       <AufgabenSection tasks={aufgabenSorted} today={today} />
     </div>
-  )
-}
-
-// ===========================================================
-// Hilfe-Box „So liest du dieses Dashboard"
-// ===========================================================
-function DashboardHelp() {
-  return (
-    <details className="group rounded-lg border border-gray-200 bg-white shadow-sm">
-      <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-medium text-gray-900 hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
-        <span>ⓘ So liest du dieses Dashboard</span>
-        <span className="text-xs text-gray-400" aria-hidden>
-          <span className="inline group-open:hidden">▶</span>
-          <span className="hidden group-open:inline">▼</span>
-        </span>
-      </summary>
-      <div className="space-y-3 border-t border-gray-200 px-4 py-3 text-sm text-gray-700">
-        <div>
-          <p className="font-semibold text-gray-900">
-            ERGEBNIS – Was ist am Ende rausgekommen?
-          </p>
-          <p className="mt-1">
-            Ausgehende Klicks zeigen deinen tatsächlichen Website-Traffic – das
-            ist, was am Monatsende zählt. Engagement Rate zeigt, wie relevant
-            dein Content insgesamt wahrgenommen wird.
-          </p>
-        </div>
-        <div>
-          <p className="font-semibold text-gray-900">
-            TREIBER – Was hat das Ergebnis erzeugt?
-          </p>
-          <p className="mt-1">
-            Saves sind das stärkste Algorithmus-Signal auf Pinterest – je mehr
-            Saves, desto länger lebt dein Pin und desto mehr Reichweite bekommt
-            er. CTR zeigt, ob dein Pin-Design (Hook) funktioniert. Impressionen
-            zeigen, ob deine Keywords und SEO greifen.
-          </p>
-        </div>
-        <div>
-          <p className="font-semibold text-gray-900">
-            KONTEXT – In welchem Umfeld passiert das?
-          </p>
-          <p className="mt-1">
-            Die Zielgruppen-Zahlen zeigen, wen du erreichst. Sie sind keine
-            Erfolgsmetriken an sich, sondern beschreiben den Kreis, aus dem
-            deine Klicks und Saves kommen.
-          </p>
-        </div>
-      </div>
-    </details>
   )
 }
 
@@ -1564,7 +1605,7 @@ function WinsSection({ wins }: { wins: WinItem[] }) {
   return (
     <section className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
       <h2 className="text-sm font-semibold text-gray-900">
-        🎉 Deine Wins der letzten 30 Tage
+        Deine Wins der letzten 30 Tage
       </h2>
       {wins.length === 0 ? (
         <p className="mt-2 text-sm text-gray-600">
@@ -1815,10 +1856,12 @@ function ProfilGesundheitWidget({
   ctr,
   engagement,
   impressionenGrowth,
+  embedded = false,
 }: {
   ctr: number | null
   engagement: number | null
   impressionenGrowth: number | null
+  embedded?: boolean
 }) {
   type StatusKey =
     | 'stark'
@@ -1911,11 +1954,16 @@ function ProfilGesundheitWidget({
   // Bei „solide" steckt die Impressionen-Warnung schon im Text — keine Doppel-Anzeige.
   const showSeparateWarn = showImpWarn && status !== 'solide'
 
+  // Embedded-Mode: kein eigener Hintergrund/Border — Hero-Section liefert
+  // den einheitlichen Status-Hintergrund. Erkennbar bleibt der Status durch
+  // Ampel-Icon, Titel und Coaching-Text.
+  const innerCls = embedded
+    ? 'flex flex-wrap items-start gap-3 px-1 text-sm text-gray-800'
+    : `flex flex-wrap items-start gap-3 rounded-md border px-4 py-3 text-sm ${c.cls}`
+
   return (
-    <div className="mt-4 space-y-2">
-      <div
-        className={`flex flex-wrap items-start gap-3 rounded-md border px-4 py-3 text-sm ${c.cls}`}
-      >
+    <div className={embedded ? 'space-y-2' : 'mt-4 space-y-2'}>
+      <div className={innerCls}>
         <span className="text-lg leading-tight" aria-hidden>
           {c.emoji}
         </span>
@@ -1967,10 +2015,10 @@ function KpiCard({
     variant === 'hero'
       ? 'border-2 border-green-300'
       : 'border border-gray-200'
-  const cardCls = `flex h-full flex-col rounded-lg ${borderCls} bg-white px-3 py-2 shadow-sm`
+  const cardCls = `flex h-full flex-col rounded-lg ${borderCls} bg-white p-2.5 shadow-sm`
   const labelCls =
-    'text-[11px] font-medium uppercase tracking-wide text-gray-500'
-  const valueCls = 'mt-0.5 text-lg font-semibold text-gray-900'
+    'text-[10px] font-medium uppercase tracking-wide text-gray-500'
+  const valueCls = 'mt-0.5 text-[22px] font-semibold leading-tight text-gray-900'
 
   const hasPrev =
     previousValue !== undefined && previousValue !== null && previousValue !== ''
@@ -2088,7 +2136,7 @@ function HandlungsbedarfSection({
 
   if (!hasAnyAnalytics) {
     return (
-      <section>
+      <section id="pin-handlungsbedarf" className="scroll-mt-4">
         {heading}
         <div className="mt-3 rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
           Trage deine ersten Pin-Analytics ein um Handlungsempfehlungen zu
@@ -2105,7 +2153,7 @@ function HandlungsbedarfSection({
   }
 
   return (
-    <section>
+    <section id="pin-handlungsbedarf" className="scroll-mt-4">
       {heading}
       <div className="mt-3 space-y-3">
         {HANDLUNGS_CATEGORIES.map((cat) => (
@@ -2117,35 +2165,49 @@ function HandlungsbedarfSection({
         ))}
 
         {bearbeitet.length > 0 && (
-          <details className="group rounded-lg border border-gray-200 bg-white shadow-sm">
-            <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 text-sm font-medium text-gray-900 hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
-              <span className="text-2xl leading-none text-gray-400" aria-hidden>
-                <span className="inline group-open:hidden">▸</span>
-                <span className="hidden group-open:inline">▾</span>
-              </span>
-              <span
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-green-500 text-base font-bold text-white"
-                aria-hidden
-              >
-                ✓
-              </span>
-              <span className="flex-1">Handlung abgeschlossen</span>
-              <span className="inline-flex items-center rounded-full bg-gray-200 px-2.5 py-0.5 text-xs font-semibold text-gray-700">
-                {bearbeitet.length}
-              </span>
-            </summary>
-            <div className="border-t border-gray-200 px-4 py-2">
-              <ul className="divide-y divide-gray-100">
-                {bearbeitet.map((b) => (
-                  <BearbeitetRow
-                    key={`${b.pin_id}|${b.kategorie}`}
-                    row={b}
-                    today={today}
-                  />
-                ))}
-              </ul>
-            </div>
-          </details>
+          <>
+            {/* Dezente Trennlinie + Abstand vor der Abgeschlossen-Kategorie */}
+            <div className="mt-5 border-t border-gray-100" />
+            <details className="group rounded-lg border border-gray-200 bg-white shadow-sm">
+              <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
+                <span
+                  className="text-2xl leading-none text-gray-400"
+                  aria-hidden
+                >
+                  <span className="inline group-open:hidden">▸</span>
+                  <span className="hidden group-open:inline">▾</span>
+                </span>
+                <span
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-gray-300 bg-gray-100 text-base font-medium text-gray-500"
+                  aria-hidden
+                >
+                  ✓
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium text-gray-500">
+                    Handlung abgeschlossen
+                  </div>
+                  <p className="mt-0.5 text-xs text-gray-500">
+                    Bereits bearbeitete Pins der letzten 30 Tage.
+                  </p>
+                </div>
+                <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-500">
+                  {bearbeitet.length}
+                </span>
+              </summary>
+              <div className="border-t border-gray-200 px-4 py-2">
+                <ul className="divide-y divide-gray-100">
+                  {bearbeitet.map((b) => (
+                    <BearbeitetRow
+                      key={`${b.pin_id}|${b.kategorie}`}
+                      row={b}
+                      today={today}
+                    />
+                  ))}
+                </ul>
+              </div>
+            </details>
+          </>
         )}
 
         <p className="pt-2 text-xs text-gray-500">
@@ -2153,7 +2215,7 @@ function HandlungsbedarfSection({
             href="/dashboard/einstellungen#pin-schwellwerte"
             className="font-medium text-red-600 hover:underline"
           >
-            Schwellwerte aller Kategorien anpassen ↗
+            Schwellwerte in den Einstellungen anpassen ↗
           </Link>
         </p>
       </div>
@@ -2221,7 +2283,9 @@ function HandlungsbedarfKategorieCard({
           <p className="mt-0.5 text-xs text-gray-600">{cat.subtitle}</p>
         </div>
         <span
-          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${cat.counterBg}`}
+          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+            pins.length === 0 ? 'bg-gray-100 text-gray-400' : cat.counterBg
+          }`}
         >
           {pins.length}
         </span>
@@ -2331,7 +2395,7 @@ function buildSuchstartTooltip(event: KanbanEvent): string {
 
 function SaisonKalenderSection({ columns }: { columns: SaisonKanbanColumns }) {
   return (
-    <section>
+    <section id="saison-kalender" className="scroll-mt-4">
       <div>
         <h2 className="flex items-center text-lg font-semibold text-gray-900">
           Saisonkalender
@@ -2560,7 +2624,7 @@ function PinPipelineSection({
 }) {
   const cat1Count = inhaltePinBedarfA.length + inhaltePinBedarfB.length
   return (
-    <section>
+    <section id="content-pipeline" className="scroll-mt-4">
       <h2 className="text-lg font-semibold text-gray-900">
         Content Pipeline – Was als nächstes pinnen?
       </h2>
@@ -2605,7 +2669,7 @@ function PinPipelineInhalteCard({
           <span className="hidden group-open:inline">▾</span>
         </span>
         <span
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-100 text-base text-blue-700"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-100 text-base text-violet-700"
           aria-hidden
         >
           📝
@@ -2622,7 +2686,13 @@ function PinPipelineInhalteCard({
             – größter Hebel für Reichweite.
           </p>
         </div>
-        <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-700">
+        <span
+          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+            totalCount === 0
+              ? 'bg-gray-100 text-gray-400'
+              : 'bg-violet-100 text-violet-700'
+          }`}
+        >
           {totalCount}
         </span>
       </summary>
@@ -2705,7 +2775,13 @@ function PinPipelineInhalteSubList({
           {heading}
           <InfoTooltip text={tooltip} />
         </span>
-        <span className="inline-flex items-center rounded-full bg-gray-200 px-2 py-0.5 text-xs font-semibold text-gray-700">
+        <span
+          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
+            items.length === 0
+              ? 'bg-gray-100 text-gray-400'
+              : 'bg-gray-200 text-gray-700'
+          }`}
+        >
           {items.length}
         </span>
       </summary>
@@ -2903,7 +2979,7 @@ function PinPipelineUrlsCard({
           <span className="hidden group-open:inline">▾</span>
         </span>
         <span
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-base text-emerald-700"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-teal-100 text-base text-teal-700"
           aria-hidden
         >
           🔗
@@ -2916,7 +2992,13 @@ function PinPipelineUrlsCard({
             URLs mit hoher CTR aber wenigen Pins – ungenutztes Goldnugget.
           </p>
         </div>
-        <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
+        <span
+          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+            urls.length === 0
+              ? 'bg-gray-100 text-gray-400'
+              : 'bg-teal-100 text-teal-700'
+          }`}
+        >
           {urls.length}
         </span>
       </summary>
@@ -3069,7 +3151,7 @@ function BoardGesundheitDashboardSection({
 
   if (!hasAnyBoardAnalytics) {
     return (
-      <section>
+      <section id="board-gesundheit" className="scroll-mt-4">
         {heading}
         <div className="mt-3 rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
           Noch keine Board-Analytics eingetragen. Trage deine ersten Board-Daten
@@ -3086,7 +3168,7 @@ function BoardGesundheitDashboardSection({
   }
 
   return (
-    <section>
+    <section id="board-gesundheit" className="scroll-mt-4">
       {heading}
 
       <div className="mt-3 rounded-md border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
@@ -3132,17 +3214,53 @@ function BoardGesundheitDashboardSection({
         profilEr={kpis.profilEr}
       />
 
-      <div className="mt-3 space-y-3">
-        {BOARD_CATEGORIES.map((cat) => (
-          <BoardKategorieCard
-            key={cat.key}
-            cat={cat}
-            boards={byCategory[cat.key]}
-            thresholds={thresholds}
-            pinsCountByBoard={pinsCountByBoard}
-          />
-        ))}
+      {(() => {
+        const categoriesA = BOARD_CATEGORIES.filter((c) => c.group === 'A')
+        const categoriesB = BOARD_CATEGORIES.filter((c) => c.group === 'B')
+        const countA = categoriesA.reduce(
+          (s, cat) => s + (byCategory[cat.key]?.length ?? 0),
+          0
+        )
+        const countB = categoriesB.reduce(
+          (s, cat) => s + (byCategory[cat.key]?.length ?? 0),
+          0
+        )
+        return (
+          <div className="mt-3">
+            {/* Gruppe A — Brauchen Aufmerksamkeit */}
+            <BoardGruppeHeader group="A" count={countA} />
+            <div className="mt-3 space-y-3">
+              {categoriesA.map((cat) => (
+                <BoardKategorieCard
+                  key={cat.key}
+                  cat={cat}
+                  boards={byCategory[cat.key]}
+                  thresholds={thresholds}
+                  pinsCountByBoard={pinsCountByBoard}
+                />
+              ))}
+            </div>
 
+            {/* Gruppe B — Performen gut (leicht ausgegraut) */}
+            <div className="mt-7 opacity-85">
+              <BoardGruppeHeader group="B" count={countB} />
+              <div className="mt-3 space-y-3">
+                {categoriesB.map((cat) => (
+                  <BoardKategorieCard
+                    key={cat.key}
+                    cat={cat}
+                    boards={byCategory[cat.key]}
+                    thresholds={thresholds}
+                    pinsCountByBoard={pinsCountByBoard}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      <div className="mt-3 space-y-3">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-2 text-xs text-gray-500">
           <Link
             href="/dashboard/einstellungen#board-schwellwerte"
@@ -3187,6 +3305,59 @@ function BoardGesundheitDashboardSection({
         </div>
       </div>
     </section>
+  )
+}
+
+// ===========================================================
+// Board-Gruppen-Header (A: Brauchen Aufmerksamkeit, B: Performen gut)
+// ===========================================================
+function BoardGruppeHeader({
+  group,
+  count,
+}: {
+  group: 'A' | 'B'
+  count: number
+}) {
+  if (group === 'A') {
+    const isEmpty = count === 0
+    return (
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-1">
+        <h3 className="flex items-center gap-2 text-sm font-medium text-gray-900">
+          <span aria-hidden className="text-base leading-none">
+            {isEmpty ? '👍' : '⚠️'}
+          </span>
+          Brauchen Aufmerksamkeit
+        </h3>
+        <p className="text-xs text-gray-500">
+          {isEmpty ? (
+            <>
+              0 Boards mit Handlungsbedarf
+              <span className="ml-2 font-medium text-green-700">
+                ✓ Stark, alle Boards laufen stabil!
+              </span>
+            </>
+          ) : (
+            <>{count} Boards mit Handlungsbedarf</>
+          )}
+        </p>
+      </div>
+    )
+  }
+  // Gruppe B
+  return (
+    <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-1">
+      <h3 className="flex items-center gap-2 text-sm font-medium text-gray-500">
+        <span aria-hidden className="text-base leading-none">
+          ✓
+        </span>
+        Performen gut
+      </h3>
+      <p className="text-xs text-gray-500">
+        {count === 0
+          ? '0 Boards laufen aktuell stabil'
+          : `${count} Boards laufen stabil`}
+      </p>
+    </div>
   )
 }
 
@@ -3409,7 +3580,9 @@ function BoardKategorieCard({
           <p className="mt-0.5 text-xs text-gray-600">{cat.subtitle}</p>
         </div>
         <span
-          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${cat.counterBg}`}
+          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+            boards.length === 0 ? 'bg-gray-100 text-gray-400' : cat.counterBg
+          }`}
         >
           {boards.length === 0 && cat.emptyTooltip ? (
             <LabelWithTooltip
@@ -3886,5 +4059,531 @@ function UpdateStatusCard({
         <span>📋 {formatZahl(boardsCount)} Boards</span>
       </span>
     </section>
+  )
+}
+
+// ===========================================================
+// Hero-Section: Status-Zeile + (rotes Warn-Banner) + Profil-Gesundheit
+// in einer Box mit Status-abhängigem Hintergrund.
+// ===========================================================
+function HeroSection({
+  statusTri,
+  pinsCount,
+  boardsCount,
+  ctr,
+  engagement,
+  impressionenGrowth,
+  briefingItems,
+}: {
+  statusTri: UpdateStatusTri
+  pinsCount: number
+  boardsCount: number
+  ctr: number | null
+  engagement: number | null
+  impressionenGrowth: number | null
+  briefingItems: BriefingItem[]
+}) {
+  // Onboarding-Modus: noch nie Analytics gepflegt — blauer Info-Banner
+  // statt Status/Profil-Gesundheit.
+  if (statusTri.state === 'leer') {
+    return (
+      <section className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-4 shadow-sm">
+        <div className="flex flex-wrap items-start gap-3 text-sm text-blue-900">
+          <span className="text-lg leading-tight" aria-hidden>
+            🔵
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold">Willkommen!</p>
+            <p className="mt-0.5">
+              Bevor das Dashboard aussagekräftig wird, pflege einmal monatlich
+              deine Pinterest-Analytics ein. Erst dann zeigen KPIs,
+              Strategie-Check und Coaching-Empfehlungen verlässliche Werte.
+            </p>
+            <Link
+              href="/dashboard/analytics"
+              className="mt-3 inline-flex items-center rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+            >
+              → Analytics jetzt einpflegen
+            </Link>
+          </div>
+          <span className="ml-auto flex shrink-0 items-center gap-3 border-l border-blue-200 pl-3 text-xs text-blue-900">
+            <span>📌 {formatZahl(pinsCount)} Pins</span>
+            <span className="text-blue-300" aria-hidden>
+              ·
+            </span>
+            <span>📋 {formatZahl(boardsCount)} Boards</span>
+          </span>
+        </div>
+      </section>
+    )
+  }
+  const tone =
+    statusTri.state === 'rot'
+      ? {
+          border: 'border-red-200',
+          bg: 'bg-red-50',
+          title: 'text-red-900',
+          body: 'text-red-800',
+          divider: 'border-red-200/60',
+        }
+      : statusTri.state === 'gelb'
+        ? {
+            border: 'border-yellow-200',
+            bg: 'bg-yellow-50',
+            title: 'text-yellow-900',
+            body: 'text-yellow-800',
+            divider: 'border-yellow-200/60',
+          }
+        : statusTri.state === 'gruen'
+          ? {
+              border: 'border-green-200',
+              bg: 'bg-green-50',
+              title: 'text-green-900',
+              body: 'text-green-800',
+              divider: 'border-green-200/60',
+            }
+          : {
+              border: 'border-gray-200',
+              bg: 'bg-gray-50',
+              title: 'text-gray-900',
+              body: 'text-gray-700',
+              divider: 'border-gray-200/60',
+            }
+
+  const statusLabel =
+    statusTri.state === 'rot'
+      ? '🔴 Analytics-Status: Daten veraltet'
+      : statusTri.state === 'gelb'
+        ? `🟡 Analytics-Status: Update fällig in ${
+            statusTri.daysUntilDue !== null
+              ? Math.max(0, statusTri.daysUntilDue)
+              : '—'
+          } Tagen`
+        : statusTri.state === 'gruen'
+          ? '🟢 Analytics-Status: Aktuell'
+          : '⚪ Analytics-Status: Noch kein Update'
+
+  const daysAgoLabel =
+    statusTri.daysSinceUpdate === null
+      ? null
+      : statusTri.daysSinceUpdate === 0
+        ? 'heute'
+        : statusTri.daysSinceUpdate === 1
+          ? 'vor 1 Tag'
+          : `vor ${statusTri.daysSinceUpdate} Tagen`
+
+  return (
+    <section
+      className={`rounded-lg border ${tone.border} ${tone.bg} shadow-sm`}
+    >
+      {/* Status-Bereich oben */}
+      <div
+        className={`flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 text-sm ${tone.body}`}
+      >
+        <span className={`font-semibold ${tone.title}`}>{statusLabel}</span>
+        {statusTri.lastUpdate && (
+          <>
+            <span className="text-gray-400" aria-hidden>
+              ·
+            </span>
+            <span>
+              Letztes Update:{' '}
+              <strong>{formatDateDe(statusTri.lastUpdate)}</strong>
+              {daysAgoLabel && <> ({daysAgoLabel})</>}
+            </span>
+            <span className="text-gray-400" aria-hidden>
+              ·
+            </span>
+            <span>
+              Nächstes Update:{' '}
+              <strong>{formatDateDe(statusTri.nextDue)}</strong>
+            </span>
+          </>
+        )}
+        <Link
+          href="/dashboard/analytics"
+          className="rounded-md border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+        >
+          📊 Jetzt aktualisieren
+        </Link>
+        <span className="ml-auto flex items-center gap-3 border-l border-gray-300 pl-3 text-gray-700">
+          <span>📌 {formatZahl(pinsCount)} Pins</span>
+          <span className="text-gray-400" aria-hidden>
+            ·
+          </span>
+          <span>📋 {formatZahl(boardsCount)} Boards</span>
+        </span>
+      </div>
+
+      {/* Warn-Hinweis nur bei rotem Status */}
+      {statusTri.state === 'rot' && statusTri.daysSinceUpdate !== null && (
+        <div className="mx-4 mb-3 rounded-md border-l-4 border-red-500 bg-red-100 px-3 py-2 text-sm text-red-900">
+          <span className="font-semibold">⚠️ Daten veraltet</span> – das
+          Dashboard zeigt Werte vom letzten Update (vor{' '}
+          {statusTri.daysSinceUpdate} Tagen). Aktualisiere jetzt deine
+          Analytics, damit alle Sektionen verlässliche Empfehlungen zeigen.
+        </div>
+      )}
+
+      {/* Dezente Trennlinie */}
+      <div className={`border-t ${tone.divider}`} />
+
+      {/* Profil-Gesundheit */}
+      <div className="px-4 py-3">
+        <ProfilGesundheitWidget
+          ctr={ctr}
+          engagement={engagement}
+          impressionenGrowth={impressionenGrowth}
+          embedded
+        />
+      </div>
+
+      {/* Dezente Trennlinie vor "Heute aktuell" */}
+      <div className={`border-t ${tone.divider}`} />
+
+      {/* Heute aktuell — Briefing mit den wichtigsten Items */}
+      <div className="px-4 py-3">
+        <BriefingSection items={briefingItems} />
+      </div>
+
+      {/* Dezente Trennlinie vor Footer-Hinweis */}
+      <div className={`border-t ${tone.divider}`} />
+
+      {/* Footer-Hinweis: Aktualität der Daten */}
+      <p className="px-4 py-2 text-xs text-gray-500">
+        <span aria-hidden>ⓘ</span> Das Dashboard ist nur so aktuell wie deine
+        zuletzt eingepflegten Daten. Pflege einmal monatlich deine
+        Pinterest-Analytics ein.
+      </p>
+    </section>
+  )
+}
+
+// ===========================================================
+// Phasen-Trenner — Icon + Titel, dezente Linie darunter
+// ===========================================================
+function PhasenTrenner({
+  icon,
+  title,
+}: {
+  icon: string
+  title: string
+}) {
+  return (
+    <div className="mb-6 mt-12 border-b border-gray-200 pb-3">
+      <p className="flex items-center gap-2 text-base font-medium text-gray-800">
+        <span aria-hidden className="text-lg leading-none">
+          {icon}
+        </span>
+        <span>{title}</span>
+      </p>
+    </div>
+  )
+}
+
+// ===========================================================
+// Gesamt-Profil-Performance — neues 3-Spalten-Layout
+// Spalte 1: Ergebnis (Hero-KPIs untereinander)
+// Spalte 2: Treiber (KPIs untereinander)
+// Spalte 3: Performance-Verlauf (Chart, gleiche Höhe wie Sp. 1+2)
+// Darunter: Kontext-Zeile in voller Breite
+// ===========================================================
+function ProfilPerformanceSection({
+  latest,
+  previous,
+  chartPoints,
+}: {
+  latest: ProfilAnalyticsWithGrowth | null
+  previous: ProfilAnalyticsWithGrowth | null
+  chartPoints: ChartPoint[]
+}) {
+  const prevCtr =
+    previous && previous.impressionen > 0
+      ? (previous.ausgehende_klicks / previous.impressionen) * 100
+      : null
+  const prevEngagement =
+    previous && previous.impressionen > 0
+      ? ((previous.saves + previous.ausgehende_klicks) /
+          previous.impressionen) *
+        100
+      : null
+  const deltaTage =
+    latest && previous ? diffDays(previous.datum, latest.datum) : null
+  const headingTooltip =
+    'Pinterest zeigt rollierende Daten der letzten 31 Tage. Wachstum % basiert auf Vergleich zum vorherigen eingetragenen Monat.'
+
+  const prevDateLabel = previous ? ` (${formatDateDe(previous.datum)})` : ''
+  const prevText = (val: string | null) =>
+    val !== null ? `Vorperiode: ${val}${prevDateLabel}` : undefined
+
+  if (!latest) {
+    return (
+      <section>
+        <h2 className="text-lg font-semibold text-gray-900">
+          <LabelWithTooltip
+            label="Gesamt-Profil-Performance"
+            tooltip={headingTooltip}
+          />
+        </h2>
+        <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
+          {[
+            'Ausgehende Klicks',
+            'Engagement Rate',
+            'Saves',
+            'CTR',
+            'Impressionen',
+            'Gesamte Zielgruppe',
+            'Interagierende Zielgruppe',
+          ].map((label) => (
+            <KpiCardEmpty key={label} label={label} />
+          ))}
+        </div>
+        <p className="mt-2 text-xs text-gray-500">
+          Noch kein Analytics-Update —{' '}
+          <Link
+            href="/dashboard/analytics"
+            className="font-medium text-red-600 hover:underline"
+          >
+            jetzt starten
+          </Link>
+          .
+        </p>
+      </section>
+    )
+  }
+
+  return (
+    <section>
+      <h2 className="text-lg font-semibold text-gray-900">
+        <LabelWithTooltip
+          label="Gesamt-Profil-Performance"
+          tooltip={headingTooltip}
+        />
+        {previous && (
+          <span className="ml-2 text-sm font-normal text-gray-500">
+            — Vergleich zum {formatDateDe(previous.datum)}
+            {deltaTage !== null && <> ({deltaTage} Tage zuvor)</>}
+          </span>
+        )}
+      </h2>
+
+      {/* 3-Spalten-Grid: Ergebnis (schmal) | Treiber (schmal) | Chart (flex-1) */}
+      <div className="mt-3 grid items-stretch gap-4 lg:grid-cols-[170px_170px_minmax(0,1fr)]">
+        {/* Spalte 1 — Ergebnis */}
+        <div className="flex flex-col">
+          <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+            <LabelWithTooltip
+              label="Ergebnis"
+              tooltip="Was ist am Ende rausgekommen – die Erfolgs-Metriken deines Profils."
+            />
+          </h3>
+          <div className="mt-2 flex flex-1 flex-col gap-2">
+            <KpiCard
+              variant="hero"
+              label="Ausgehende Klicks"
+              value={formatZahl(latest.ausgehende_klicks)}
+              fullValue={latest.ausgehende_klicks}
+              growth={latest.klicks_growth}
+              tooltip="Wie oft Nutzer von Pinterest auf deine Website geklickt haben. Das ist deine wichtigste Metrik — sie zeigt echten Traffic."
+              previousValue={prevText(
+                previous ? formatZahl(previous.ausgehende_klicks) : null
+              )}
+            />
+            <KpiCard
+              variant="hero"
+              label="Engagement Rate"
+              value={formatPercent(latest.engagement)}
+              growth={latest.engagement_growth}
+              tooltip="(Saves + Klicks) ÷ Impressionen. Standard Pins Durchschnitt: 0,15–0,25%. Über 1% ist ausgezeichnet."
+              previousValue={prevText(
+                prevEngagement !== null ? formatPercent(prevEngagement) : null
+              )}
+            />
+          </div>
+        </div>
+
+        {/* Spalte 2 — Treiber */}
+        <div className="flex flex-col">
+          <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+            <LabelWithTooltip
+              label="Treiber"
+              tooltip="Was hat das Ergebnis erzeugt – die Hebel, an denen du drehen kannst."
+            />
+          </h3>
+          <div className="mt-2 flex flex-1 flex-col gap-2">
+            <KpiCard
+              label="Saves"
+              value={formatZahl(latest.saves)}
+              fullValue={latest.saves}
+              growth={latest.saves_growth}
+              tooltip="Saves sind das stärkste Algorithmus-Signal. Mehr Saves = längere Lebensdauer + mehr Reichweite."
+              previousValue={prevText(
+                previous ? formatZahl(previous.saves) : null
+              )}
+            />
+            <KpiCard
+              label="CTR"
+              value={formatPercent(latest.ctr)}
+              growth={latest.ctr_growth}
+              tooltip="Ausgehende Klicks ÷ Impressionen. Zeigt ob dein Pin-Hook funktioniert. Pinterest organisch: 1,54%."
+              previousValue={prevText(
+                prevCtr !== null ? formatPercent(prevCtr) : null
+              )}
+            />
+            <KpiCard
+              label="Impressionen"
+              value={formatZahl(latest.impressionen)}
+              fullValue={latest.impressionen}
+              growth={latest.impressionen_growth}
+              tooltip="Wie oft deine Pins angezeigt wurden. Zeigt ob deine Keywords und SEO greifen."
+              previousValue={prevText(
+                previous ? formatZahl(previous.impressionen) : null
+              )}
+            />
+          </div>
+        </div>
+
+        {/* Spalte 3 — Performance-Verlauf, volle Höhe der Treiber-Spalte */}
+        <div className="flex flex-col">
+          <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+            <LabelWithTooltip
+              label="Performance-Verlauf"
+              tooltip="Hier siehst du die Entwicklung deiner wichtigsten Metriken über die letzten 12 Monate (rollierend). Sobald ein neuer Monat hinzukommt, fällt der älteste raus."
+            />
+          </h3>
+          <div className="mt-2 flex flex-1 flex-col rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
+            <PerformanceChartArea points={chartPoints} />
+          </div>
+        </div>
+      </div>
+
+      {/* Kontext-Zeile in voller Breite unter den 3 Spalten */}
+      <KontextZeile latest={latest} previous={previous} prevDateLabel={prevDateLabel} />
+    </section>
+  )
+}
+
+// Inline-Variante des Performance-Charts ohne eigenen Section-/Border-Wrapper.
+// Nimmt die volle Höhe der Spalte (h-full / flex-1), damit Spalte 3 bündig
+// mit der Treiber-Spalte abschließt.
+function PerformanceChartArea({ points }: { points: ChartPoint[] }) {
+  const tooLittle = points.length < 3
+  const datapointLabel =
+    points.length === 1 ? '1 Datenpunkt' : `${points.length} Datenpunkte`
+  if (tooLittle) {
+    return (
+      <div className="flex min-h-[18rem] flex-1 items-center justify-center">
+        <p className="text-center text-sm text-gray-400">
+          Der Verlauf wird ab dem 3. Monat sichtbar.
+          <br />
+          Aktuell verfügbar: {datapointLabel}.
+        </p>
+      </div>
+    )
+  }
+  return (
+    <div className="flex flex-1 flex-col">
+      <PerformanceChart data={points} />
+    </div>
+  )
+}
+
+// Kontext-Zeile: kompakt, eine Zeile, beide Zielgruppen-KPIs mit Pfeil.
+// Format: 'KONTEXT  Gesamte Zielgruppe: [Wert] [Pfeil]   ·   Interagierende ZG: [Wert] [Pfeil]'
+function KontextZeile({
+  latest,
+  previous,
+  prevDateLabel,
+}: {
+  latest: ProfilAnalyticsWithGrowth
+  previous: ProfilAnalyticsWithGrowth | null
+  prevDateLabel: string
+}) {
+  return (
+    <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 shadow-sm">
+      <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">
+        <LabelWithTooltip
+          label="Kontext"
+          tooltip="In welchem Umfeld passiert das – wen du erreichst."
+        />
+      </span>
+      <KontextKpi
+        label="Gesamte Zielgruppe"
+        value={formatZahl(latest.gesamte_zielgruppe)}
+        growth={latest.zielgruppe_growth}
+        tooltip="Alle Menschen die deinen Content gesehen haben — auf Pinterest und außerhalb."
+        previousValue={
+          previous
+            ? `Vorperiode: ${formatZahl(previous.gesamte_zielgruppe)}${prevDateLabel}`
+            : undefined
+        }
+      />
+      <span className="text-gray-300" aria-hidden>
+        ·
+      </span>
+      <KontextKpi
+        label="Interagierende Zielgruppe"
+        value={formatZahl(latest.interagierende_zielgruppe)}
+        growth={latest.interagierend_growth}
+        tooltip="Menschen die aktiv reagiert haben — geklickt, gespeichert oder kommentiert. Qualitativ wertvoller als Gesamtzielgruppe."
+        previousValue={
+          previous
+            ? `Vorperiode: ${formatZahl(previous.interagierende_zielgruppe)}${prevDateLabel}`
+            : undefined
+        }
+      />
+    </div>
+  )
+}
+
+function KontextKpi({
+  label,
+  value,
+  growth,
+  tooltip,
+  previousValue,
+}: {
+  label: string
+  value: string
+  growth: number | null | undefined
+  tooltip?: string
+  previousValue?: string
+}) {
+  const arrow =
+    growth === null || growth === undefined
+      ? null
+      : !Number.isFinite(growth)
+        ? '↑ neu'
+        : growth > 0
+          ? `↑ ${formatGrowth(growth)}`
+          : growth < 0
+            ? `↓ ${formatGrowth(growth)}`
+            : '→'
+  const arrowCls =
+    growth === null || growth === undefined
+      ? 'text-gray-400'
+      : !Number.isFinite(growth) || growth > 0
+        ? 'text-green-700'
+        : growth < 0
+          ? 'text-red-700'
+          : 'text-gray-500'
+  // Alle Elemente in EINER Zeile: Label · Wert · Veränderung · Vorperiode
+  return (
+    <span className="inline-flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+      <span className="text-[10px] font-medium uppercase tracking-wide text-gray-500">
+        <LabelWithTooltip label={label} tooltip={tooltip} />
+      </span>
+      <span className="text-base font-semibold leading-tight text-gray-900">
+        {value}
+      </span>
+      {arrow && (
+        <span className={`text-xs font-medium ${arrowCls}`}>{arrow}</span>
+      )}
+      {previousValue && (
+        <span className="whitespace-nowrap text-[10px] text-gray-400">
+          {previousValue}
+        </span>
+      )}
+    </span>
   )
 }
