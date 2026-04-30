@@ -9,7 +9,6 @@ export type BusinessModell =
   | 'affiliate'
   | 'shop'
   | 'coaching'
-  | 'mix'
   | 'anderes'
 
 export type Hauptziel =
@@ -63,12 +62,6 @@ export const BUSINESS_MODELL_OPTIONS: ReadonlyArray<{
     label: 'Coaching, Beratung oder Dienstleistungen',
     kurz: 'Coach/Berater',
     mix: { blog: 50, affiliate: 0, produkt: 50 },
-  },
-  {
-    value: 'mix',
-    label: 'Mix aus mehreren Bereichen (Content-Creator)',
-    kurz: 'Content-Creator',
-    mix: { blog: 50, affiliate: 30, produkt: 20 },
   },
   {
     value: 'anderes',
@@ -211,12 +204,28 @@ export type RecommendationResult = {
 }
 
 export function computeRecommendation(
-  modell: BusinessModell,
+  modelle: BusinessModell[],
   hauptziel: Hauptziel,
   vorhanden: VorhandenItem[]
 ): RecommendationResult {
-  const modellOpt = BUSINESS_MODELL_OPTIONS.find((o) => o.value === modell)
-  const base = modellOpt?.mix ?? { blog: 50, affiliate: 30, produkt: 20 }
+  const modellOpts = modelle
+    .map((m) => BUSINESS_MODELL_OPTIONS.find((o) => o.value === m))
+    .filter((o): o is (typeof BUSINESS_MODELL_OPTIONS)[number] => o != null)
+
+  const base =
+    modellOpts.length === 0
+      ? { blog: 50, affiliate: 30, produkt: 20 }
+      : {
+          blog:
+            modellOpts.reduce((s, o) => s + o.mix.blog, 0) /
+            modellOpts.length,
+          affiliate:
+            modellOpts.reduce((s, o) => s + o.mix.affiliate, 0) /
+            modellOpts.length,
+          produkt:
+            modellOpts.reduce((s, o) => s + o.mix.produkt, 0) /
+            modellOpts.length,
+        }
   const mix = { ...base }
 
   const hasBlog = vorhanden.includes('blog')
@@ -284,7 +293,17 @@ export function computeRecommendation(
     }
   }
 
-  const modellKurz = modellOpt?.kurz ?? 'Pinterest-Nutzer'
+  const modellKurzList = modellOpts.map((o) => o.kurz)
+  const modellKurz =
+    modellKurzList.length === 0
+      ? 'Pinterest-Nutzer'
+      : modellKurzList.length === 1
+        ? modellKurzList[0]
+        : modellKurzList.length === 2
+          ? modellKurzList.join(' und ')
+          : modellKurzList.slice(0, -1).join(', ') +
+            ' und ' +
+            modellKurzList[modellKurzList.length - 1]
   const zielKurz = zielOpt?.kurz ?? 'Reichweite'
 
   const begruendung =
@@ -325,6 +344,24 @@ export function parseVorhanden(s: string | null): VorhandenItem[] {
     .map((v) => v.trim())
     .filter((v): v is VorhandenItem =>
       VORHANDEN_OPTIONS.some((o) => o.value === v)
+    )
+}
+
+// =====================================================
+// Business-Modell-Serialisierung (TEXT-Spalte → Array)
+// =====================================================
+
+export function serializeBusinessModelle(items: BusinessModell[]): string {
+  return items.join(',')
+}
+
+export function parseBusinessModelle(s: string | null): BusinessModell[] {
+  if (!s) return []
+  return s
+    .split(',')
+    .map((v) => v.trim())
+    .filter((v): v is BusinessModell =>
+      BUSINESS_MODELL_OPTIONS.some((o) => o.value === v)
     )
 }
 

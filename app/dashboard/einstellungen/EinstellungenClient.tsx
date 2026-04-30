@@ -41,6 +41,8 @@ export type InitialStrategie = {
   mix: [number, number, number]
   ziele: [number, number, number]
   format: [number, number, number, number]
+  schwelleGelb: number
+  schwelleRot: number
   onboardingAbgeschlossen: boolean
 }
 
@@ -887,7 +889,22 @@ const STRATEGIE_ACCENTS = {
   red: 'accent-red-500',
   yellow: 'accent-yellow-400',
   pink: 'accent-pink-500',
+  indigo: 'accent-indigo-500',
+  black: 'accent-black',
 } as const
+const STRATEGIE_FILL_HEX = {
+  blue: '#3b82f6',
+  purple: '#a855f7',
+  green: '#22c55e',
+  orange: '#f97316',
+  gray: '#6b7280',
+  red: '#ef4444',
+  yellow: '#facc15',
+  pink: '#ec4899',
+  indigo: '#6366f1',
+  black: '#000000',
+} as const
+const STRATEGIE_TRACK_GRAY = '#e5e7eb' // bg-gray-200
 type StrategieAccent = keyof typeof STRATEGIE_ACCENTS
 
 function StrategieSection({ initial }: { initial: InitialStrategie }) {
@@ -895,6 +912,12 @@ function StrategieSection({ initial }: { initial: InitialStrategie }) {
   const [ziele, setZiele] = useState<[number, number, number]>(initial.ziele)
   const [format, setFormat] = useState<[number, number, number, number]>(
     initial.format
+  )
+  const [schwelleGelb, setSchwelleGelb] = useState<string>(
+    String(initial.schwelleGelb)
+  )
+  const [schwelleRot, setSchwelleRot] = useState<string>(
+    String(initial.schwelleRot)
   )
   const [isPending, startTransition] = useTransition()
   const [feedback, setFeedback] = useState<{
@@ -907,6 +930,17 @@ function StrategieSection({ initial }: { initial: InitialStrategie }) {
   const formatSum = format[0] + format[1] + format[2] + format[3]
   const allOk = mixSum === 100 && zieleSum === 100 && formatSum === 100
 
+  const gelbN = Number(schwelleGelb)
+  const rotN = Number(schwelleRot)
+  const schwelleErr =
+    !Number.isInteger(gelbN) || gelbN < 0 || gelbN > 100
+      ? 'Diff-Schwelle Gelb muss eine ganze Zahl zwischen 0 und 100 sein.'
+      : !Number.isInteger(rotN) || rotN < 0 || rotN > 100
+        ? 'Diff-Schwelle Rot muss eine ganze Zahl zwischen 0 und 100 sein.'
+        : rotN <= gelbN
+          ? 'Diff-Schwelle Rot muss größer sein als Gelb.'
+          : null
+
   function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setFeedback({})
@@ -914,6 +948,10 @@ function StrategieSection({ initial }: { initial: InitialStrategie }) {
       setFeedback({
         error: 'Alle drei Gruppen müssen jeweils 100% ergeben.',
       })
+      return
+    }
+    if (schwelleErr) {
+      setFeedback({ error: schwelleErr })
       return
     }
     const formData = new FormData()
@@ -927,6 +965,8 @@ function StrategieSection({ initial }: { initial: InitialStrategie }) {
     formData.set('format_soll_video', String(format[1]))
     formData.set('format_soll_collage', String(format[2]))
     formData.set('format_soll_carousel', String(format[3]))
+    formData.set('strategie_check_schwelle_gelb', String(gelbN))
+    formData.set('strategie_check_schwelle_rot', String(rotN))
     startTransition(async () => {
       const result = await saveStrategieManual(formData)
       if (result.error) setFeedback({ error: result.error })
@@ -989,7 +1029,7 @@ function StrategieSection({ initial }: { initial: InitialStrategie }) {
         <StrategieSliderGroup
           title="Pin-Format-Mix"
           channels={[
-            { label: 'Standard', color: 'gray' },
+            { label: 'Standard', color: 'black' },
             { label: 'Video', color: 'red' },
             { label: 'Collage', color: 'yellow' },
             { label: 'Carousel', color: 'pink' },
@@ -1000,10 +1040,69 @@ function StrategieSection({ initial }: { initial: InitialStrategie }) {
           }
         />
 
+        <div>
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-900">
+            Diff-Schwellen für Strategie-Check
+          </h3>
+          <p className="mt-1 text-xs text-gray-600">
+            Steuert die Farb-Bewertung im Strategie-Check auf dem Dashboard.
+            Abweichung |Ist − Soll| in Prozentpunkten.
+          </p>
+          <div className="mt-3 grid gap-4 sm:grid-cols-2">
+            <div>
+              <label
+                htmlFor="strategie_check_schwelle_gelb"
+                className="block text-sm font-medium text-gray-700"
+              >
+                Diff-Schwelle Gelb (%)
+              </label>
+              <input
+                id="strategie_check_schwelle_gelb"
+                type="number"
+                min={0}
+                max={100}
+                step={1}
+                value={schwelleGelb}
+                onChange={(e) => setSchwelleGelb(e.target.value)}
+                className="mt-1 block w-32 rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                Ab dieser Abweichung wird der Wert gelb markiert (leicht außer
+                Plan). Standard: 5.
+              </p>
+            </div>
+            <div>
+              <label
+                htmlFor="strategie_check_schwelle_rot"
+                className="block text-sm font-medium text-gray-700"
+              >
+                Diff-Schwelle Rot (%)
+              </label>
+              <input
+                id="strategie_check_schwelle_rot"
+                type="number"
+                min={0}
+                max={100}
+                step={1}
+                value={schwelleRot}
+                onChange={(e) => setSchwelleRot(e.target.value)}
+                className="mt-1 block w-32 rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                Ab dieser Abweichung wird der Wert rot markiert (deutlich außer
+                Plan). Muss größer sein als die gelbe Schwelle. Standard: 15.
+              </p>
+            </div>
+          </div>
+          {schwelleErr && (
+            <p className="mt-2 text-xs text-red-700">{schwelleErr}</p>
+          )}
+        </div>
+
         <div className="flex flex-wrap items-center gap-3">
           <button
             type="submit"
-            disabled={isPending || !allOk}
+            disabled={isPending || !allOk || !!schwelleErr}
             className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isPending ? 'Speichert…' : 'Strategie speichern'}
@@ -1066,23 +1165,36 @@ function StrategieSliderGroup({
                   adjustProportional(values, i, Number(e.target.value))
                 )
               }
-              className={`w-full ${STRATEGIE_ACCENTS[c.color]}`}
+              className={`pf-slider w-full ${STRATEGIE_ACCENTS[c.color]}`}
+              style={{
+                background: `linear-gradient(to right, ${STRATEGIE_FILL_HEX[c.color]} 0%, ${STRATEGIE_FILL_HEX[c.color]} ${values[i]}%, ${STRATEGIE_TRACK_GRAY} ${values[i]}%, ${STRATEGIE_TRACK_GRAY} 100%)`,
+                borderRadius: '9999px',
+                color: STRATEGIE_FILL_HEX[c.color],
+              }}
               aria-label={c.label}
             />
-            <input
-              type="number"
-              min={0}
-              max={100}
-              step={5}
-              value={values[i]}
-              onChange={(e) =>
-                onChange(
-                  adjustProportional(values, i, Number(e.target.value))
-                )
-              }
-              className="w-20 rounded-md border border-gray-300 px-2 py-1 text-right text-sm tabular-nums shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-              aria-label={`${c.label} Prozent`}
-            />
+            <div className="relative w-20">
+              <input
+                type="number"
+                min={0}
+                max={100}
+                step={5}
+                value={values[i]}
+                onChange={(e) =>
+                  onChange(
+                    adjustProportional(values, i, Number(e.target.value))
+                  )
+                }
+                className="w-full rounded-md border border-gray-300 py-1 pl-2 pr-6 text-right text-sm tabular-nums shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                aria-label={`${c.label} Prozent`}
+              />
+              <span
+                className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-sm text-gray-500"
+                aria-hidden
+              >
+                %
+              </span>
+            </div>
           </div>
         ))}
       </div>

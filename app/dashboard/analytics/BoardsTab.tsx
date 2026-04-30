@@ -14,6 +14,7 @@ import {
   saveBoardAnalyticsBulk,
   type BoardAnalyticsBulkRow,
 } from './actions'
+import AnalyticsDateHelper from './AnalyticsDateHelper'
 import {
   BOARD_SCORE_BADGE,
   BOARD_SCORE_LABEL,
@@ -147,6 +148,8 @@ export default function BoardsTab({
 
   return (
     <div className="space-y-6">
+      <AnalyticsDateHelper />
+
       <div className="rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
         Keywords sind der wichtigste SEO-Faktor auf Pinterest — sie bestimmen
         wer deinen Pin findet. Boards sind der zweitwichtigste Faktor — sie
@@ -352,7 +355,9 @@ function BulkBoardForm({
             htmlFor="bulk_datum"
             className="block text-sm font-medium text-gray-700"
           >
-            Datum (gilt für alle Boards) <span className="text-red-600">*</span>
+            Analytics-Datum (heute, gilt für alle Boards){' '}
+            <span className="text-red-600">*</span>
+            <InfoTooltip text="Das Datum an dem du diese Analytics-Daten aus Pinterest exportiert hast — in der Regel das heutige Datum." />
           </label>
           <input
             id="bulk_datum"
@@ -592,7 +597,12 @@ function SingleBoardForm({
           </select>
         </Field>
 
-        <Field label="Datum" htmlFor="single_datum" required>
+        <Field
+          label="Analytics-Datum (heute)"
+          htmlFor="single_datum"
+          required
+          tooltip="Das Datum an dem du diese Analytics-Daten aus Pinterest exportiert hast — in der Regel das heutige Datum."
+        >
           <input
             id="single_datum"
             name="datum"
@@ -1119,11 +1129,13 @@ function Field({
   label,
   htmlFor,
   required,
+  tooltip,
   children,
 }: {
   label: string
   htmlFor: string
   required?: boolean
+  tooltip?: string
   children: React.ReactNode
 }) {
   return (
@@ -1133,6 +1145,7 @@ function Field({
         className="block text-sm font-medium text-gray-700"
       >
         {label} {required && <span className="text-red-600">*</span>}
+        {tooltip && <InfoTooltip text={tooltip} />}
       </label>
       {children}
     </div>

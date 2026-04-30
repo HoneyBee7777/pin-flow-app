@@ -113,6 +113,8 @@ export default function ProfilTab({
 
   return (
     <div className="space-y-6">
+      <UpdateStatusBanner status={status} />
+
       <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
         <span className="font-medium">ℹ️ Hinweis:</span> Die Gesamt-Performance
         zeigt Daten für ALLE deine Pins zusammen — so wie Pinterest sie
@@ -121,46 +123,39 @@ export default function ProfilTab({
         sollten. Beide Ansichten ergänzen sich.
       </div>
 
-      {/* Top: Banner + CTA + Anleitung links, Status-Widget rechts */}
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="flex-1 space-y-3">
-          <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-            <span className="font-medium">⚠️ Wichtig:</span> Pinterest speichert
-            Analytics nur 90 Tage. Trage deine Zahlen monatlich ein, damit keine
-            Daten verloren gehen.
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            {pinterestAnalyticsUrl ? (
-              <a
-                href={pinterestAnalyticsUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 rounded-md bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700"
-              >
-                📊 Pinterest Analytics öffnen ↗
-              </a>
-            ) : (
-              <p className="text-xs text-gray-500">
-                💡 Hinterlege in den Einstellungen einen Pinterest-Analytics-Link,
-                um direkt dorthin zu springen.
-              </p>
-            )}
-          </div>
-
-          <details className="rounded-md border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
-            <summary className="cursor-pointer font-medium text-gray-900">
-              So findest du deine Zahlen
-            </summary>
-            <p className="mt-2 text-gray-600">
-              Pinterest öffnen → Profilbild oben rechts → Analytics → Übersicht
-              → Zeitraum auf „Letzter Monat" setzen.
-            </p>
-          </details>
-        </div>
-
-        <UpdateStatusWidget status={status} />
+      <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+        <span className="font-medium">⚠️ Wichtig:</span> Pinterest speichert
+        Analytics nur 6 Monate (180 Tage). Trage deine Zahlen monatlich ein,
+        damit keine Daten verloren gehen.
       </div>
+
+      <div className="flex flex-wrap items-center gap-3">
+        {pinterestAnalyticsUrl ? (
+          <a
+            href={pinterestAnalyticsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 rounded-md bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700"
+          >
+            📊 Pinterest Analytics öffnen ↗
+          </a>
+        ) : (
+          <p className="text-xs text-gray-500">
+            💡 Hinterlege in den Einstellungen einen Pinterest-Analytics-Link,
+            um direkt dorthin zu springen.
+          </p>
+        )}
+      </div>
+
+      <details className="rounded-md border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
+        <summary className="cursor-pointer font-medium text-gray-900">
+          So findest du deine Zahlen
+        </summary>
+        <p className="mt-2 text-gray-600">
+          Pinterest öffnen → Profilbild oben rechts → Analytics → Übersicht →
+          Zeitraum auf „Letzter Monat" setzen.
+        </p>
+      </details>
 
       {/* Eingabe-Bereich */}
       <form
@@ -175,7 +170,8 @@ export default function ProfilTab({
           <p className="mt-1 text-sm text-gray-600">
             Prozentuale Veränderungen werden mit dem vorherigen Monat
             verglichen. Trage deine Zahlen monatlich ein, damit keine Daten
-            verloren gehen — Pinterest speichert Analytics nur 90 Tage.
+            verloren gehen — Pinterest speichert Analytics nur 6 Monate (180
+            Tage).
           </p>
         </div>
 
@@ -317,52 +313,44 @@ export default function ProfilTab({
 }
 
 // ===========================================================
-// Update-Status-Widget
+// Update-Status-Banner (volle Breite, banner-style)
 // ===========================================================
-function UpdateStatusWidget({ status }: { status: UpdateStatus }) {
+function UpdateStatusBanner({ status }: { status: UpdateStatus }) {
   const { lastUpdate, nextDue, isOverdue, daysSinceUpdate } = status
+
+  const seitText =
+    daysSinceUpdate === null
+      ? null
+      : daysSinceUpdate === 0
+        ? 'heute'
+        : daysSinceUpdate === 1
+          ? 'vor 1 Tag'
+          : `vor ${daysSinceUpdate} Tagen`
 
   return (
     <div
-      className={`w-full shrink-0 rounded-lg border p-4 lg:w-72 ${
+      className={`flex flex-wrap items-center gap-x-4 gap-y-1 rounded-md border p-3 text-sm ${
         isOverdue
-          ? 'border-red-200 bg-red-50'
-          : 'border-green-200 bg-green-50'
+          ? 'border-red-200 bg-red-50 text-red-800'
+          : 'border-green-200 bg-green-50 text-green-800'
       }`}
     >
-      <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
-        Update-Status
-      </p>
-      <p
-        className={`mt-2 text-sm font-semibold ${
-          isOverdue ? 'text-red-800' : 'text-green-800'
-        }`}
-      >
-        {isOverdue ? '🔴 Überfällig' : '🟢 Aktualisiert'}
-        {daysSinceUpdate !== null && (
-          <span className="ml-1 font-normal">
-            ({daysSinceUpdate === 0
-              ? 'heute'
-              : daysSinceUpdate === 1
-                ? 'vor 1 Tag'
-                : `vor ${daysSinceUpdate} Tagen`})
-          </span>
-        )}
-      </p>
-      <div className="mt-2 space-y-0.5 text-xs text-gray-600">
-        <p>
-          Letztes Update:{' '}
-          <span className="font-medium text-gray-900">
-            {lastUpdate ? formatDateDe(lastUpdate) : 'noch nie'}
-          </span>
-        </p>
-        <p>
-          Nächstes Update fällig:{' '}
-          <span className="font-medium text-gray-900">
-            {nextDue ? formatDateDe(nextDue) : '—'}
-          </span>
-        </p>
-      </div>
+      <span className="font-semibold">
+        {isOverdue ? '🔴 Update überfällig' : '🟢 Update aktuell'}
+        {seitText && <span className="ml-1 font-normal">({seitText})</span>}
+      </span>
+      <span className="text-xs text-gray-700">
+        Letztes Update:{' '}
+        <span className="font-medium text-gray-900">
+          {lastUpdate ? formatDateDe(lastUpdate) : 'noch nie'}
+        </span>
+      </span>
+      <span className="text-xs text-gray-700">
+        Nächstes Update fällig:{' '}
+        <span className="font-medium text-gray-900">
+          {nextDue ? formatDateDe(nextDue) : '—'}
+        </span>
+      </span>
     </div>
   )
 }

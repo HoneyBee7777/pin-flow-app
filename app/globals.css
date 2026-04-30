@@ -25,3 +25,45 @@ body {
     text-wrap: balance;
   }
 }
+
+/* Strategie-Slider: einheitlicher hellgrauer Track, gefüllter Teil per
+   inline linear-gradient (siehe SliderGroup / StrategieSliderGroup).
+   Track-Pseudo-Elemente müssen transparent sein, damit der gesetzte
+   Input-Background sichtbar wird. */
+input[type='range'].pf-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  outline: none;
+}
+input[type='range'].pf-slider::-webkit-slider-runnable-track {
+  background: transparent;
+  height: 6px;
+  border: none;
+}
+input[type='range'].pf-slider::-moz-range-track {
+  background: transparent;
+  height: 6px;
+  border: none;
+}
+input[type='range'].pf-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  background: currentColor;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.1);
+  margin-top: -5px;
+  cursor: pointer;
+}
+input[type='range'].pf-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  background: currentColor;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+}

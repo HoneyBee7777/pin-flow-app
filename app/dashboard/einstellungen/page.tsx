@@ -23,7 +23,8 @@ export default async function EinstellungenPage() {
        strategie_soll_blog, strategie_soll_affiliate, strategie_soll_produkt,
        ziel_soll_traffic, ziel_soll_lead, ziel_soll_sales,
        format_soll_standard, format_soll_video, format_soll_collage, format_soll_carousel,
-       strategie_onboarding_abgeschlossen`
+       strategie_onboarding_abgeschlossen,
+       strategie_check_schwelle_gelb, strategie_check_schwelle_rot`
     )
     .eq('user_id', user.id)
     .maybeSingle()
@@ -115,6 +116,8 @@ export default async function EinstellungenPage() {
             data?.format_soll_collage ?? 10,
             data?.format_soll_carousel ?? 10,
           ],
+          schwelleGelb: data?.strategie_check_schwelle_gelb ?? 5,
+          schwelleRot: data?.strategie_check_schwelle_rot ?? 15,
           onboardingAbgeschlossen:
             data?.strategie_onboarding_abgeschlossen === true,
         }}

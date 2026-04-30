@@ -41,6 +41,12 @@ import HandlungsbedarfPinRow, {
   type HandlungsbedarfPin,
 } from './HandlungsbedarfPinRow'
 import BearbeitetRow, { type BearbeitetRowData } from './BearbeitetRow'
+import StrategieCheckSection from './strategie-check/StrategieCheckSection'
+import {
+  computeStrategieCheck,
+  type StrategiePinRow,
+  type StrategieSettings,
+} from './strategie-check/lib'
 
 // Pin-Pipeline-Defaults — greifen, wenn `einstellungen` für den User
 // (noch) keine Zeile bzw. NULL-Werte enthält. Nutzer-Werte werden in
@@ -480,7 +486,12 @@ export default async function DashboardPage() {
          schwellwert_board_top_er, schwellwert_board_top_prozent,
          schwellwert_board_schwach_er, schwellwert_board_wachstum_trend,
          cp_min_pins_gesamt, cp_min_pins_ohne_aktuell, cp_tage_ohne_pin,
-         cp_min_ctr_goldnugget, cp_max_pins_goldnugget`
+         cp_min_ctr_goldnugget, cp_max_pins_goldnugget,
+         strategie_soll_blog, strategie_soll_affiliate, strategie_soll_produkt,
+         ziel_soll_traffic, ziel_soll_lead, ziel_soll_sales,
+         format_soll_standard, format_soll_video, format_soll_collage, format_soll_carousel,
+         strategie_onboarding_abgeschlossen,
+         strategie_check_schwelle_gelb, strategie_check_schwelle_rot`
       )
       .eq('user_id', user.id)
       .maybeSingle(),
@@ -523,7 +534,7 @@ export default async function DashboardPage() {
       supabase
         .from('pins')
         .select(
-          'id, status, created_at, geplante_veroeffentlichung, board_id, content_id, ziel_url_id'
+          'id, status, created_at, geplante_veroeffentlichung, board_id, content_id, ziel_url_id, strategie_typ, conversion_ziel, pin_format'
         )
     ).catch((err: unknown) => {
       console.error('[Dashboard] pins query failed:', err)
@@ -782,6 +793,9 @@ export default async function DashboardPage() {
     board_id: string | null
     content_id: string | null
     ziel_url_id: string | null
+    strategie_typ: string | null
+    conversion_ziel: string | null
+    pin_format: string | null
   }
   type BoardRow = {
     id: string
@@ -806,6 +820,15 @@ export default async function DashboardPage() {
     if (!p.board_id) continue
     pinsCountByBoard.set(p.board_id, (pinsCountByBoard.get(p.board_id) ?? 0) + 1)
   }
+
+  // ===== Strategie-Check (180 Tage, IST vs. SOLL) =====
+  // Vergleicht IST-Verteilung der Pins der letzten 180 Tage mit den SOLL-Werten
+  // aus den Strategie-Einstellungen. Pure Berechnung in strategie-check/lib.ts.
+  const strategieCheckResult = computeStrategieCheck(
+    allPinsRows as StrategiePinRow[],
+    (settingsRes.data ?? null) as StrategieSettings | null,
+    today
+  )
 
   // ===== Pin-Pipeline: Inhalte mit Pin-Bedarf + URLs mit Potenzial =====
   // Schwellwerte aus `einstellungen` (cp_*) mit Code-Fallback (siehe
@@ -1459,6 +1482,8 @@ export default async function DashboardPage() {
         urlPotenzial={urlPotenzial}
         thresholds={pipelineThresholds}
       />
+
+      <StrategieCheckSection result={strategieCheckResult} />
 
       <HandlungsbedarfSection
         grouped={groupedActions}

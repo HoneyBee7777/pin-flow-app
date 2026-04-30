@@ -8,7 +8,9 @@ import {
   type FormEvent,
 } from 'react'
 import { deletePinAnalytics, savePinAnalytics } from './actions'
+import AnalyticsDateHelper from './AnalyticsDateHelper'
 import SharedSortableTh from '@/components/SortableTh'
+import InfoTooltip from '@/components/InfoTooltip'
 import {
   diffDays,
   formatDateDe,
@@ -141,26 +143,36 @@ export default function PinsTab({
 
   return (
     <div className="space-y-6">
+      <AnalyticsDateHelper />
+
       <div className="space-y-3 rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
         <p>
-          Die Pin-Analytics zeigt dir gezielt deine wichtigsten Pins — nicht
+          Die Pin-Analytics zeigt dir gezielt deine wichtigsten Pins – nicht
           alle, nur die strategisch relevanten. Im Gegensatz zur
           Gesamt-Performance (die alle Pins zusammenfasst) siehst du hier jeden
           Pin einzeln mit seiner Diagnose und der nächsten
           Handlungsempfehlung.
         </p>
         <p>
-          📌 Pinterest vergisst Daten nach 6 Monaten. Deine App vergisst nie —
-          je länger du trackst, desto wertvoller werden deine Daten.
-          Eingeschlafene Gewinner, die Pinterest nicht mehr zeigt, findest du
-          weiter unten im Recycling-Radar automatisch.
+          📌 Pinterest speichert Pin-Analytics-Daten maximal 6 Monate (180
+          Tage) zurück.
+        </p>
+        <p>
+          Deine App speichert deine Eingaben dauerhaft – eingeschlafene
+          Gewinner, die Pinterest nicht mehr zeigt, findest du weiter unten im
+          Recycling-Radar automatisch.
         </p>
         <div>
           <p className="font-medium">So gehst du vor (einmal pro Monat):</p>
           <ol className="mt-1 list-decimal space-y-0.5 pl-5">
-            <li>Pinterest Analytics öffnen → Zeitraum: Letzte 90 Tage</li>
+            <li>Pinterest Analytics öffnen</li>
             <li>
-              Nach Ausgehenden Klicks sortieren → Top Pins hier eintragen
+              Zeitraum auf „Benutzerdefiniert" setzen und das Start-Datum 180
+              Tage zurück wählen (siehe Datums-Helper oben)
+            </li>
+            <li>
+              Nach Ausgehenden Klicks absteigend sortieren → Top Pins hier
+              eintragen
             </li>
             <li>Nach Impressionen sortieren → Top Pins hier eintragen</li>
             <li>Nach Saves sortieren → Top Pins hier eintragen</li>
@@ -208,7 +220,11 @@ export default function PinsTab({
                 <input type="hidden" name="pin_id" value={pinId} />
               </div>
 
-              <Field label="Datum" htmlFor="datum">
+              <Field
+                label="Analytics-Datum (heute)"
+                htmlFor="datum"
+                tooltip="Das Datum an dem du diese Analytics-Daten aus Pinterest exportiert hast — in der Regel das heutige Datum."
+              >
                 <input
                   id="datum"
                   name="datum"
@@ -774,10 +790,12 @@ function ThresholdInfo({
 function Field({
   label,
   htmlFor,
+  tooltip,
   children,
 }: {
   label: string
   htmlFor: string
+  tooltip?: string
   children: React.ReactNode
 }) {
   return (
@@ -787,6 +805,7 @@ function Field({
         className="block text-sm font-medium text-gray-700"
       >
         {label} <span className="text-red-600">*</span>
+        {tooltip && <InfoTooltip text={tooltip} />}
       </label>
       {children}
     </div>

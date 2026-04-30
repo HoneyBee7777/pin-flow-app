@@ -10,7 +10,9 @@ import {
   adjustProportional,
   computeRecommendation,
   getEmpfehlungstext,
+  parseBusinessModelle,
   parseVorhanden,
+  serializeBusinessModelle,
   serializeVorhanden,
   type BusinessModell,
   type Hauptziel,
@@ -34,6 +36,8 @@ const BAR_COLORS = {
   red: 'bg-red-500',
   yellow: 'bg-yellow-400',
   pink: 'bg-pink-500',
+  indigo: 'bg-indigo-500',
+  black: 'bg-black',
 } as const
 const ACCENT_COLORS = {
   blue: 'accent-blue-500',
@@ -44,7 +48,22 @@ const ACCENT_COLORS = {
   red: 'accent-red-500',
   yellow: 'accent-yellow-400',
   pink: 'accent-pink-500',
+  indigo: 'accent-indigo-500',
+  black: 'accent-black',
 } as const
+const FILL_HEX = {
+  blue: '#3b82f6',
+  purple: '#a855f7',
+  green: '#22c55e',
+  orange: '#f97316',
+  gray: '#6b7280',
+  red: '#ef4444',
+  yellow: '#facc15',
+  pink: '#ec4899',
+  indigo: '#6366f1',
+  black: '#000000',
+} as const
+const TRACK_GRAY = '#e5e7eb' // bg-gray-200
 type BarColor = keyof typeof BAR_COLORS
 
 // =====================================================
@@ -129,7 +148,7 @@ type Quad = [number, number, number, number]
 
 function Wizard({ onCancel }: { onCancel: () => void }) {
   const [step, setStep] = useState<0 | 1 | 2 | 3 | 4 | 5>(0)
-  const [modell, setModell] = useState<BusinessModell | null>(null)
+  const [modelle, setModelle] = useState<BusinessModell[]>([])
   const [hauptziel, setHauptziel] = useState<Hauptziel | null>(null)
   const [vorhanden, setVorhanden] = useState<VorhandenItem[]>([])
   const [strategieMix, setStrategieMix] = useState<Triple>([50, 30, 20])
@@ -144,9 +163,9 @@ function Wizard({ onCancel }: { onCancel: () => void }) {
   const [isPending, startTransition] = useTransition()
 
   const recommendation = useMemo(() => {
-    if (!modell || !hauptziel) return null
-    return computeRecommendation(modell, hauptziel, vorhanden)
-  }, [modell, hauptziel, vorhanden])
+    if (modelle.length === 0 || !hauptziel) return null
+    return computeRecommendation(modelle, hauptziel, vorhanden)
+  }, [modelle, hauptziel, vorhanden])
 
   // Beim Übergang Schritt 4 → 5 die Empfehlung in die Slider übernehmen.
   function adoptRecommendation() {
@@ -166,12 +185,12 @@ function Wizard({ onCancel }: { onCancel: () => void }) {
 
   function handleSave() {
     setError(null)
-    if (!modell || !hauptziel) {
+    if (modelle.length === 0 || !hauptziel) {
       setError('Bitte alle Schritte ausfüllen.')
       return
     }
     const formData = new FormData()
-    formData.set('strategie_business_modell', modell)
+    formData.set('strategie_business_modell', serializeBusinessModelle(modelle))
     formData.set('strategie_hauptziel', hauptziel)
     formData.set('strategie_vorhanden', serializeVorhanden(vorhanden))
     formData.set('strategie_soll_blog', String(strategieMix[0]))
@@ -204,8 +223,8 @@ function Wizard({ onCancel }: { onCancel: () => void }) {
       )}
       {step === 1 && (
         <Step1
-          value={modell}
-          onChange={setModell}
+          value={modelle}
+          onChange={setModelle}
           onBack={() => setStep(0)}
           onNext={() => setStep(2)}
         />
@@ -228,10 +247,13 @@ function Wizard({ onCancel }: { onCancel: () => void }) {
       )}
       {step === 4 && recommendation && (
         <Step4
-          modellLabel={
-            BUSINESS_MODELL_OPTIONS.find((o) => o.value === modell)?.label ??
-            ''
-          }
+          modellLabel={modelle
+            .map(
+              (m) =>
+                BUSINESS_MODELL_OPTIONS.find((o) => o.value === m)?.label ?? ''
+            )
+            .filter(Boolean)
+            .join(' · ')}
           hauptzielLabel={
             HAUPTZIEL_OPTIONS.find((o) => o.value === hauptziel)?.label ?? ''
           }
@@ -405,24 +427,38 @@ function Step1({
   onBack,
   onNext,
 }: {
-  value: BusinessModell | null
-  onChange: (v: BusinessModell) => void
+  value: BusinessModell[]
+  onChange: (v: BusinessModell[]) => void
   onBack: () => void
   onNext: () => void
 }) {
+  function toggle(item: BusinessModell) {
+    if (value.includes(item)) {
+      onChange(value.filter((v) => v !== item))
+    } else {
+      onChange([...value, item])
+    }
+  }
   return (
     <StepCard title="🎯 Schritt 1 von 5: Was beschreibt dein Business am besten?">
+      <p className="text-xs text-gray-500">
+        Mehrere Auswahlen möglich – wähle alle Bereiche, die auf dich zutreffen.
+      </p>
       <div className="grid gap-2 sm:grid-cols-2">
         {BUSINESS_MODELL_OPTIONS.map((o) => (
-          <SelectCard
+          <CheckboxCard
             key={o.value}
-            selected={value === o.value}
-            onClick={() => onChange(o.value)}
+            selected={value.includes(o.value)}
+            onClick={() => toggle(o.value)}
             label={o.label}
           />
         ))}
       </div>
-      <NavRow onBack={onBack} onNext={onNext} nextDisabled={!value} />
+      <NavRow
+        onBack={onBack}
+        onNext={onNext}
+        nextDisabled={value.length === 0}
+      />
     </StepCard>
   )
 }
@@ -599,7 +635,7 @@ function Step5({
         <div className="mt-3">
           <SliderGroup
             channels={[
-              { label: 'Standard Pins', color: 'gray' },
+              { label: 'Standard Pins', color: 'black' },
               { label: 'Video Pins', color: 'red' },
               { label: 'Collage Pins', color: 'yellow' },
               { label: 'Carousel Pins', color: 'pink' },
@@ -708,7 +744,12 @@ export function SliderGroup({
             onChange={(e) =>
               onChange(adjustProportional(values, i, Number(e.target.value)))
             }
-            className={`w-full ${ACCENT_COLORS[c.color]}`}
+            className={`pf-slider w-full ${ACCENT_COLORS[c.color]}`}
+            style={{
+              background: `linear-gradient(to right, ${FILL_HEX[c.color]} 0%, ${FILL_HEX[c.color]} ${values[i]}%, ${TRACK_GRAY} ${values[i]}%, ${TRACK_GRAY} 100%)`,
+              borderRadius: '9999px',
+              color: FILL_HEX[c.color],
+            }}
             aria-label={c.label}
           />
         </div>
@@ -785,6 +826,43 @@ function SelectCard({
   )
 }
 
+// Checkbox-Variante: explizit mit Checkbox-Symbol für Multi-Select.
+function CheckboxCard({
+  label,
+  selected,
+  onClick,
+}: {
+  label: string
+  selected: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex items-start gap-3 rounded-md border px-3 py-2 text-left text-sm transition-colors ${
+        selected
+          ? 'border-red-600 bg-red-50 text-red-900'
+          : 'border-gray-300 bg-white text-gray-900 hover:border-gray-400 hover:bg-gray-50'
+      }`}
+      role="checkbox"
+      aria-checked={selected}
+    >
+      <span
+        className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+          selected
+            ? 'border-red-600 bg-red-600 text-white'
+            : 'border-gray-400 bg-white'
+        }`}
+        aria-hidden
+      >
+        {selected && <span className="text-[10px] leading-none">✓</span>}
+      </span>
+      <span className="flex-1">{label}</span>
+    </button>
+  )
+}
+
 // =====================================================
 // Zustand C: Summary
 // =====================================================
@@ -812,10 +890,10 @@ function StrategySummary({
 
   const empfehlung = getEmpfehlungstext(blog, affiliate, produkt)
 
-  const modellLabel =
-    BUSINESS_MODELL_OPTIONS.find(
-      (o) => o.value === row.strategie_business_modell
-    )?.label ?? '—'
+  const modellLabels = parseBusinessModelle(row.strategie_business_modell).map(
+    (m) => BUSINESS_MODELL_OPTIONS.find((o) => o.value === m)?.label ?? m
+  )
+  const modellLabel = modellLabels.length === 0 ? '—' : modellLabels.join(' · ')
   const hauptzielLabel =
     HAUPTZIEL_OPTIONS.find((o) => o.value === row.strategie_hauptziel)
       ?.label ?? '—'
@@ -879,7 +957,7 @@ function StrategySummary({
               Pin-Format-Mix
             </h3>
             <div className="mt-2 space-y-2">
-              <Bar label="Standard" value={fStandard} color="gray" />
+              <Bar label="Standard" value={fStandard} color="black" />
               <Bar label="Video" value={fVideo} color="red" />
               <Bar label="Collage" value={fCollage} color="yellow" />
               <Bar label="Carousel" value={fCarousel} color="pink" />

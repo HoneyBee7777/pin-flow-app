@@ -65,6 +65,18 @@ function isBusinessModell(v: string): v is BusinessModell {
   return BUSINESS_MODELL_OPTIONS.some((o) => o.value === v)
 }
 
+function parseBusinessModelleField(raw: string): BusinessModell[] | null {
+  const parts = raw
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean)
+  if (parts.length === 0) return null
+  for (const p of parts) {
+    if (!isBusinessModell(p)) return null
+  }
+  return parts as BusinessModell[]
+}
+
 function isHauptziel(v: string): v is Hauptziel {
   return HAUPTZIEL_OPTIONS.some((o) => o.value === v)
 }
@@ -152,15 +164,16 @@ export async function saveStrategieOnboarding(
   const hauptziel = String(formData.get('strategie_hauptziel') ?? '').trim()
   const vorhanden = String(formData.get('strategie_vorhanden') ?? '').trim()
 
-  if (!modell || !isBusinessModell(modell))
-    return { error: 'Bitte ein gültiges Business-Modell wählen.' }
+  const modelle = parseBusinessModelleField(modell)
+  if (!modelle)
+    return { error: 'Bitte mindestens ein gültiges Business-Modell wählen.' }
   if (!hauptziel || !isHauptziel(hauptziel))
     return { error: 'Bitte ein gültiges Hauptziel wählen.' }
 
   const update = {
     user_id: user.id,
     ...values,
-    strategie_business_modell: modell,
+    strategie_business_modell: modelle.join(','),
     strategie_hauptziel: hauptziel,
     strategie_vorhanden: vorhanden || null,
     strategie_onboarding_abgeschlossen: true,
@@ -178,7 +191,7 @@ export async function saveStrategieOnboarding(
     'Onboarding abgeschlossen',
     values,
     {
-      business_modell: modell,
+      business_modell: modelle.join(','),
       hauptziel,
       vorhanden: vorhanden || null,
     }
@@ -191,6 +204,39 @@ export async function saveStrategieOnboarding(
 // =====================================================
 // 2) Manuelle Änderung — aus Einstellungen-Sektion
 // =====================================================
+function readDiffSchwellen(
+  formData: FormData
+):
+  | {
+      gelb: number | null
+      rot: number | null
+    }
+  | { error: string } {
+  const rawGelb = String(formData.get('strategie_check_schwelle_gelb') ?? '')
+    .trim()
+  const rawRot = String(formData.get('strategie_check_schwelle_rot') ?? '')
+    .trim()
+  // Beide leer → kein Update der Schwellwerte (nur Slider gespeichert).
+  if (rawGelb === '' && rawRot === '') {
+    return { gelb: null, rot: null }
+  }
+  if (rawGelb === '' || rawRot === '') {
+    return { error: 'Bitte beide Diff-Schwellen ausfüllen.' }
+  }
+  const gelb = Number(rawGelb)
+  const rot = Number(rawRot)
+  if (!Number.isInteger(gelb) || gelb < 0 || gelb > 100) {
+    return { error: 'Diff-Schwelle Gelb muss eine ganze Zahl zwischen 0 und 100 sein.' }
+  }
+  if (!Number.isInteger(rot) || rot < 0 || rot > 100) {
+    return { error: 'Diff-Schwelle Rot muss eine ganze Zahl zwischen 0 und 100 sein.' }
+  }
+  if (rot <= gelb) {
+    return { error: 'Diff-Schwelle Rot muss größer sein als Gelb.' }
+  }
+  return { gelb, rot }
+}
+
 export async function saveStrategieManual(
   formData: FormData
 ): Promise<{ error?: string }> {
@@ -206,10 +252,17 @@ export async function saveStrategieManual(
   const sumErr = validateSums(values)
   if (sumErr) return { error: sumErr }
 
-  const update = {
+  const schwellen = readDiffSchwellen(formData)
+  if ('error' in schwellen) return { error: schwellen.error }
+
+  const update: Record<string, unknown> = {
     user_id: user.id,
     ...values,
     strategie_letzte_aenderung: new Date().toISOString(),
+  }
+  if (schwellen.gelb !== null && schwellen.rot !== null) {
+    update.strategie_check_schwelle_gelb = schwellen.gelb
+    update.strategie_check_schwelle_rot = schwellen.rot
   }
 
   const { error } = await supabase
