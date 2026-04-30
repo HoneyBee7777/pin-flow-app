@@ -8,11 +8,16 @@
 import { useCallback } from 'react'
 import type { BriefingItem, BriefingPrio } from './lib'
 
-const BORDER_CLASS: Record<BriefingPrio, string> = {
-  sehr_hoch: 'border-l-4 border-orange-400',
-  hoch: 'border-l-4 border-blue-400',
-  mittel: 'border-l-4 border-slate-400',
-  niedrig: 'border-l-4 border-gray-300',
+// 3px Border-Left wie .coaching-box / .hinweis-box / .warn-box.
+// Prio-Farbtokens:
+//   sehr_hoch → orange (warn-Akzent)
+//   hoch / mittel → blau (hinweis-Akzent, beides Pin-Handlungsbedarf)
+//   niedrig → grau
+const BORDER_STYLE: Record<BriefingPrio, string> = {
+  sehr_hoch: '#ef4444', // red-500 / warn
+  hoch: '#60a5fa', // blue-400 / hinweis
+  mittel: '#60a5fa',
+  niedrig: '#9ca3af', // gray-400
 }
 
 function jumpTo(sectionId: string) {
@@ -44,7 +49,7 @@ export default function BriefingSection({
   return (
     <div>
       <h3 className="text-sm font-semibold text-gray-900">
-        📋 Heute aktuell
+        Deine Prioritäten
       </h3>
 
       {items.length === 0 ? (
@@ -56,7 +61,8 @@ export default function BriefingSection({
           {items.map((item, i) => (
             <li
               key={`${item.sectionId}-${i}`}
-              className={`rounded-r bg-white/60 py-1 pl-3 pr-2 text-sm leading-snug text-gray-800 ${BORDER_CLASS[item.prio]}`}
+              className="rounded-r bg-white/60 py-1 pl-3 pr-2 text-sm leading-snug text-gray-800"
+              style={{ borderLeft: `3px solid ${BORDER_STYLE[item.prio]}` }}
             >
               <span className="mr-1" aria-hidden="true">
                 {item.icon}

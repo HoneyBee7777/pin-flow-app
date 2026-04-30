@@ -168,11 +168,6 @@ type BoardDashHealth = {
 
 type BoardCat = BoardScore | 'schlafende_top' | 'inaktive'
 
-type WinItem =
-  | { kind: 'pin'; titel: string; growthPct: number }
-  | { kind: 'board'; boardName: string; from: string; to: string }
-  | { kind: 'react'; boardName: string; impressionGrowthPct: number | null }
-
 type BoardMetricKind = 'er' | 'erChange' | 'impressionen' | 'klicks'
 
 type BoardCatConfig = {
@@ -297,7 +292,7 @@ const BOARD_CATEGORIES: BoardCatConfig[] = [
   {
     key: 'solide',
     group: 'B',
-    emoji: '👀',
+    emoji: '⚖️',
     label: 'Solide Boards',
     subtitle:
       'Boards mit stabiler Performance – mit gezielten Optimierungen können sie zu Top Boards werden.',
@@ -343,14 +338,17 @@ const BOARD_CATEGORIES: BoardCatConfig[] = [
   },
 ]
 
+// Text-Akzentfarbe pro Kategorie für die Board-Zeilen-Metadaten
+// (📊 Warum, 📌 Pins). Coaching-Boxen selbst verwenden einheitlich
+// `coaching-box`; dies ist nur die Text-Tönung in den Listenzeilen.
 const BOARD_HINT_TONE: Record<
   BoardCatConfig['hintTone'],
-  { bg: string; text: string }
+  { text: string }
 > = {
-  orange: { bg: 'bg-orange-50 border-orange-200', text: 'text-orange-800' },
-  blue: { bg: 'bg-blue-50 border-blue-200', text: 'text-blue-800' },
-  green: { bg: 'bg-green-50 border-green-200', text: 'text-green-800' },
-  gray: { bg: 'bg-gray-50 border-gray-200', text: 'text-gray-700' },
+  orange: { text: 'text-orange-800' },
+  blue: { text: 'text-blue-800' },
+  green: { text: 'text-green-800' },
+  gray: { text: 'text-gray-700' },
 }
 
 
@@ -374,7 +372,7 @@ type HandlungsCategory = {
 const HANDLUNGS_CATEGORIES: HandlungsCategory[] = [
   {
     diagnose: 'aktiver_top_performer',
-    emoji: '🚀',
+    emoji: '⭐',
     label: 'Aktiver Top Performer',
     subtitle:
       'Diese Pins laufen stark – produziere Varianten solange der Algorithmus pusht.',
@@ -416,7 +414,7 @@ const HANDLUNGS_CATEGORIES: HandlungsCategory[] = [
   },
   {
     diagnose: 'hohe_impressionen_niedrige_ctr',
-    emoji: '🎯',
+    emoji: '🔍',
     label: 'Optimierungspotenzial',
     subtitle:
       'Viel ausgespielt wenig geklickt – SEO läuft, Hook und Design optimieren.',
@@ -1287,161 +1285,6 @@ export default async function DashboardPage() {
   const boardsOhneAnalyticsCount = boardsOhneAnalytics.length
   const boardsLeerCount = boardsLeer.length
 
-  // ===== Wins der letzten 30 Tage =====
-  // Drei regelbasierte Wins. Sektion wird nur ab 2 Monaten Profil-Analytics
-  // angezeigt — vorher fehlt die Vergleichsbasis.
-  const SCORE_RANK: Record<BoardScore, number> = {
-    schwach: 0,
-    solide: 1,
-    wachstum: 2,
-    top: 3,
-  }
-  const SCORE_LABEL: Record<BoardScore, string> = {
-    schwach: 'Schwach',
-    solide: 'Solide',
-    wachstum: 'Wachstum',
-    top: 'Top',
-  }
-
-  // Per-Pin: neuester + vorheriger Analytics-Eintrag (rawPinAnalytics ist DESC).
-  const latestPaByPin = new Map<string, RawPinAnalyticsRow>()
-  const prevPaByPin = new Map<string, RawPinAnalyticsRow>()
-  for (const r of rawPinAnalytics) {
-    if (!latestPaByPin.has(r.pin_id)) latestPaByPin.set(r.pin_id, r)
-    else if (!prevPaByPin.has(r.pin_id)) prevPaByPin.set(r.pin_id, r)
-  }
-
-  // Win 1 — Pin mit größter Klick-Steigerung gegenüber Vormonat (≥50% Pflicht,
-  // sonst „schwacher" Win — wird gefiltert, damit nur echte Erfolge erscheinen).
-  const WIN_PIN_MIN_GROWTH_PCT = 50
-  let winPin: WinItem | null = null
-  let winPinPct = 0
-  latestPaByPin.forEach((latestPa, pinId) => {
-    const prevPa = prevPaByPin.get(pinId)
-    if (!prevPa || prevPa.klicks <= 0) return
-    const growth = ((latestPa.klicks - prevPa.klicks) / prevPa.klicks) * 100
-    if (growth < WIN_PIN_MIN_GROWTH_PCT) return
-    if (growth > winPinPct) {
-      winPinPct = growth
-      const titel = (latestPa.pins?.titel ?? '').trim() || '(ohne Titel)'
-      winPin = { kind: 'pin', titel, growthPct: growth }
-    }
-  })
-
-  // Vor-Vormonats-Eintrag pro Board (für vorherigen Score).
-  const prevPrevBaByBoard = new Map<string, BoardAnalyticsRaw>()
-  {
-    const seenLatest = new Set<string>()
-    const seenPrev = new Set<string>()
-    for (const r of boardAnalyticsRaw) {
-      if (!seenLatest.has(r.board_id)) {
-        seenLatest.add(r.board_id)
-      } else if (!seenPrev.has(r.board_id)) {
-        seenPrev.add(r.board_id)
-      } else if (!prevPrevBaByBoard.has(r.board_id)) {
-        prevPrevBaByBoard.set(r.board_id, r)
-      }
-    }
-  }
-
-  // Win 2 — Board mit Ein-Stufen-Aufstieg von Solide oder Wachstum:
-  // Solide→Wachstum oder Wachstum→Top. Schwach→Solide gilt nicht als Win,
-  // da Solide noch keine echte Stärke ist. Mehrstufige Sprünge werden nicht
-  // gewertet, weil sie meist auf instabile Datenbasis hindeuten.
-  let winBoard: WinItem | null = null
-  for (const b of boardsRows) {
-    const latestBa = latestBaByBoard.get(b.id)
-    const prevBa = prevBaByBoard.get(b.id)
-    if (!latestBa || !prevBa) continue
-    const erNow = calcBoardEngagementRate(latestBa.engagement, latestBa.impressionen)
-    const erPrev = calcBoardEngagementRate(prevBa.engagement, prevBa.impressionen)
-    const prevPrevBa = prevPrevBaByBoard.get(b.id) ?? null
-    const erPrevPrev = prevPrevBa
-      ? calcBoardEngagementRate(prevPrevBa.engagement, prevPrevBa.impressionen)
-      : null
-    const currentScore = scoreBoardHybrid({
-      er: erNow,
-      erVormonat: erPrev,
-      topCutoffEr,
-      thresholds: boardThresholds,
-    }).score
-    const previousScore = scoreBoardHybrid({
-      er: erPrev,
-      erVormonat: erPrevPrev,
-      topCutoffEr,
-      thresholds: boardThresholds,
-    }).score
-    const jump = SCORE_RANK[currentScore] - SCORE_RANK[previousScore]
-    if (jump !== 1) continue
-    if (previousScore !== 'solide' && previousScore !== 'wachstum') continue
-    // Erstes passendes Board nehmen — boardsRows hat keine Ranking-Reihenfolge.
-    winBoard = {
-      kind: 'board',
-      boardName: b.name,
-      from: SCORE_LABEL[previousScore],
-      to: SCORE_LABEL[currentScore],
-    }
-    break
-  }
-
-  // Win 3 — Reaktivierung: neuester Pin in den letzten 30 Tagen, davor Lücke >30 Tage.
-  const publishedDatesByBoard = new Map<string, string[]>()
-  for (const p of pinsPublishedRows) {
-    if (!p.board_id) continue
-    const d = p.geplante_veroeffentlichung
-    if (!d || d > today) continue
-    const arr = publishedDatesByBoard.get(p.board_id) ?? []
-    arr.push(d)
-    publishedDatesByBoard.set(p.board_id, arr)
-  }
-  publishedDatesByBoard.forEach((arr) =>
-    arr.sort((a, b) => (a < b ? 1 : a > b ? -1 : 0))
-  )
-  // Reaktivierung zählt nur, wenn die Impressionen in der ersten Periode nach
-  // dem Reaktivierungs-Pin um mindestens 20% gegenüber der Vor-Periode stiegen.
-  // Sonst war der „Wieder-Pin" zu schwach, um als Win zu zählen.
-  const WIN_REACT_MIN_GROWTH_PCT = 20
-  let winReact: WinItem | null = null
-  let winReactGap = 0
-  publishedDatesByBoard.forEach((dates, boardId) => {
-    if (dates.length < 2) return
-    const newest = dates[0]
-    const second = dates[1]
-    if (diffDays(newest, today) > 30) return
-    const gap = diffDays(second, newest)
-    if (gap <= 30) return
-    const board = boardsRows.find((b) => b.id === boardId)
-    if (!board) return
-    const latestBa = latestBaByBoard.get(boardId)
-    const prevBa = prevBaByBoard.get(boardId)
-    if (!latestBa || !prevBa || prevBa.impressionen <= 0) return
-    const growthPct =
-      ((latestBa.impressionen - prevBa.impressionen) / prevBa.impressionen) * 100
-    if (growthPct < WIN_REACT_MIN_GROWTH_PCT) return
-    if (gap > winReactGap) {
-      winReactGap = gap
-      winReact = {
-        kind: 'react',
-        boardName: board.name,
-        impressionGrowthPct: growthPct,
-      }
-    }
-  })
-
-  const wins: WinItem[] = ([winPin, winBoard, winReact] as (WinItem | null)[])
-    .filter((w): w is WinItem => !!w)
-  const showWins = profilRows.length >= 2
-
-  // [WINS-DEBUG] Sichtbarkeit + Rohdaten der drei Win-Berechnungen.
-  // showWins=false bei <2 Monaten Profil-Analytics → Sektion bleibt leer (Spec).
-  console.log('[WINS-DEBUG]', {
-    showWins,
-    profilRowsCount: profilRows.length,
-    winPin,
-    winBoard,
-    winReact,
-  })
-
   // ===== Aufgaben (Priorität → Datum → erledigt unten) =====
   const aufgabenAll = (aufgabenRes.data ?? []) as Aufgabe[]
   const aufgabenSorted = [...aufgabenAll].sort((a, b) => {
@@ -1533,7 +1376,7 @@ export default async function DashboardPage() {
       />
 
       {/* 2. Phasen-Trenner */}
-      <PhasenTrenner icon="📊" title="Wo stehst du?" />
+      <PhasenTrenner title="Wo stehst du?" />
 
       {/* 3. Gesamt-Profil-Performance (KPIs + Performance-Verlauf in 3 Spalten) */}
       <ProfilPerformanceSection
@@ -1543,13 +1386,13 @@ export default async function DashboardPage() {
       />
 
       {/* 4. Phasen-Trenner */}
-      <PhasenTrenner icon="🎯" title="Pinst du das Richtige?" />
+      <PhasenTrenner title="Pinst du das Richtige?" />
 
       {/* 5. Strategie-Check */}
       <StrategieCheckSection result={strategieCheckResult} />
 
       {/* 6. Phasen-Trenner */}
-      <PhasenTrenner icon="⚡" title="Was tust du heute?" />
+      <PhasenTrenner title="Was tust du heute?" />
 
       {/* 7. Saisonkalender */}
       <SaisonKalenderSection columns={saisonKanban} />
@@ -1571,7 +1414,7 @@ export default async function DashboardPage() {
       />
 
       {/* 10. Phasen-Trenner */}
-      <PhasenTrenner icon="🏗️" title="Wo verbesserst du strukturell?" />
+      <PhasenTrenner title="Wo verbesserst du strukturell?" />
 
       {/* 11. Board-Gesundheit */}
       <BoardGesundheitDashboardSection
@@ -1584,67 +1427,10 @@ export default async function DashboardPage() {
         pinsCountByBoard={pinsCountByBoard}
       />
 
-      {/* 12. + 13. Phasen-Trenner + Wins (nur wenn vorhanden) */}
-      {showWins && (
-        <>
-          <PhasenTrenner icon="🎉" title="Was ist gelungen?" />
-          <WinsSection wins={wins} />
-        </>
-      )}
-
       {/* 14. Aufgaben & Erinnerungen — bleibt ganz unten */}
       <AufgabenSection tasks={aufgabenSorted} today={today} />
     </div>
   )
-}
-
-// ===========================================================
-// Wins der letzten 30 Tage — regelbasierte Mini-Erfolge
-// ===========================================================
-function WinsSection({ wins }: { wins: WinItem[] }) {
-  return (
-    <section className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-      <h2 className="text-sm font-semibold text-gray-900">
-        Deine Wins der letzten 30 Tage
-      </h2>
-      {wins.length === 0 ? (
-        <p className="mt-2 text-sm text-gray-600">
-          📊 In den letzten 30 Tagen sind die Daten stabil – weiter dranbleiben.
-        </p>
-      ) : (
-        <ul className="mt-2 space-y-1.5">
-          {wins.map((w, idx) => (
-            <li
-              key={idx}
-              className="flex items-start gap-2 border-l-2 border-emerald-200 pl-2 text-sm text-gray-700"
-            >
-              <span aria-hidden>{winIcon(w)}</span>
-              <span>{winText(w)}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
-  )
-}
-
-function winIcon(w: WinItem): string {
-  if (w.kind === 'pin') return '📌'
-  if (w.kind === 'board') return '📋'
-  return '♻️'
-}
-
-function winText(w: WinItem): string {
-  if (w.kind === 'pin') {
-    return `${w.titel} hat sich stark entwickelt – Klicks +${Math.round(w.growthPct)}% gegenüber Vormonat.`
-  }
-  if (w.kind === 'board') {
-    return `Dein Board ${w.boardName} hat den Sprung von ${w.from} zu ${w.to} geschafft.`
-  }
-  if (w.impressionGrowthPct !== null && w.impressionGrowthPct > 0) {
-    return `Du hast ${w.boardName} reaktiviert – seitdem +${Math.round(w.impressionGrowthPct)}% Impressionen.`
-  }
-  return `Du hast ${w.boardName} reaktiviert.`
 }
 
 // ===========================================================
@@ -1973,7 +1759,7 @@ function ProfilGesundheitWidget({
         </div>
       </div>
       {showSeparateWarn && (
-        <div className="flex items-start gap-3 rounded-md border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-900">
+        <div className="warn-box flex items-start gap-3">
           <span className="text-lg leading-tight" aria-hidden>
             ⚠️
           </span>
@@ -2138,12 +1924,12 @@ function HandlungsbedarfSection({
     return (
       <section id="pin-handlungsbedarf" className="scroll-mt-4">
         {heading}
-        <div className="mt-3 rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
-          Trage deine ersten Pin-Analytics ein um Handlungsempfehlungen zu
+        <div className="hinweis-box mt-3">
+          💡 Trage deine ersten Pin-Analytics ein um Handlungsempfehlungen zu
           sehen.{' '}
           <Link
             href="/dashboard/analytics"
-            className="font-medium text-red-600 hover:underline"
+            className="font-medium underline hover:text-blue-700"
           >
             → Zum Analytics-Tab
           </Link>
@@ -2271,7 +2057,7 @@ function HandlungsbedarfKategorieCard({
           <span className="hidden group-open:inline">▾</span>
         </span>
         <span
-          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-base ${cat.iconBg}`}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-gray-300 bg-white text-base text-gray-700"
           aria-hidden
         >
           {cat.emoji}
@@ -2603,14 +2389,6 @@ function SaisonCard({
 // ===========================================================
 // Pin-Pipeline (Inhalte mit Pin-Bedarf + URLs mit Potenzial)
 // ===========================================================
-const PIPELINE_HINT_TONE: Record<
-  'blue' | 'green',
-  { bg: string; text: string }
-> = {
-  blue: { bg: 'bg-blue-50 border-blue-200', text: 'text-blue-800' },
-  green: { bg: 'bg-green-50 border-green-200', text: 'text-green-800' },
-}
-
 function PinPipelineSection({
   inhaltePinBedarfA,
   inhaltePinBedarfB,
@@ -2660,7 +2438,6 @@ function PinPipelineInhalteCard({
   totalCount: number
   thresholds: PipelineThresholds
 }) {
-  const tone = PIPELINE_HINT_TONE.blue
   return (
     <details className="group rounded-lg border border-gray-200 bg-white shadow-sm">
       <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
@@ -2669,10 +2446,10 @@ function PinPipelineInhalteCard({
           <span className="hidden group-open:inline">▾</span>
         </span>
         <span
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-100 text-base text-violet-700"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-gray-300 bg-white text-base text-gray-700"
           aria-hidden
         >
-          📝
+          📖
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1 text-sm font-medium text-gray-900">
@@ -2698,11 +2475,9 @@ function PinPipelineInhalteCard({
       </summary>
 
       <div className="border-t border-gray-200">
-        <div
-          className={`space-y-1 border-b px-4 py-2 text-xs font-medium ${tone.bg} ${tone.text}`}
-        >
+        <div className="coaching-box mx-4 my-3 space-y-1 text-xs font-medium">
           <div>
-            💡 Der Hebel: Pinterest belohnt frische Pin-Varianten pro Inhalt.
+            🎯 Der Hebel: Pinterest belohnt frische Pin-Varianten pro Inhalt.
             Wer pro Inhalt regelmäßig neue Pins mit anderen Hooks produziert,
             maximiert die Reichweite jedes einzelnen Themas.
           </div>
@@ -2959,7 +2734,6 @@ function PinPipelineUrlsCard({
   urls: UrlPotenzialRow[]
   thresholds: PipelineThresholds
 }) {
-  const tone = PIPELINE_HINT_TONE.green
   const visible = urls.slice(0, 5)
   const remaining = urls.length - visible.length
   const ctrText = thresholds.minCtrGoldnugget
@@ -2979,7 +2753,7 @@ function PinPipelineUrlsCard({
           <span className="hidden group-open:inline">▾</span>
         </span>
         <span
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-teal-100 text-base text-teal-700"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-gray-300 bg-white text-base text-gray-700"
           aria-hidden
         >
           🔗
@@ -3010,11 +2784,9 @@ function PinPipelineUrlsCard({
         </div>
       ) : (
         <div className="border-t border-gray-200">
-          <div
-            className={`space-y-1 border-b px-4 py-2 text-xs font-medium ${tone.bg} ${tone.text}`}
-          >
+          <div className="coaching-box mx-4 my-3 space-y-1 text-xs font-medium">
             <div>
-              💡 Der Hebel: Eine URL mit hoher CTR und wenigen Pins ist ein
+              🎯 Der Hebel: Eine URL mit hoher CTR und wenigen Pins ist ein
               bewiesenes Erfolgs-Thema mit ungenutztem Volumen. Jeder neue Pin
               auf dieses Thema bringt vorhersehbar Traffic.
             </div>
@@ -3153,12 +2925,12 @@ function BoardGesundheitDashboardSection({
     return (
       <section id="board-gesundheit" className="scroll-mt-4">
         {heading}
-        <div className="mt-3 rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
-          Noch keine Board-Analytics eingetragen. Trage deine ersten Board-Daten
+        <div className="hinweis-box mt-3">
+          💡 Noch keine Board-Analytics eingetragen. Trage deine ersten Board-Daten
           ein um die Board-Gesundheit zu sehen.{' '}
           <Link
             href="/dashboard/analytics?tab=boards"
-            className="font-medium text-red-600 hover:underline"
+            className="font-medium underline hover:text-blue-700"
           >
             → Zum Boards-Tab
           </Link>
@@ -3457,25 +3229,20 @@ function BoardKurzanalyse({
 
   if (lines.length === 0 && !rec) return null
 
-  // Eine zusammenhängende Karte mit dezenter orange-Akzentkante links —
-  // subtile Hervorhebung, nicht dominant. Empfehlung optisch leicht stärker
-  // (font-medium) als die Lage-Bausteine, damit der Hebel hervorsticht.
   return (
-    <div className="mt-3 rounded-md border border-gray-200 border-l-[3px] border-l-orange-300 bg-gray-50 p-4">
-      <div className="flex items-start gap-3 text-sm text-gray-700">
+    <div className="coaching-box mt-3">
+      <div className="flex items-start gap-3">
         <span aria-hidden className="text-base leading-tight">
           📊
         </span>
         <div className="space-y-1.5">
           {lines.map((l, i) => (
-            <p key={i} className="text-sm leading-relaxed">
+            <p key={i} className="leading-relaxed">
               {l}
             </p>
           ))}
           {rec && (
-            <p className="text-sm font-medium text-gray-900 leading-relaxed">
-              {rec}
-            </p>
+            <p className="font-medium leading-relaxed">{rec}</p>
           )}
         </div>
       </div>
@@ -3556,7 +3323,6 @@ function BoardKategorieCard({
 }) {
   const visible = boards.slice(0, 3)
   const remaining = boards.length - visible.length
-  const tone = BOARD_HINT_TONE[cat.hintTone]
 
   return (
     <details
@@ -3568,7 +3334,7 @@ function BoardKategorieCard({
           <span className="hidden group-open:inline">▾</span>
         </span>
         <span
-          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-base ${cat.iconBg}`}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-gray-300 bg-white text-base text-gray-700"
           aria-hidden
         >
           {cat.emoji}
@@ -3601,9 +3367,7 @@ function BoardKategorieCard({
         </div>
       ) : (
         <div className="border-t border-gray-200">
-          <div
-            className={`space-y-1 border-b px-4 py-2 text-xs font-medium ${tone.bg} ${tone.text}`}
-          >
+          <div className="coaching-box mx-4 my-3 space-y-1 text-xs font-medium">
             <div>{cat.hint}</div>
             <div>{cat.nextStep}</div>
           </div>
@@ -4217,7 +3981,7 @@ function HeroSection({
 
       {/* Warn-Hinweis nur bei rotem Status */}
       {statusTri.state === 'rot' && statusTri.daysSinceUpdate !== null && (
-        <div className="mx-4 mb-3 rounded-md border-l-4 border-red-500 bg-red-100 px-3 py-2 text-sm text-red-900">
+        <div className="warn-box mx-4 mb-3">
           <span className="font-semibold">⚠️ Daten veraltet</span> – das
           Dashboard zeigt Werte vom letzten Update (vor{' '}
           {statusTri.daysSinceUpdate} Tagen). Aktualisiere jetzt deine
@@ -4260,23 +4024,12 @@ function HeroSection({
 }
 
 // ===========================================================
-// Phasen-Trenner — Icon + Titel, dezente Linie darunter
+// Phasen-Trenner — schlichter weißer Callout, nur Titel
 // ===========================================================
-function PhasenTrenner({
-  icon,
-  title,
-}: {
-  icon: string
-  title: string
-}) {
+function PhasenTrenner({ title }: { title: string }) {
   return (
-    <div className="mb-6 mt-12 border-b border-gray-200 pb-3">
-      <p className="flex items-center gap-2 text-base font-medium text-gray-800">
-        <span aria-hidden className="text-lg leading-none">
-          {icon}
-        </span>
-        <span>{title}</span>
-      </p>
+    <div className="mb-5 mt-10 rounded-lg border border-gray-200 bg-white px-[18px] py-[14px]">
+      <span className="text-[15px] font-medium text-gray-900">{title}</span>
     </div>
   )
 }

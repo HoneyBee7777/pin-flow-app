@@ -187,7 +187,7 @@ export function buildBriefingItems(
       const sign = c.diff > 0 ? '+' : '−'
       const rounded = Math.round(Math.abs(c.diff))
       items.push({
-        icon: '🎯',
+        icon: c.area === 'format' ? '🖼️' : '🎯',
         parts: [
           txt(`${AREA_LABEL[c.area]} `),
           bold(c.label),
@@ -220,7 +220,7 @@ export function buildBriefingItems(
       })
     } else if (input.optimierungCount > 0) {
       items.push({
-        icon: '🎯',
+        icon: '🔍',
         parts: [
           bold(String(input.optimierungCount)),
           txt(
@@ -233,7 +233,7 @@ export function buildBriefingItems(
       })
     } else if (input.aktivTopPerformerCount > 0) {
       items.push({
-        icon: '🚀',
+        icon: '⭐',
         parts: [
           bold(String(input.aktivTopPerformerCount)),
           txt(

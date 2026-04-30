@@ -68,6 +68,24 @@ input[type='range'].pf-slider::-moz-range-thumb {
   cursor: pointer;
 }
 
+/* Drei einheitliche Coaching-Box-Typen für das Dashboard.
+   Border-left als Akzent + abgerundete rechte Ecken (linke bleiben eckig
+   wegen der Akzentkante). Vereinheitlicht alle vorherigen Custom-Stile. */
+@layer components {
+  .hinweis-box {
+    @apply rounded-r-lg bg-blue-50 px-4 py-3 text-sm text-blue-900;
+    border-left: 3px solid #60a5fa; /* blue-400 */
+  }
+  .coaching-box {
+    @apply rounded-r-lg bg-amber-50 px-4 py-3 text-sm text-amber-900;
+    border-left: 3px solid #fbbf24; /* amber-400 */
+  }
+  .warn-box {
+    @apply rounded-r-lg bg-red-50 px-4 py-3 text-sm text-red-900;
+    border-left: 3px solid #ef4444; /* red-500 */
+  }
+}
+
 /* Highlight-Pulse für Sprungziele aus dem "Heute aktuell"-Briefing.
    Wird per JS kurz hinzugefügt und nach ~1.8s wieder entfernt. */
 @keyframes briefing-pulse-kf {

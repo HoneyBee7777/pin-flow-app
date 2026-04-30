@@ -126,12 +126,12 @@ function SectionHeader() {
 // =====================================================
 function OnboardingHinweis() {
   return (
-    <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-      🎯 Du hast noch keine Strategie hinterlegt. Hinterlege deine Soll-Strategie
+    <div className="hinweis-box">
+      💡 Du hast noch keine Strategie hinterlegt. Hinterlege deine Soll-Strategie
       auf der Strategie-Seite, um einen Soll-Ist-Vergleich zu sehen.{' '}
       <Link
         href="/dashboard/strategie"
-        className="font-medium underline hover:text-amber-700"
+        className="font-medium underline hover:text-blue-700"
       >
         Strategie hinterlegen ↗
       </Link>
@@ -147,7 +147,7 @@ function HinweisOhneDaten({
   fensterTage: number
 }) {
   return (
-    <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+    <div className="hinweis-box">
       💡 {count} {count === 1 ? 'deiner Pins' : 'deiner Pins'} aus den letzten{' '}
       {fensterTage} Tagen{' '}
       {count === 1 ? 'hat' : 'haben'} noch keine Strategie-, Conversion-Ziel-
@@ -277,7 +277,7 @@ function Bar({
 // =====================================================
 function CoachingBlock({ items }: { items: CoachingItem[] }) {
   return (
-    <div className="rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+    <div className="coaching-box">
       <p className="text-base font-semibold">🎯 Größter Hebel</p>
       <p className="mt-1">
         Diese {items.length === 1 ? 'Anpassung hat' : 'Anpassungen haben'} den
@@ -287,7 +287,7 @@ function CoachingBlock({ items }: { items: CoachingItem[] }) {
         {items.map((item, i) => (
           <li key={i}>
             {item.recommendation}{' '}
-            <span className="text-xs text-blue-700">
+            <span className="text-xs text-amber-800">
               (
               {item.label}: {formatDiff(item.diff)}{' '}
               {item.diff > 0 ? 'über' : 'unter'} Plan)
@@ -301,8 +301,8 @@ function CoachingBlock({ items }: { items: CoachingItem[] }) {
 
 function AllInPlanBlock() {
   return (
-    <div className="rounded-md border border-green-200 bg-green-50 p-4 text-sm text-green-900">
-      <p className="text-base font-semibold">🎯 Strategie im Plan!</p>
+    <div className="hinweis-box">
+      <p className="text-base font-semibold">💡 Strategie im Plan</p>
       <p className="mt-1">
         Deine tatsächliche Pin-Verteilung passt zu deiner geplanten Strategie.
         Konzentriere dich darauf, die Frequenz zu halten und deine Pin-Qualität
