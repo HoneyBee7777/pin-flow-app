@@ -45,6 +45,10 @@ export async function saveEinstellungen(
     ['schwellwert_min_klicks', 'Mindest-Klicks'],
     ['schwellwert_alter_recycling', 'Mindest-Alter'],
     ['schwellwert_impressionen', 'Mindest-Impressionen'],
+    [
+      'schwellwert_top_performer_bonus_impressionen',
+      'Bonus-Impressionen-Schwelle für Top Performer',
+    ],
     ['schwellwert_board_wenig_aktiv', 'Wenig aktiv ab (Tage)'],
     ['schwellwert_board_inaktiv', 'Inaktiv ab (Tage)'],
     ['cp_min_pins_gesamt', 'Mindest-Pin-Anzahl pro Inhalt'],

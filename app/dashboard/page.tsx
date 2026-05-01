@@ -21,6 +21,7 @@ import {
   topPercentCutoff,
   type BoardScore,
   type BoardThresholds,
+  type PinAnalyticsThresholds,
   todayIso,
   withGrowth,
   type BoardStatus,
@@ -390,7 +391,7 @@ const HANDLUNGS_CATEGORIES: HandlungsCategory[] = [
       klicks: 'Klicks',
       ctr: 'CTR',
       impressionen: 'Impressionen',
-      alter: 'Alter',
+      alter: 'alt',
       push: 'Algorithmus-Push',
     },
   },
@@ -452,7 +453,7 @@ const HANDLUNGS_CATEGORIES: HandlungsCategory[] = [
     metrics: ['klicks', 'alter', 'datum'],
     metricLabels: {
       klicks: 'Frühere Klicks',
-      alter: 'Alter',
+      alter: 'alt',
       datum: 'Letzter Analytics-Eintrag',
     },
   },
@@ -491,6 +492,7 @@ export default async function DashboardPage() {
         `profil_name, analytics_update_datum,
          schwellwert_beobachtung, schwellwert_min_klicks,
          schwellwert_alter_recycling, schwellwert_ctr, schwellwert_impressionen,
+         schwellwert_top_performer_bonus_impressionen,
          schwellwert_board_wenig_aktiv, schwellwert_board_inaktiv,
          schwellwert_board_top_er, schwellwert_board_top_prozent,
          schwellwert_board_schwach_er, schwellwert_board_wachstum_trend,
@@ -1411,6 +1413,7 @@ export default async function DashboardPage() {
         hasAnyAnalytics={hasAnyAnalytics}
         bearbeitet={bearbeitet}
         today={today}
+        thresholds={thresholds}
       />
 
       {/* 10. Phasen-Trenner */}
@@ -1759,6 +1762,17 @@ function ProfilGesundheitWidget({
         <div className="min-w-0 flex-1">
           <p className="font-semibold">Profil-Gesundheit: {c.label}</p>
           <p className="mt-0.5 text-gray-700">{c.text}</p>
+          {status !== 'leer' && (
+            <p className="mt-1.5 text-xs">
+              <span aria-hidden>→ </span>
+              <a
+                href="#gesamt-profil-performance"
+                className="text-gray-600 underline hover:opacity-80"
+              >
+                Alle KPIs im Detail
+              </a>
+            </p>
+          )}
         </div>
       </div>
       {showSeparateWarn && (
@@ -1906,11 +1920,13 @@ function HandlungsbedarfSection({
   hasAnyAnalytics,
   bearbeitet,
   today,
+  thresholds,
 }: {
   grouped: Map<PinDiagnose, ActionablePin[]>
   hasAnyAnalytics: boolean
   bearbeitet: BearbeitetRowData[]
   today: string
+  thresholds: PinAnalyticsThresholds
 }) {
   const heading = (
     <>
@@ -1920,7 +1936,8 @@ function HandlungsbedarfSection({
       </p>
       <div className="achtung-box mt-2">
         ⚠️ Erstelle immer einen neuen Pin – bearbeite nie den bei Pinterest
-        veröffentlichten Pin.
+        veröffentlichten Pin. Hake den Pin ab sobald die Handlung erfolgt
+        ist.
       </div>
     </>
   )
@@ -1952,6 +1969,7 @@ function HandlungsbedarfSection({
             key={cat.diagnose}
             cat={cat}
             pins={grouped.get(cat.diagnose) ?? []}
+            thresholds={thresholds}
           />
         ))}
 
@@ -2047,12 +2065,26 @@ function buildMetrics(cat: HandlungsCategory, pinData: HandlungsbedarfPin) {
 function HandlungsbedarfKategorieCard({
   cat,
   pins,
+  thresholds,
 }: {
   cat: HandlungsCategory
   pins: ActionablePin[]
+  thresholds: PinAnalyticsThresholds
 }) {
   const visiblePins = pins.slice(0, 3)
   const remaining = pins.length - visiblePins.length
+
+  // Top-Performer-Tooltip dynamisch mit aktuellen Schwellwerten — die anderen
+  // Kategorien nutzen weiterhin den statischen Text aus der Konfiguration.
+  const ctrText = String(thresholds.mindestCtr).replace('.', ',')
+  const tooltip =
+    cat.diagnose === 'aktiver_top_performer'
+      ? `Pins, die alle drei Kriterien erfüllen:\n` +
+        `- Mehr als ${thresholds.mindestKlicks} Klicks\n` +
+        `- CTR über ${ctrText}%\n` +
+        `- Jünger als ${thresholds.mindestAlter} Tage\n\n` +
+        `Diese Pins laufen aktiv und profitieren vom Algorithmus-Push. Varianten produzieren, solange der Push aktiv ist.`
+      : cat.tooltip
 
   return (
     <details className="group rounded-lg border border-gray-200 bg-white shadow-sm">
@@ -2069,7 +2101,7 @@ function HandlungsbedarfKategorieCard({
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1 text-sm font-medium text-gray-900">
-            <LabelWithTooltip label={cat.label} tooltip={cat.tooltip} />
+            <LabelWithTooltip label={cat.label} tooltip={tooltip} />
           </div>
           <p className="mt-0.5 text-xs text-gray-600">{cat.subtitle}</p>
         </div>
@@ -2090,9 +2122,6 @@ function HandlungsbedarfKategorieCard({
         </div>
       ) : (
         <div className="border-t border-gray-200">
-          <p className="px-4 pt-2 text-[11px] uppercase tracking-wide text-gray-400">
-            Abhaken sobald Handlung erfolgt ist
-          </p>
           <ul className="divide-y divide-gray-100">
             {visiblePins.map((p) => {
               const pinData = buildPinData(p)
@@ -2103,6 +2132,9 @@ function HandlungsbedarfKategorieCard({
                   kategorie={cat.diagnose}
                   metrics={buildMetrics(cat, pinData)}
                   primaryAction={cat.primaryAction}
+                  bonusImpressionenSchwelle={
+                    thresholds.topPerformerBonusImpressionen
+                  }
                 />
               )
             })}
@@ -2122,6 +2154,9 @@ function HandlungsbedarfKategorieCard({
                       kategorie={cat.diagnose}
                       metrics={buildMetrics(cat, pinData)}
                       primaryAction={cat.primaryAction}
+                      bonusImpressionenSchwelle={
+                        thresholds.topPerformerBonusImpressionen
+                      }
                     />
                   )
                 })}
@@ -2197,6 +2232,15 @@ function SaisonKalenderSection({ columns }: { columns: SaisonKanbanColumns }) {
         <p className="mt-1 text-sm text-gray-600">
           Saisonale Themen brauchen 6–12 Wochen Vorlauf — hier siehst du,
           was wann zu tun ist.
+        </p>
+        <p className="mt-1 text-[13px]">
+          <span aria-hidden>→ </span>
+          <Link
+            href="/dashboard/strategie?tab=grundlagen&accordion=saisonalitaet"
+            className="text-red-600 underline hover:opacity-80"
+          >
+            Mehr zur Saisonalität & Pinterest-Timing
+          </Link>
         </p>
       </div>
 
@@ -2491,14 +2535,15 @@ function PinPipelineInhalteCard({
       <div className="border-t border-gray-200">
         <div className="coaching-box mx-4 my-3 space-y-1 text-xs font-medium">
           <div>
-            🎯 Der Hebel: Pinterest belohnt frische Pin-Varianten pro Inhalt.
-            Wer pro Inhalt regelmäßig neue Pins mit anderen Hooks produziert,
-            maximiert die Reichweite jedes einzelnen Themas.
+            🎯 <strong>Der Hebel:</strong> Pinterest belohnt frische
+            Pin-Varianten pro Inhalt. Wer pro Inhalt regelmäßig neue Pins mit
+            anderen Hooks produziert, maximiert die Reichweite jedes
+            einzelnen Themas.
           </div>
           <div>
-            🎯 So gehst du vor: Pro Inhalt mindestens alle 3-4 Wochen eine
-            neue Pin-Variante produzieren. Verschiedene Hooks und Designs für
-            denselben Inhalt ausspielen.
+            <strong>So gehst du vor:</strong> Pro Inhalt mindestens alle 3-4
+            Wochen eine neue Pin-Variante produzieren. Verschiedene Hooks und
+            Designs für denselben Inhalt ausspielen.
           </div>
         </div>
 
@@ -2630,7 +2675,7 @@ function PinPipelineInhaltRow({
 }) {
   const meta =
     item.pinCount === 0
-      ? '0 Pins · Noch kein Pin'
+      ? 'Noch kein Pin zu diesem Inhalt vorhanden'
       : `${item.pinCount} Pin${item.pinCount === 1 ? '' : 's'}` +
         (item.letzterPinTage !== null
           ? ` · Letzter Pin: vor ${item.letzterPinTage} Tag${
@@ -2648,30 +2693,50 @@ function PinPipelineInhaltRow({
     item.letzterPinTage > thresholds.tageOhnePin
   const hint =
     kind === 'stale'
-      ? `📊 Letzter Pin vor ${item.letzterPinTage ?? 0} Tagen – kontinuierliche Pin-Produktion fehlt, neue Variante mit anderem Hook produzieren.`
+      ? `⚠️ Letzter Pin vor ${item.letzterPinTage ?? 0} Tagen – kontinuierliche Pin-Produktion fehlt, neue Variante mit anderem Hook produzieren.`
       : fewPinsIsStale
-        ? `📊 Nur ${item.pinCount} Pin${pinPlural} und seit ${item.letzterPinTage} Tagen kein neuer – kontinuierliche Pin-Produktion fehlt.`
-        : `📊 Nur ${item.pinCount} Pin${pinPlural} – pro Inhalt sollten ${thresholds.minPinsGesamt}+ Varianten existieren.`
+        ? `⚠️ Nur ${item.pinCount} Pin${pinPlural} und seit ${item.letzterPinTage} Tagen kein neuer – kontinuierliche Pin-Produktion fehlt.`
+        : item.pinCount === 0
+          ? `⚠️ Noch keinen Pin zu diesem Inhalt erstellt – pro Inhalt sollten ${thresholds.minPinsGesamt}+ Varianten existieren.`
+          : `⚠️ Nur ${item.pinCount} Pin${pinPlural} – pro Inhalt sollten ${thresholds.minPinsGesamt}+ Varianten existieren.`
   const hintBoxCls =
     kind === 'stale' || fewPinsIsStale
       ? 'bg-orange-50 text-orange-800'
       : 'bg-yellow-50 text-yellow-800'
   const visibleBoards = item.boardNames.slice(0, 2)
   const hiddenBoards = item.boardNames.slice(2)
-  const hasKeywords = item.keywords.length > 0
-  const keywordChips = item.keywords.slice(0, 3)
+  const chipCls =
+    'inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-700'
+  const boardLabel = item.boardNames.length === 1 ? 'Board:' : 'Boards:'
   return (
     <li className="space-y-2 px-4 py-3">
-      <div className="text-sm font-medium text-gray-900">{item.titel}</div>
-      <div className="text-xs text-gray-600">{meta}</div>
+      <div className="text-[15px] font-semibold text-gray-900">{item.titel}</div>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="text-xs text-gray-600">{meta}</div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href={`/dashboard/pin-produktion?content_id=${item.id}&open=new`}
+            className="inline-flex items-center justify-center rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700"
+          >
+            Pin erstellen
+          </Link>
+          {item.primaryUrl && (
+            <a
+              href={item.primaryUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Zur Ziel-URL ↗
+            </a>
+          )}
+        </div>
+      </div>
       {item.boardNames.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5 text-xs">
-          <span className="text-gray-500">Boards:</span>
+          <span className="text-gray-500">{boardLabel}</span>
           {visibleBoards.map((name) => (
-            <span
-              key={`b-${name}`}
-              className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs text-purple-700"
-            >
+            <span key={`b-${name}`} className={chipCls}>
               {name}
             </span>
           ))}
@@ -2681,10 +2746,7 @@ function PinPipelineInhaltRow({
                 + {hiddenBoards.length} weitere
               </summary>
               {hiddenBoards.map((name) => (
-                <span
-                  key={`b-${name}`}
-                  className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs text-purple-700"
-                >
+                <span key={`b-${name}`} className={chipCls}>
                   {name}
                 </span>
               ))}
@@ -2692,50 +2754,8 @@ function PinPipelineInhaltRow({
           )}
         </div>
       )}
-      {hasKeywords ? (
-        <div className="flex flex-wrap items-center gap-1.5 text-xs">
-          <span className="text-gray-500">Keywords:</span>
-          {keywordChips.map((kw) => (
-            <span
-              key={`k-${kw}`}
-              className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-700"
-            >
-              {kw}
-            </span>
-          ))}
-        </div>
-      ) : (
-        <div className="text-xs text-gray-500">
-          Keywords: keine hinterlegt – in Content-Datenbank ergänzen, um SEO zu
-          stärken.
-        </div>
-      )}
       <div className={`rounded-md px-2 py-1.5 text-xs ${hintBoxCls}`}>
         {hint}
-      </div>
-      <div className="flex flex-wrap gap-2 pt-1">
-        <Link
-          href={`/dashboard/pin-produktion?content_id=${item.id}&open=new`}
-          className="inline-flex items-center justify-center rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700"
-        >
-          Pin erstellen
-        </Link>
-        {item.primaryUrl && (
-          <a
-            href={item.primaryUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
-          >
-            Zur Ziel-URL ↗
-          </a>
-        )}
-        <Link
-          href="/dashboard/content-inhalte"
-          className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
-        >
-          Zur Content-Datenbank ↗
-        </Link>
       </div>
     </li>
   )
@@ -2800,14 +2820,15 @@ function PinPipelineUrlsCard({
         <div className="border-t border-gray-200">
           <div className="coaching-box mx-4 my-3 space-y-1 text-xs font-medium">
             <div>
-              🎯 Der Hebel: Eine URL mit hoher CTR und wenigen Pins ist ein
-              bewiesenes Erfolgs-Thema mit ungenutztem Volumen. Jeder neue Pin
-              auf dieses Thema bringt vorhersehbar Traffic.
+              🎯 <strong>Der Hebel:</strong> Eine URL mit hoher CTR und
+              wenigen Pins ist ein bewiesenes Erfolgs-Thema mit ungenutztem
+              Volumen. Jeder neue Pin auf dieses Thema bringt vorhersehbar
+              Traffic.
             </div>
             <div>
-              🎯 So gehst du vor: Identifiziere die Hooks und Designs die bei
-              den bestehenden Pins funktioniert haben. Produziere 3-5 weitere
-              Varianten in derselben Erfolgs-Logik.
+              <strong>So gehst du vor:</strong> Identifiziere die Hooks und
+              Designs die bei den bestehenden Pins funktioniert haben.
+              Produziere 3-5 weitere Varianten in derselben Erfolgs-Logik.
             </div>
           </div>
           <ul className="divide-y divide-gray-100">
@@ -2848,44 +2869,61 @@ function PinPipelineUrlRow({ url }: { url: UrlPotenzialRow }) {
       ? url.displayTitle
       : shortenUrl(url.basisUrl)
   const ctrText = url.ctr.toFixed(1).replace('.', ',')
+  const visibleBoards = url.boardNames.slice(0, 2)
+  const hiddenBoards = url.boardNames.slice(2)
+  const chipCls =
+    'inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-700'
   return (
     <li className="space-y-2 px-4 py-3">
-      <div className="text-sm font-medium text-gray-900">{display}</div>
-      <div className="text-xs text-gray-600">
-        Ø CTR: <strong className="text-gray-900">{ctrText}%</strong> ·{' '}
-        {url.pinCount} Pin{url.pinCount === 1 ? '' : 's'}
+      <div className="text-[15px] font-semibold text-gray-900">{display}</div>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="text-xs text-gray-600">
+          {url.pinCount} Pin{url.pinCount === 1 ? '' : 's'} · Ø CTR:{' '}
+          <strong className="text-gray-900">{ctrText}%</strong>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href="/dashboard/pin-produktion?open=new"
+            className="inline-flex items-center justify-center rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700"
+          >
+            Pin erstellen
+          </Link>
+          <a
+            href={url.basisUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+          >
+            URL öffnen ↗
+          </a>
+        </div>
       </div>
       {url.boardNames.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5 text-xs">
-          <span className="text-gray-500">Boards:</span>
-          {url.boardNames.map((name) => (
-            <span
-              key={name}
-              className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs text-purple-700"
-            >
+          <span className="text-gray-500">
+            {url.boardNames.length === 1 ? 'Board:' : 'Boards:'}
+          </span>
+          {visibleBoards.map((name) => (
+            <span key={`b-${name}`} className={chipCls}>
               {name}
             </span>
           ))}
+          {hiddenBoards.length > 0 && (
+            <details className="contents">
+              <summary className="cursor-pointer list-none text-xs font-medium text-red-600 hover:underline [&::-webkit-details-marker]:hidden">
+                + {hiddenBoards.length} weitere
+              </summary>
+              {hiddenBoards.map((name) => (
+                <span key={`b-${name}`} className={chipCls}>
+                  {name}
+                </span>
+              ))}
+            </details>
+          )}
         </div>
       )}
-      <div className="text-xs text-gray-700">
-        📊 Hohe CTR ({ctrText}%) bei wenigen Pins – Erfolg skalieren.
-      </div>
-      <div className="flex flex-wrap gap-2 pt-1">
-        <Link
-          href="/dashboard/pin-produktion?open=new"
-          className="inline-flex items-center justify-center rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700"
-        >
-          Pin erstellen
-        </Link>
-        <a
-          href={url.basisUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
-        >
-          URL öffnen ↗
-        </a>
+      <div className="coaching-box !px-2 !py-1.5 text-xs">
+        🎯 Hohe CTR ({ctrText}%) bei wenigen Pins – Erfolg skalieren.
       </div>
     </li>
   )
@@ -4107,7 +4145,7 @@ function ProfilPerformanceSection({
 
   if (!latest) {
     return (
-      <section>
+      <section id="gesamt-profil-performance" className="scroll-mt-4">
         <h2 className="text-lg font-semibold text-gray-900">
           <LabelWithTooltip
             label="Gesamt-Profil-Performance"
@@ -4146,7 +4184,7 @@ function ProfilPerformanceSection({
   }
 
   return (
-    <section>
+    <section id="gesamt-profil-performance" className="scroll-mt-4">
       <h2 className="text-lg font-semibold text-gray-900">
         <LabelWithTooltip
           label="Gesamt-Profil-Performance"

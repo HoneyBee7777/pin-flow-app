@@ -12,6 +12,7 @@ export type InitialSchwellwerte = {
   alterRecycling: number | null
   ctr: number | null
   impressionen: number | null
+  topPerformerBonusImpressionen: number | null
 }
 
 export type InitialPersoenlicheLinks = {
@@ -382,6 +383,11 @@ function SchwellwerteSection({
   const [impressionen, setImpressionen] = useState(
     initial.impressionen !== null ? String(initial.impressionen) : '1000'
   )
+  const [bonusImpressionen, setBonusImpressionen] = useState(
+    initial.topPerformerBonusImpressionen !== null
+      ? String(initial.topPerformerBonusImpressionen)
+      : '500'
+  )
   const [isPending, startTransition] = useTransition()
   const [feedback, setFeedback] = useState<{
     saved?: boolean
@@ -438,12 +444,12 @@ function SchwellwerteSection({
           help="Ab wann gilt ein eingeschlafener Pin als Recycling-Kandidat?"
         />
         <SchwellwertField
-          label="Mindest-CTR für Hidden Gem (%)"
+          label="Mindest-CTR (Hidden Gem & Top Performer) (%)"
           name="schwellwert_ctr"
           value={ctr}
           onChange={setCtr}
           step={0.1}
-          help="Ab welcher CTR gilt ein Pin mit wenig Reichweite als Hidden Gem?"
+          help="Pins mit einer CTR über diesem Schwellwert gelten als qualitativ hochwertig – sie landen je nach Klick-Anzahl in Hidden Gem (wenig Reichweite) oder Top Performer (viel Reichweite)."
         />
         <SchwellwertField
           label="Mindest-Impressionen für Optimierungspotenzial"
@@ -452,6 +458,14 @@ function SchwellwerteSection({
           onChange={setImpressionen}
           step={1}
           help="Ab wie vielen Impressionen prüfen wir, ob der Hook optimiert werden sollte?"
+        />
+        <SchwellwertField
+          label="Bonus-Hinweis: Max. Impressionen für Reichweiten-Hinweis bei Top Performer"
+          name="schwellwert_top_performer_bonus_impressionen"
+          value={bonusImpressionen}
+          onChange={setBonusImpressionen}
+          step={1}
+          help="Top Performer mit weniger Impressionen als dieser Wert erhalten einen zusätzlichen Hinweis, Keywords in der Variante zu stärken."
         />
 
         <div className="flex items-center gap-3">

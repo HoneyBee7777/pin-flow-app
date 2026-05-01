@@ -47,6 +47,7 @@ export default function SaisonClient({
   const [formError, setFormError] = useState<string | null>(null)
   const [saisonTyp, setSaisonTyp] = useState<SaisonTyp | ''>('')
   const [isPending, startTransition] = useTransition()
+  const [showPromptModal, setShowPromptModal] = useState(false)
 
   const formOpen = showAddForm || editing !== null
   const isEvergreen = saisonTyp === 'evergreen'
@@ -111,6 +112,13 @@ export default function SaisonClient({
         >
           {showAddForm ? 'Abbrechen' : 'Event hinzufügen'}
         </button>
+        <button
+          type="button"
+          onClick={() => setShowPromptModal(true)}
+          className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+        >
+          ✨ KI-Prompt: Events für deine Nische
+        </button>
         <Link
           href="/dashboard/saison-kalender/planung"
           className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
@@ -118,6 +126,10 @@ export default function SaisonClient({
           📅 Nächstes Jahr planen
         </Link>
       </div>
+
+      {showPromptModal && (
+        <NischePromptModal onClose={() => setShowPromptModal(false)} />
+      )}
 
       {formOpen && (
         <form
@@ -393,5 +405,184 @@ export default function SaisonClient({
         </table>
       </div>
     </div>
+  )
+}
+
+// ===========================================================
+// KI-Prompt-Modal: generiert einen personalisierten Claude-Prompt
+// für die Nische des Nutzers.
+// ===========================================================
+function NischePromptModal({ onClose }: { onClose: () => void }) {
+  const [nische, setNische] = useState('')
+  const [ziel, setZiel] = useState('')
+  const [angebot, setAngebot] = useState('')
+  const [zielgruppe, setZielgruppe] = useState('')
+  const [generated, setGenerated] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  const canGenerate =
+    nische.trim() !== '' && ziel.trim() !== '' && angebot.trim() !== ''
+
+  function generate() {
+    const zielgruppeSatz = zielgruppe.trim()
+      ? ` Meine Zielgruppe: ${zielgruppe.trim()}.`
+      : ''
+    const prompt =
+      `Ich betreibe einen Pinterest-Account in der Nische ${nische.trim()}. ` +
+      `Mein Ziel ist ${ziel.trim()}. ` +
+      `Mein Hauptangebot ist ${angebot.trim()}.${zielgruppeSatz}\n\n` +
+      `Bitte erstelle mir eine personalisierte Saison-Strategie für Pinterest mit:\n\n` +
+      `1. Welche 5-8 Hauptsaisons sind für meine Nische besonders relevant?\n` +
+      `2. Welche 3-5 Micro-Seasons (kleinere Anlässe) sollte ich beachten?\n` +
+      `3. Welche saisonalen Themen kann ich aus meinem Hauptangebot ableiten?\n` +
+      `4. Was sind typische Sucheingaben meiner Zielgruppe pro Saison auf Pinterest?\n` +
+      `5. Wie viele Wochen vor dem Event sollte ich produzieren / pinnen für jede dieser Saisons?\n\n` +
+      `Berücksichtige Pinterest-Suchverhalten: Nutzer:innen recherchieren 4-12 Wochen vor einem Event. Pinterest-Pins brauchen ca. 60 Tage zur vollen Ausspielung. Hauptevents wie Weihnachten oder Black Friday brauchen 90 Tage Vorlauf, mittlere Events wie Muttertag oder Valentinstag 45 Tage.`
+    setGenerated(prompt)
+    setCopied(false)
+  }
+
+  async function copyPrompt() {
+    if (!generated) return
+    try {
+      await navigator.clipboard.writeText(generated)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // Clipboard-API nicht verfügbar — Nutzer kann den Prompt manuell markieren.
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:items-center"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="nische-prompt-modal-title"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-2xl rounded-lg bg-white p-6 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2
+              id="nische-prompt-modal-title"
+              className="text-lg font-semibold text-gray-900"
+            >
+              ✨ Personalisierte Saison-Events für deine Nische
+            </h2>
+            <p className="mt-1 text-sm text-gray-600">
+              Fülle die Felder aus — wir generieren daraus einen fertigen
+              KI-Prompt.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Schließen"
+            className="shrink-0 rounded-md px-2 py-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="mt-4 space-y-3">
+          <PromptField
+            label="Deine Nische"
+            value={nische}
+            onChange={setNische}
+            placeholder="z.B. Yoga & Wellness, Handmade Schmuck, Vegane Rezepte"
+            required
+          />
+          <PromptField
+            label="Dein Pinterest-Ziel"
+            value={ziel}
+            onChange={setZiel}
+            placeholder="z.B. Reichweite aufbauen, E-Mail-Liste wachsen lassen, Produkte verkaufen"
+            required
+          />
+          <PromptField
+            label="Dein Hauptangebot"
+            value={angebot}
+            onChange={setAngebot}
+            placeholder="z.B. Online-Yoga-Kurse, handgemachte Ohrringe, Kochblog mit Rezepten"
+            required
+          />
+          <PromptField
+            label="Deine Zielgruppe (optional)"
+            value={zielgruppe}
+            onChange={setZielgruppe}
+            placeholder="z.B. Frauen 30-45 die zuhause Yoga praktizieren"
+          />
+        </div>
+
+        <div className="mt-4">
+          <button
+            type="button"
+            onClick={generate}
+            disabled={!canGenerate}
+            className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Prompt generieren
+          </button>
+        </div>
+
+        {generated && (
+          <div className="mt-5">
+            <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-md border border-gray-200 bg-gray-50 p-4 font-mono text-xs leading-relaxed text-gray-800">
+{generated}
+            </pre>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={copyPrompt}
+                className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100"
+              >
+                {copied ? '✓ Kopiert!' : 'Prompt kopieren'}
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100"
+              >
+                Schließen
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function PromptField({
+  label,
+  value,
+  onChange,
+  placeholder,
+  required = false,
+}: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  placeholder: string
+  required?: boolean
+}) {
+  return (
+    <label className="block">
+      <span className="text-xs font-medium text-gray-700">
+        {label}
+        {required && <span className="ml-0.5 text-red-600">*</span>}
+      </span>
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm placeholder-gray-400 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+      />
+    </label>
   )
 }

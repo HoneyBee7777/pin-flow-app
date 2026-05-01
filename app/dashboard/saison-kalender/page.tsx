@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase-server'
 import SaisonClient from './SaisonClient'
 import {
@@ -169,6 +170,15 @@ export default async function SaisonKalenderPage() {
         <p className="mt-1 text-sm text-gray-600">
           Plane deine Saison-Pins rechtzeitig — Status und Countdown werden
           automatisch berechnet.
+        </p>
+        <p className="mt-1 text-[13px]">
+          <span aria-hidden>→ </span>
+          <Link
+            href="/dashboard/strategie?tab=grundlagen&accordion=saisonalitaet"
+            className="text-red-600 underline hover:opacity-80"
+          >
+            Mehr zur Saisonalität & Pinterest-Timing
+          </Link>
         </p>
       </header>
 

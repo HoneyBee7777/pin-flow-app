@@ -361,6 +361,7 @@ export type PinAnalyticsThresholds = {
   mindestAlter: number
   mindestCtr: number
   mindestImpressionen: number
+  topPerformerBonusImpressionen: number
 }
 
 export const PIN_ANALYTICS_THRESHOLDS: PinAnalyticsThresholds = {
@@ -369,6 +370,7 @@ export const PIN_ANALYTICS_THRESHOLDS: PinAnalyticsThresholds = {
   mindestAlter: 70,
   mindestCtr: 1.5,
   mindestImpressionen: 1000,
+  topPerformerBonusImpressionen: 500,
 }
 
 export type EinstellungenSchwellwerte = {
@@ -377,6 +379,7 @@ export type EinstellungenSchwellwerte = {
   schwellwert_alter_recycling: number | null
   schwellwert_ctr: number | string | null
   schwellwert_impressionen: number | null
+  schwellwert_top_performer_bonus_impressionen: number | null
 }
 
 export function thresholdsFromSettings(
@@ -403,6 +406,9 @@ export function thresholdsFromSettings(
     mindestImpressionen:
       settings?.schwellwert_impressionen ??
       PIN_ANALYTICS_THRESHOLDS.mindestImpressionen,
+    topPerformerBonusImpressionen:
+      settings?.schwellwert_top_performer_bonus_impressionen ??
+      PIN_ANALYTICS_THRESHOLDS.topPerformerBonusImpressionen,
   }
 }
 
@@ -420,7 +426,11 @@ export function diagnosePin(args: {
 
   if (!hatDatum) return 'evergreen'
 
-  if (klicks >= t.mindestKlicks && alterTage < t.mindestAlter)
+  if (
+    klicks >= t.mindestKlicks &&
+    ctrValue >= t.mindestCtr &&
+    alterTage < t.mindestAlter
+  )
     return 'aktiver_top_performer'
 
   if (klicks >= t.mindestKlicks && alterTage >= t.mindestAlter)

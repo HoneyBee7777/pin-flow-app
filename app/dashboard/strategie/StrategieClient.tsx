@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useSearchParams } from 'next/navigation'
 import type { StrategieRow } from './lib'
 import MyStrategy from './MyStrategy'
 
@@ -13,12 +14,19 @@ const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'design', label: '🎨 Pin-Design & Formate' },
 ]
 
+const TAB_KEYS: TabKey[] = ['meine', 'grundlagen', 'strategien', 'design']
+
 export default function StrategieClient({
   strategie,
 }: {
   strategie: StrategieRow | null
 }) {
-  const [active, setActive] = useState<TabKey>('meine')
+  const searchParams = useSearchParams()
+  const initialTab: TabKey = (() => {
+    const t = searchParams?.get('tab')
+    return t && (TAB_KEYS as string[]).includes(t) ? (t as TabKey) : 'meine'
+  })()
+  const [active, setActive] = useState<TabKey>(initialTab)
 
   return (
     <div className="space-y-6">
@@ -67,16 +75,37 @@ export default function StrategieClient({
 function Accordion({
   title,
   defaultOpen = false,
+  anchorId,
   children,
 }: {
   title: string
   defaultOpen?: boolean
+  anchorId?: string
   children: ReactNode
 }) {
+  const searchParams = useSearchParams()
+  const matched = !!anchorId && searchParams?.get('accordion') === anchorId
+  const [open, setOpen] = useState<boolean>(defaultOpen || matched)
+  const ref = useRef<HTMLDetailsElement>(null)
+
+  // Wenn die URL auf dieses Accordion zeigt: aufklappen und reinscrollen.
+  useEffect(() => {
+    if (matched) {
+      setOpen(true)
+      const t = setTimeout(() => {
+        ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }, 50)
+      return () => clearTimeout(t)
+    }
+  }, [matched])
+
   return (
     <details
-      className="group rounded-lg border border-gray-200 bg-white shadow-sm open:shadow-md"
-      open={defaultOpen}
+      ref={ref}
+      id={anchorId}
+      className="group scroll-mt-4 rounded-lg border border-gray-200 bg-white shadow-sm open:shadow-md"
+      open={open}
+      onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)}
     >
       <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-4 text-base font-semibold text-gray-900 hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
         <span
@@ -92,6 +121,50 @@ function Accordion({
         {children}
       </div>
     </details>
+  )
+}
+
+// Tool-Block mit kopierbarem Prompt — eigener Look (heller Background,
+// monospace-Prompt, Kopier-Button mit 2s Bestätigung).
+function CopyPromptBlock({
+  title,
+  prompt,
+  steps,
+}: {
+  title: string
+  prompt: string
+  steps: ReactNode
+}) {
+  const [copied, setCopied] = useState(false)
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(prompt)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // Clipboard-API unavailable (z.B. ohne HTTPS / sehr alte Browser):
+      // Button bleibt unverändert, Nutzer kann den Prompt manuell markieren.
+    }
+  }
+  return (
+    <div className="space-y-3">
+      <div className="rounded-md border border-gray-200 bg-gray-50 p-4">
+        <div className="flex items-start justify-between gap-3">
+          <h4 className="text-sm font-semibold text-gray-900">{title}</h4>
+          <button
+            type="button"
+            onClick={copy}
+            className="shrink-0 rounded-md border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100"
+          >
+            {copied ? '✓ Kopiert!' : 'Prompt kopieren'}
+          </button>
+        </div>
+        <pre className="mt-3 whitespace-pre-wrap font-mono text-xs leading-relaxed text-gray-800">
+{prompt}
+        </pre>
+      </div>
+      {steps}
+    </div>
   )
 }
 
@@ -409,30 +482,277 @@ Woche 7:  Pin B (Variante) → Board "Garten gestalten"`}
         </CodeBlock>
       </Accordion>
 
-      <Accordion title="Saisonkalender – Pin-Fenster respektieren">
+      <Accordion
+        title="Saisonalität & Pinterest-Timing"
+        anchorId="saisonalitaet"
+      >
+        {/* Block 1 — Warum Timing entscheidend ist */}
+        <H3>Warum Timing auf Pinterest entscheidend ist</H3>
         <Para>
-          Pinterest indexiert Pins langsam. Wer Muttertagspins am 9. Mai
-          veröffentlicht, hat verloren.
+          Pinterest ist eine Planungsplattform, kein Spontanmedium. Während auf
+          Instagram Pins nach 24 Stunden im Feed verschwinden und auf
+          Twitter/X nach 15-20 Minuten, hat ein Pinterest-Pin eine Lebensdauer
+          von 3-6 Monaten.
         </Para>
         <Para>
-          <strong>Faustregel:</strong> Saisonale Pins brauchen 45-60 Tage
-          Vorlauf.
+          <strong>Pinterest belohnt Vorausschauen, nicht Reaktivität:</strong>{' '}
+          Pinterest indexiert neue Pins langsam – etwa 60 Tage bis zur vollen
+          Ausspielung. Das gibt dir einen enormen Vorteil: Du kannst Trends
+          antizipieren, statt darauf zu reagieren.
         </Para>
+        <HinweisBox>
+          <strong>Die goldene Regel:</strong> Zu früh ist besser als zu spät.
+          Ein Pin, der 8 Wochen vor dem Event veröffentlicht wird, hat Zeit
+          ausgespielt zu werden. Ein Pin, der eine Woche vorher erscheint,
+          kommt nicht mehr rechtzeitig an.
+        </HinweisBox>
+
+        {/* Block 2 — Vier Phasen */}
+        <H3>Die vier Phasen – wann was passieren soll</H3>
         <Para>
-          Pinterest-Suchen nach saisonalen Themen starten 6-12 Wochen vor dem
-          Event:
+          Pinterest-Saisonalität läuft in vier klar definierten Phasen ab. Das
+          Dashboard zeigt dir pro Event, in welcher Phase es gerade ist:
         </Para>
         <Bullets
           items={[
-            'Muttertag-Suchen starten Mitte März, nicht im Mai',
-            'Halloween-Suchen starten im Juli, nicht im Oktober',
-            'Weihnachts-Suchen starten im September',
+            <>
+              <strong>🎬 Jetzt produzieren</strong> — Pins werden erstellt und
+              zum Veröffentlichen vorbereitet. Beginnt typischerweise 14-30
+              Tage vor dem Pin-Start.
+            </>,
+            <>
+              <strong>📌 Jetzt pinnen</strong> — Pin-Fenster ist offen, neue
+              Pins werden veröffentlicht. Das ist die Hauptphase für Pinterest,
+              in der Pins indexiert und ausgespielt werden.
+            </>,
+            <>
+              <strong>🚀 Hochphase</strong> — Das Event nähert sich. Keine
+              neuen Pins mehr erstellen – Pinterest würde sie nicht mehr
+              rechtzeitig ausspielen. Stattdessen bestehende Pins beobachten
+              und optimieren.
+            </>,
+            <>
+              <strong>⏳ Noch Zeit</strong> — Event liegt weit in der Zukunft.
+              Vormerken, Ideen sammeln, Produktion startet später.
+            </>,
+          ]}
+        />
+
+        {/* Block 3 — Wie das System rechnet + Tabelle */}
+        <H3>Wie das System rechnet – und was du eintragen musst</H3>
+        <Para>
+          Das System berechnet alle Phasen automatisch. Du musst nur zwei Werte
+          pflegen:
+        </Para>
+        <Bullets
+          items={[
+            <>
+              <strong>Event-Datum</strong> (z.B. 14.05.2026 für Muttertag)
+            </>,
+            <>
+              <strong>Suchbeginn-Tage</strong> — wie viele Tage vor dem Event
+              sollen Pins live gehen? Diese Zahl steht für jedes Event bereits
+              vordefiniert im System (basierend auf Pinterest-Suchverhalten pro
+              Eventtyp). Du kannst sie anpassen, aber empfehlenswert ist das
+              nicht.
+            </>,
+          ]}
+        />
+        <Para>Das System rechnet zusätzlich automatisch:</Para>
+        <Bullets
+          items={[
+            '60 Tage Pinterest-Indexierungszeit',
+            '31 Tage Produktionsvorlauf',
+            'Phasen-Wechsel (Noch Zeit → Jetzt produzieren → Jetzt pinnen → Hochphase)',
+          ]}
+        />
+        <H4>Vordefinierte Suchbeginn-Tage in diesem System:</H4>
+        <Table
+          head={['Event', 'Suchbeginn vor Event']}
+          rows={[
+            ['Valentinstag', '45 Tage'],
+            ['Ostern', '60 Tage'],
+            ['Muttertag', '45 Tage'],
+            ['Vatertag', '45 Tage'],
+            ['Halloween', '90 Tage'],
+            ['Black Friday', '90 Tage'],
+            ['Weihnachten', '90 Tage'],
+            ['Silvester / Neujahr', '60 Tage'],
+            ['Frühling (saisonal)', '60 Tage'],
+            ['Sommer (saisonal)', '60 Tage'],
+            ['Herbst (saisonal)', '60 Tage'],
+            ['Winter (saisonal)', '60 Tage'],
+          ]}
+        />
+
+        {/* Block 4 — 70/30-Regel */}
+        <H3>70/30-Regel: Evergreen vs. Saisonal</H3>
+        <Para>
+          Neben saisonalen Inhalten brauchst du Evergreen Content – Inhalte,
+          die das ganze Jahr relevant sind und kontinuierlich Traffic bringen.
+        </Para>
+        <H4>Was guten Evergreen Content ausmacht:</H4>
+        <Bullets
+          items={[
+            'Beantwortet eine zeitlose Frage deiner Zielgruppe',
+            'Ist nicht an ein bestimmtes Datum oder Event gebunden',
+            'Kann saisonal leicht angepasst werden',
+          ]}
+        />
+        <H4>Beispiele:</H4>
+        <Bullets
+          items={[
+            <>
+              „Pasta-Soße einfrieren: 3 Methoden" → ganzjährig relevant
+            </>,
+            <>
+              „Etsy-Shop optimieren: 5 Schritte" → ganzjährig relevant
+            </>,
+            <>
+              „Glühwein-Rezept ohne Alkohol" → nur saisonal relevant
+            </>,
+            <>
+              „Etsy: Black-Friday-Aktionen vorbereiten" → nur saisonal relevant
+            </>,
           ]}
         />
         <Para>
-          Der Saison-Kalender im Dashboard zeigt automatisch, was wann ansteht
-          und wann das Pin-Fenster schließt.
+          <strong>Empfehlung:</strong> 70% deiner Pins sollten Evergreen
+          Content sein, 30% saisonal. So hast du ganzjährig Traffic und nutzt
+          zusätzlich saisonale Peaks.
         </Para>
+
+        {/* Block 5 — Ganzjähriger Rhythmus */}
+        <H3>Ganzjähriger Rhythmus – kein Leerlauf zwischen den Saisonen</H3>
+        <Para>
+          Zwischen den großen Events gibt es immer kleinere Anlässe – und
+          immer Evergreen Content, der veröffentlicht werden kann. So sieht
+          ein typischer Monats-Überblick aus:
+        </Para>
+        <CodeBlock>
+{`Januar:
+→ Laufend pinnen: Neujahr / Vorsätze / Winterthemen
+→ Produzieren: Valentinstag / Frühjahrs-Content
+→ Analysieren: Weihnachtssaison auswerten
+
+April:
+→ Laufend pinnen: Ostern / Frühling / Muttertag-Vorbereitung
+→ Produzieren: Sommer-Content / Back-to-School beginnen
+→ Analysieren: Q1 Performance prüfen
+
+September:
+→ Laufend pinnen: Halloween / Herbst
+→ Produzieren: Weihnachten / Neujahr
+→ Analysieren: Sommer-Performance auswerten`}
+        </CodeBlock>
+        <H4>Micro-Seasons als zusätzliche Chance:</H4>
+        <Para>
+          Neben Hauptsaisons gibt es kleinere Anlässe mit weniger Wettbewerb:
+        </Para>
+        <Bullets
+          items={[
+            'Earth Day (April)',
+            'Pride Month (Juni)',
+            'Mental Health Awareness (Mai/Oktober)',
+            'Branchenspezifische Saisons (z.B. „Back-to-School" für Bildungsanbieter)',
+          ]}
+        />
+        <Para>
+          Diese Micro-Seasons bieten die Chance, in Zeiträumen mit weniger
+          Wettbewerb Sichtbarkeit zu erlangen.
+        </Para>
+
+        {/* Block 6 — Pflege */}
+        <H3>
+          Saisonkalender pflegen – einmal im Jahr für zwei Jahre vorausplanen
+        </H3>
+        <Para>
+          Der Saisonkalender in diesem System ist vorausgefüllt mit den
+          wichtigsten Events. Empfehlung: Im Dezember oder Januar einmal im
+          Jahr die Daten für die kommenden ZWEI Jahre vorausplanen.
+        </Para>
+        <H4>Was zu tun ist:</H4>
+        <Bullets
+          items={[
+            'Feiertage prüfen (Ostern wechselt jährlich, ebenso bewegliche Feiertage)',
+            'Persönliche Events ergänzen (Launches, Messen, Kampagnen)',
+            'Branchenspezifische Anlässe ergänzen (z.B. eigener Geschäftsstart-Anniversary)',
+            'Neue Saisons hinzufügen, die du im Jahr beobachtet hast und die für deine Nische relevant sind',
+          ]}
+        />
+        <Para>
+          <strong>Zeitaufwand:</strong> etwa 10-15 Minuten pro Jahr für zwei
+          Jahre vorausgeplant.
+        </Para>
+
+        {/* Block 7 — Häufige Fehler */}
+        <H3>Häufige Fehler vermeiden</H3>
+        <H4>1. Zu spät starten</H4>
+        <Para>
+          Wenn du im Dezember anfängst, Weihnachts-Pins zu posten, hast du
+          den Großteil der Planungsphase deiner Zielgruppe bereits verpasst.
+          Nutzer:innen suchen Weihnachts-Inhalte ab Oktober.
+        </Para>
+        <H4>2. Generische Keywords statt saisonaler Recherche</H4>
+        <Para>
+          Was 2026 funktioniert, ist 2027 vielleicht nicht mehr relevant.
+          Pinterest-Suchverhalten ändert sich. Vor jeder Saison einmal die
+          aktuellen Trends prüfen (Pinterest Trends Tool, Pinterest-Suche-Auto-
+          vervollständigung).
+        </Para>
+        <H4>3. Nur Hauptsaisons bedienen, Zwischenzeiten leer</H4>
+        <Para>
+          Wer nur zur Weihnachtssaison aktiv ist, verliert Reichweite in den
+          restlichen 11 Monaten. Pinterest-Algorithmus belohnt kontinuierliche
+          Aktivität.
+        </Para>
+        <H4>4. Performance nicht analysieren</H4>
+        <Para>
+          Welche Saison-Kampagne hat funktioniert, welche nicht? Ohne
+          Auswertung wiederholst du jedes Jahr die gleichen Fehler.
+        </Para>
+
+        {/* Block 8 — Tool-Block mit Claude-Prompt */}
+        <H3>Welche Events sind für DEINE Nische relevant?</H3>
+        <Para>
+          Nicht jedes Event passt zu jeder Nische. Ein Yoga-Account
+          priorisiert andere Saisonen als ein Etsy-Shop für Wohnaccessoires.
+          Statt einer Standard-Liste haben wir hier ein KI-gestütztes
+          Coaching-Tool: Kopiere den folgenden Prompt in Claude (claude.ai)
+          und du erhältst eine personalisierte Saison-Strategie für deine
+          Nische.
+        </Para>
+        <CopyPromptBlock
+          title="Welche Events sind für DEINE Nische relevant?"
+          prompt={`Ich betreibe einen Pinterest-Account in der Nische [DEINE NISCHE HIER, z.B. "Yoga & Wellness für Selbstständige"]. Mein Ziel ist [DEIN ZIEL, z.B. "Reichweite + E-Mail-Liste aufbauen"]. Mein Hauptangebot ist [DEIN ANGEBOT, z.B. "Online-Yoga-Kurse"].
+
+Bitte erstelle mir eine personalisierte Saison-Strategie für Pinterest mit:
+
+1. Welche 5-8 Hauptsaisons sind für meine Nische besonders relevant?
+2. Welche 3-5 Micro-Seasons (kleinere Anlässe) sollte ich beachten?
+3. Welche saisonalen Themen kann ich aus meinem Hauptangebot ableiten?
+4. Was sind typische Sucheingaben meiner Zielgruppe pro Saison auf Pinterest?
+5. Wie viele Wochen vor dem Event sollte ich produzieren / pinnen für jede dieser Saisons?
+
+Berücksichtige Pinterest-Suchverhalten: Nutzer:innen recherchieren 4-12 Wochen vor einem Event. Pinterest-Pins brauchen ca. 60 Tage zur vollen Ausspielung. Hauptevents wie Weihnachten oder Black Friday brauchen 90 Tage Vorlauf, mittlere Events wie Muttertag oder Valentinstag 45 Tage.`}
+          steps={
+            <div>
+              <H4>So gehst du vor:</H4>
+              <ol className="list-decimal space-y-1 pl-5 text-sm leading-relaxed text-gray-700">
+                <li>Klick auf „Prompt kopieren"</li>
+                <li>Öffne claude.ai</li>
+                <li>
+                  Füge den Prompt ein und ersetze die drei Platzhalter (Nische,
+                  Ziel, Angebot) mit deinen Angaben
+                </li>
+                <li>
+                  Du erhältst eine personalisierte Saison-Strategie, die du
+                  direkt im Saisonkalender umsetzen kannst
+                </li>
+              </ol>
+            </div>
+          }
+        />
       </Accordion>
 
       <Accordion title="Recycling – eingeschlafene Gewinner neu aufsetzen">

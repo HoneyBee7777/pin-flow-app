@@ -50,11 +50,13 @@ export default function HandlungsbedarfPinRow({
   kategorie,
   metrics,
   primaryAction,
+  bonusImpressionenSchwelle,
 }: {
   pin: HandlungsbedarfPin
   kategorie: string
   metrics: Metric[]
   primaryAction: ActionButton
+  bonusImpressionenSchwelle: number
 }) {
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
@@ -89,96 +91,130 @@ export default function HandlungsbedarfPinRow({
   if (hidden) return null
 
   const warning = boardWarning(pin.boardScoreLabel)
-  const keywordHint = topPerformerKeywordHint(kategorie, pin)
+  const coachingText = coachingHint({
+    kategorie,
+    pin,
+    bonusSchwelle: bonusImpressionenSchwelle,
+  })
+
+  // Algorithmus-Push (nur Top-Performer-Kategorie) erscheint vor den Buttons
+  // in Zeile 2; die übrigen Metriken stehen oben rechts neben dem Titel.
+  const pushMetric = metrics.find((m) => m.label === 'Algorithmus-Push')
+  const inlineMetrics = metrics.filter((m) => m.label !== 'Algorithmus-Push')
 
   return (
-    <li className="flex flex-wrap items-center gap-3 px-4 py-2 text-sm hover:bg-gray-50">
-      <input
-        type="checkbox"
-        checked={false}
-        onChange={onCheck}
-        disabled={isPending}
-        className="h-4 w-4 cursor-pointer rounded border-gray-300 text-red-600 focus:ring-red-500"
-        aria-label="Pin als bearbeitet markieren"
-        title="Als bearbeitet markieren"
-      />
-      <div className="min-w-0 flex-1">
-        <div className="truncate font-medium text-gray-900">
+    <li className="space-y-1.5 px-4 py-3 text-sm hover:bg-gray-50">
+      {/* Zeile 1 — Pin-Titel links | Metriken rechts */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="text-[15px] font-semibold text-gray-900">
           {pin.titel ?? <span className="text-gray-400">(ohne Titel)</span>}
         </div>
-        <BoardLine pin={pin} />
-        {warning && (
-          <div className={`mt-0.5 truncate text-xs ${warning.colorClass}`}>
-            {warning.text}
+        {inlineMetrics.length > 0 && (
+          <div className="flex flex-wrap items-center gap-y-0.5 text-xs text-gray-500">
+            {inlineMetrics.map((m, i) => (
+              <span
+                key={m.label}
+                className="inline-flex items-center whitespace-nowrap"
+              >
+                {i > 0 && (
+                  <span aria-hidden className="mx-1.5">
+                    ·
+                  </span>
+                )}
+                <span className="mr-1 font-semibold">{m.value}</span>
+                {m.label}
+                {m.tooltip && <InfoTooltip text={m.tooltip} />}
+              </span>
+            ))}
           </div>
         )}
-        {keywordHint && (
-          <div className="mt-0.5 text-xs text-blue-700">{keywordHint}</div>
-        )}
       </div>
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600">
-        {metrics.map((m) => (
-          <span
-            key={m.label}
-            className="inline-flex items-center whitespace-nowrap"
-          >
-            {m.label}: <strong className="ml-1 text-gray-900">{m.value}</strong>
-            {m.tooltip && <InfoTooltip text={m.tooltip} />}
-          </span>
-        ))}
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        {primaryAction.type === 'variante' ? (
-          <button
-            type="button"
-            onClick={onPrimary}
-            disabled={isPending}
-            className="rounded-md bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
-          >
-            {isPending ? 'Lädt…' : primaryAction.label}
-          </button>
-        ) : (
+
+      {/* Zeile 2 — Board-Chip + Status-Badge links | Buttons + Checkbox rechts */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <BoardLine pin={pin} />
+        <div className="flex flex-wrap items-center gap-2">
+          {pushMetric && (
+            <span className="inline-flex items-center whitespace-nowrap text-xs text-gray-500">
+              <span className="mr-1">{pushMetric.label}:</span>
+              <span className="mr-1 font-semibold">{pushMetric.value}</span>
+              {pushMetric.tooltip && <InfoTooltip text={pushMetric.tooltip} />}
+            </span>
+          )}
+          {primaryAction.type === 'variante' ? (
+            <button
+              type="button"
+              onClick={onPrimary}
+              disabled={isPending}
+              className="rounded-md bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
+            >
+              {isPending ? 'Lädt…' : primaryAction.label}
+            </button>
+          ) : (
+            <Link
+              href={`/dashboard/pin-produktion?edit=${pin.pin_id}`}
+              className="rounded-md bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700"
+            >
+              {primaryAction.label}
+            </Link>
+          )}
           <Link
             href={`/dashboard/pin-produktion?edit=${pin.pin_id}`}
-            className="rounded-md bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700"
-          >
-            {primaryAction.label}
-          </Link>
-        )}
-        <Link
-          href={`/dashboard/pin-produktion?edit=${pin.pin_id}`}
-          className="rounded-md border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
-        >
-          Pin anschauen
-        </Link>
-        {pin.pinterestUrl && (
-          <a
-            href={pin.pinterestUrl}
-            target="_blank"
-            rel="noreferrer noopener"
             className="rounded-md border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
           >
-            Zum Pin bei Pinterest ↗
-          </a>
-        )}
+            Pin anschauen
+          </Link>
+          {pin.pinterestUrl && (
+            <a
+              href={pin.pinterestUrl}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="rounded-md border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Zum Pin bei Pinterest ↗
+            </a>
+          )}
+          <input
+            type="checkbox"
+            checked={false}
+            onChange={onCheck}
+            disabled={isPending}
+            className="ml-1 h-4 w-4 cursor-pointer rounded border-gray-300 text-red-600 focus:ring-red-500"
+            aria-label="Pin als bearbeitet markieren"
+            title="Als bearbeitet markieren"
+          />
+        </div>
       </div>
-      {error && (
-        <span className="basis-full text-xs text-red-700">{error}</span>
+
+      {/* Zeile 3 — Board-Status-Hinweis */}
+      {warning && (
+        <div className={`text-xs ${warning.colorClass}`}>{warning.text}</div>
       )}
+
+      {/* Zeile 4 — Coaching-Hinweis (Matrix Pin-Kategorie × Board-Status) */}
+      {coachingText && (
+        <div className="coaching-box !px-2 !py-1.5 text-xs">
+          🎯 {coachingText}
+        </div>
+      )}
+
+      {error && <div className="text-xs text-red-700">{error}</div>}
     </li>
   )
 }
 
-// Farbtöne pro Board-Status — dezent (Tailwind 600er-Reihe).
-// „Inaktiv" (= Solide-Board ohne Aktivität) teilt den Orange-Ton mit
-// „Schlafend", da beide einen Aktivitäts-Mangel signalisieren.
-const BOARD_LABEL_COLOR: Record<BoardScoreLabel, string> = {
-  Top: 'text-green-600',
-  Wachstum: 'text-blue-600',
-  Solide: 'text-gray-600',
-  Schwach: 'text-red-600',
-  Schlafend: 'text-orange-600',
-  Inaktiv: 'text-orange-600',
+// Status-Badges pro Board-Score — Emoji + Farbschema gespiegelt zur
+// Board-Gesundheit-Sektion auf dem Dashboard.
+const BOARD_BADGE: Record<
+  BoardScoreLabel,
+  { emoji: string; cls: string }
+> = {
+  Top: { emoji: '🏆', cls: 'bg-emerald-100 text-emerald-700' },
+  Wachstum: { emoji: '📈', cls: 'bg-blue-100 text-blue-700' },
+  Solide: { emoji: '⚖️', cls: 'bg-slate-100 text-slate-700' },
+  Schwach: { emoji: '📉', cls: 'bg-gray-200 text-gray-700' },
+  Schlafend: { emoji: '💤', cls: 'bg-orange-100 text-orange-700' },
+  Inaktiv: { emoji: '⏸️', cls: 'bg-orange-50 text-orange-700' },
 }
 
 function BoardLine({ pin }: { pin: HandlungsbedarfPin }) {
@@ -189,84 +225,192 @@ function BoardLine({ pin }: { pin: HandlungsbedarfPin }) {
       </div>
     )
   }
+  const chipCls =
+    'inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-700'
   if (!pin.boardHasAnalytics) {
     return (
-      <div className="mt-0.5 truncate text-xs text-gray-600">
-        📋 Liegt auf Board: {pin.boardName}{' '}
+      <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-gray-600">
+        <span>Board:</span>
+        <span className={chipCls}>{pin.boardName}</span>
         <span className="text-gray-400">(keine Analytics)</span>
       </div>
     )
   }
   const label = pin.boardScoreLabel
-  const colorCls = label ? BOARD_LABEL_COLOR[label] : 'text-gray-500'
+  const badge = label ? BOARD_BADGE[label] : null
   return (
-    <div className="mt-0.5 truncate text-xs text-gray-600">
-      📋 Liegt auf Board: {pin.boardName}{' '}
-      <span className={`font-medium ${colorCls}`}>({label ?? '—'})</span>
+    <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-gray-600">
+      <span>Board:</span>
+      <span className={chipCls}>{pin.boardName}</span>
+      {badge && label && (
+        <span
+          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${badge.cls}`}
+        >
+          {badge.emoji} {label}
+        </span>
+      )}
     </div>
   )
 }
 
 // Warnhinweis nur bei Aktivitäts- oder Performance-Mangel — Top/Wachstum/Solide
 // bekommen keinen Hinweis. Klassifizierung kommt vorgegeben aus der
-// Board-Gesundheit-Berechnung.
+// Board-Gesundheit-Berechnung. Alle drei Hinweise tragen den Achtung-Ton
+// (amber), passend zum Achtung-Box-System.
 function boardWarning(
   label: BoardScoreLabel | null
 ): { text: string; colorClass: string } | null {
   if (label === 'Schlafend') {
     return {
-      text: '💤 Dieses Board ist aktuell schlafend – der Pin profitiert weniger vom Pinterest-Push, solange keine neuen Pins dazukommen.',
-      colorClass: 'text-orange-700',
+      text: '⚠️ Dieses Board ist aktuell schlafend – der Pin profitiert weniger vom Pinterest-Push, solange keine neuen Pins dazukommen.',
+      colorClass: 'text-amber-700',
     }
   }
   if (label === 'Inaktiv') {
     return {
-      text: '💤 Dieses Board ist aktuell inaktiv – der Pin profitiert weniger vom Pinterest-Push, solange keine neuen Pins dazukommen.',
-      colorClass: 'text-orange-700',
+      text: '⚠️ Dieses Board ist aktuell inaktiv – der Pin profitiert weniger vom Pinterest-Push, solange keine neuen Pins dazukommen.',
+      colorClass: 'text-amber-700',
     }
   }
   if (label === 'Schwach') {
     return {
       text: '⚠️ Dieser Pin liegt auf einem schwachen Board – das könnte die Reichweite des Pins begrenzen.',
-      colorClass: 'text-red-700',
+      colorClass: 'text-amber-700',
     }
   }
   return null
 }
 
-// Schwellwerte für den Top-Performer-Keyword-Hinweis. Später nach
-// einstellungen verlagerbar — vorerst Konstanten.
-const TOP_PERFORMER_CTR_GUT = 1.5
-const TOP_PERFORMER_IMPRESSIONEN_NIEDRIG = 500
-const TOP_PERFORMER_IMPRESSIONEN_MITTEL = 1000
+// Coaching-Matrix: Pin-Kategorie × Board-Status → genau ein Hinweistext.
+// 'kein' deckt alle Fälle ab, in denen das Board fehlt oder keine Analytics
+// hat (Fallback ohne Board-Bezug).
+type CoachingKategorie =
+  | 'aktiver_top_performer'
+  | 'hidden_gem'
+  | 'hohe_impressionen_niedrige_ctr'
+  | 'eingeschlafener_gewinner'
 
-// Regelbasierter Hinweis nur für „Aktiver Top Performer"-Pins.
-// Empfehlung adressiert die Variante, die als nächstes erstellt wird:
-//   - Gute CTR + wenig Reichweite     → stärkere Keywords wählen
-//   - Gute CTR + mittlere Reichweite  → Keywords prüfen, ob stärkere existieren
-//   - Gute CTR + viel Reichweite      → kein Keyword-Hinweis (alles gut)
-//   - Schwache CTR + viel Reichweite  → Hook überarbeiten statt Keywords ändern
-function topPerformerKeywordHint(
-  kategorie: string,
+type BoardKey =
+  | 'top'
+  | 'wachstum'
+  | 'solide'
+  | 'schlafend'
+  | 'inaktiv'
+  | 'schwach'
+  | 'kein'
+
+const COACHING_MATRIX: Record<
+  CoachingKategorie,
+  Record<BoardKey, string>
+> = {
+  aktiver_top_performer: {
+    top: 'Beste Kombination – Pin und Board pushen sich gegenseitig. Varianten nutzen den Algorithmus-Push voll aus.',
+    wachstum:
+      'Wachstums-Board pusht den Pin – Frequenz nicht abreißen lassen, Varianten verstärken den Trend.',
+    solide:
+      'Solides Board, starker Pin – Varianten produzieren, um beide weiter zu pushen.',
+    schlafend:
+      'Pin pusht trotz schlafendem Board – verstärke das Board mit 2-3 neuen Pins, dann profitiert der Pin doppelt.',
+    inaktiv:
+      'Pin läuft trotz inaktivem Board – ein Reaktivierungs-Pin pro Woche kann das Board wieder beleben.',
+    schwach:
+      'Pin sticht aus schwachem Board hervor – prüfe, ob er thematisch passt oder besser auf ein stärkeres Board verschoben werden sollte.',
+    kein: 'Starker Pin ohne Board-Zuordnung – einem thematisch passenden Board zuordnen, um den Algorithmus-Push zu verstärken.',
+  },
+  hidden_gem: {
+    top: 'Top-Board pusht das Umfeld, aber dieser Pin wird nicht in der Suche gefunden – stärkere Keywords sind der Hebel.',
+    wachstum:
+      'Board wächst, aber dieser Pin findet keine Suchen – Keywords nachschärfen.',
+    solide:
+      'Solides Board, aber Pin-Suchbarkeit fehlt – Keywords sind der Hebel.',
+    schlafend:
+      'Doppel-Hebel: Pin braucht Keywords UND Board braucht neue Pins, um wieder zu pushen.',
+    inaktiv:
+      'Inaktives Board hält den Pin klein – reaktiviere mit 2-3 neuen Pins, dann kann dieser Hidden Gem wachsen.',
+    schwach:
+      'Schwaches Board limitiert den Pin – überlege, ob ein stärkeres Board zur Pin-Thematik passen könnte.',
+    kein: 'Hidden Gem ohne Board-Zuordnung – einem thematisch passenden Board zuordnen, dann können Keywords und Board gemeinsam wirken.',
+  },
+  hohe_impressionen_niedrige_ctr: {
+    top: 'Top-Board liefert Reichweite, aber Hook und Design konvertieren nicht – beides ist der Hebel.',
+    wachstum:
+      'Wachstums-Board liefert Sichtbarkeit, aber Klicks fehlen – Hook und Design überarbeiten.',
+    solide:
+      'Solides Board, aber Pin konvertiert nicht – Hook und Design sind der Hebel.',
+    schlafend:
+      'Hook und Design schwach UND Board liefert wenig Push – beides angehen.',
+    inaktiv:
+      'Inaktives Board – Hook-Optimierung möglich, aber Wirkung begrenzt, solange Board ruht.',
+    schwach:
+      'Schwaches Board und schwache Pin-Performance – beides überarbeiten oder Pin auf stärkeres Board verschieben.',
+    kein: 'Pin ohne Board-Zuordnung und Optimierungsbedarf – erst Board zuordnen, dann Hook und Design optimieren.',
+  },
+  eingeschlafener_gewinner: {
+    top: 'Top-Board ist da, aber Pin-Frische fehlt – ein Recycling-Pin mit aktualisiertem Design weckt den Algorithmus.',
+    wachstum:
+      'Wachstums-Board lebt – ein Recycling-Pin nutzt das Momentum aus.',
+    solide:
+      'Solides Board, müder Pin – Recycling-Pin kann den Pin wieder ins Spiel bringen.',
+    schlafend:
+      'Pin und Board sind beide eingeschlafen – Recycling-Pin auf reaktiviertem Board kann beides wiederbeleben.',
+    inaktiv:
+      'Inaktives Board hält den eingeschlafenen Pin tot – Recycling-Pin als Reaktivierungs-Trigger nutzen.',
+    schwach:
+      'Schwaches Board und alter Pin – prüfe, ob das Recycling auf einem stärkeren Board sinnvoller ist.',
+    kein: 'Eingeschlafener Pin ohne Board – einem aktiven Board zuordnen und Recycling-Pin erstellen.',
+  },
+}
+
+const BONUS_REICHWEITE_HINWEIS =
+  'Zusatz-Hebel: Impressionen sind noch niedrig – mit stärkeren Keywords in der Variante kann die Reichweite deutlich gehoben werden.'
+
+function boardKeyFor(pin: HandlungsbedarfPin): BoardKey {
+  if (!pin.boardName || !pin.boardHasAnalytics || !pin.boardScoreLabel)
+    return 'kein'
+  switch (pin.boardScoreLabel) {
+    case 'Top':
+      return 'top'
+    case 'Wachstum':
+      return 'wachstum'
+    case 'Solide':
+      return 'solide'
+    case 'Schlafend':
+      return 'schlafend'
+    case 'Inaktiv':
+      return 'inaktiv'
+    case 'Schwach':
+      return 'schwach'
+    default:
+      return 'kein'
+  }
+}
+
+function isCoachingKategorie(k: string): k is CoachingKategorie {
+  return (
+    k === 'aktiver_top_performer' ||
+    k === 'hidden_gem' ||
+    k === 'hohe_impressionen_niedrige_ctr' ||
+    k === 'eingeschlafener_gewinner'
+  )
+}
+
+function coachingHint({
+  kategorie,
+  pin,
+  bonusSchwelle,
+}: {
+  kategorie: string
   pin: HandlungsbedarfPin
-): string | null {
-  if (kategorie !== 'aktiver_top_performer') return null
-  if (pin.ctr === null) return null
-  const ctr = pin.ctr
-  const imp = pin.impressionen
-  if (ctr >= TOP_PERFORMER_CTR_GUT) {
-    if (imp < TOP_PERFORMER_IMPRESSIONEN_NIEDRIG) {
-      return '💡 Dieser Pin klickt gut aber hat wenig Reichweite — beim Erstellen der Variante stärkere Keywords wählen für mehr Impressionen.'
-    }
-    if (imp < TOP_PERFORMER_IMPRESSIONEN_MITTEL) {
-      return '💡 Gute CTR — beim Erstellen der Variante Keywords prüfen ob es noch reichweitenstärkere Alternativen gibt.'
-    }
-    return null
+  bonusSchwelle: number
+}): string | null {
+  if (!isCoachingKategorie(kategorie)) return null
+  const baseText = COACHING_MATRIX[kategorie][boardKeyFor(pin)]
+  if (
+    kategorie === 'aktiver_top_performer' &&
+    pin.impressionen < bonusSchwelle
+  ) {
+    return `${baseText} ${BONUS_REICHWEITE_HINWEIS}`
   }
-  // CTR < 1,5%
-  if (imp >= TOP_PERFORMER_IMPRESSIONEN_MITTEL) {
-    return '💡 Viel Reichweite aber niedrige CTR — beim Erstellen der Variante den Hook überarbeiten statt Keywords ändern.'
-  }
-  return null
+  return baseText
 }
 

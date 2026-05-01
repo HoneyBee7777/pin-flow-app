@@ -63,6 +63,7 @@ export default async function AnalyticsPage() {
         `pinterest_analytics_url, analytics_update_datum,
          schwellwert_beobachtung, schwellwert_min_klicks,
          schwellwert_alter_recycling, schwellwert_ctr, schwellwert_impressionen,
+         schwellwert_top_performer_bonus_impressionen,
          schwellwert_board_wenig_aktiv, schwellwert_board_inaktiv,
          schwellwert_board_top_er, schwellwert_board_top_prozent,
          schwellwert_board_schwach_er, schwellwert_board_wachstum_trend`

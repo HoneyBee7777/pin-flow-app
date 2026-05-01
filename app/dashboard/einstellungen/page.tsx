@@ -15,6 +15,7 @@ export default async function EinstellungenPage() {
        pinterest_account_url, website_url, tailwind_url,
        schwellwert_beobachtung, schwellwert_min_klicks,
        schwellwert_alter_recycling, schwellwert_ctr, schwellwert_impressionen,
+       schwellwert_top_performer_bonus_impressionen,
        schwellwert_board_wenig_aktiv, schwellwert_board_inaktiv,
        schwellwert_board_top_er, schwellwert_board_top_prozent,
        schwellwert_board_schwach_er, schwellwert_board_wachstum_trend,
@@ -64,6 +65,8 @@ export default async function EinstellungenPage() {
               ? null
               : Number(data.schwellwert_ctr),
           impressionen: data?.schwellwert_impressionen ?? null,
+          topPerformerBonusImpressionen:
+            data?.schwellwert_top_performer_bonus_impressionen ?? null,
         }}
         initialBoardSchwellwerte={{
           wenigAktiv: data?.schwellwert_board_wenig_aktiv ?? null,
