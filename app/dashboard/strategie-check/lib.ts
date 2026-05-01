@@ -60,7 +60,10 @@ export type CoachingItem = {
 export type StrategieCheckResult = {
   fensterTage: number
   totalPinsImFenster: number
-  pinsOhneAngabe: number // Pins mit fehlendem strategie_typ ODER conversion_ziel ODER pin_format
+  // Drei separate Zähler — pro Feld: NULL / '' / undefined zählen als fehlend.
+  pinsOhneStrategie: number
+  pinsOhneConversion: number
+  pinsOhneFormat: number
   onboardingAbgeschlossen: boolean
   schwelleGelb: number
   schwelleRot: number
@@ -243,13 +246,15 @@ export function computeStrategieCheck(
   const onboardingAbgeschlossen =
     settings?.strategie_onboarding_abgeschlossen === true
 
-  // Pins ohne (mindestens) eine der drei Angaben
-  const pinsOhneAngabe = fenster.filter(
-    (p) =>
-      !p.strategie_typ?.trim() ||
-      !p.conversion_ziel?.trim() ||
-      !p.pin_format?.trim()
+  // Drei separate Zähler — jeweils Pins, bei denen das jeweilige Feld
+  // NULL, leerer String oder undefined ist.
+  const pinsOhneStrategie = fenster.filter(
+    (p) => !p.strategie_typ?.trim()
   ).length
+  const pinsOhneConversion = fenster.filter(
+    (p) => !p.conversion_ziel?.trim()
+  ).length
+  const pinsOhneFormat = fenster.filter((p) => !p.pin_format?.trim()).length
 
   // ----- Strategie-Mix -----
   const stratPins = fenster.filter((p) => !!p.strategie_typ?.trim())
@@ -405,7 +410,9 @@ export function computeStrategieCheck(
   return {
     fensterTage: STRATEGIE_CHECK_FENSTER_TAGE,
     totalPinsImFenster: total,
-    pinsOhneAngabe,
+    pinsOhneStrategie,
+    pinsOhneConversion,
+    pinsOhneFormat,
     onboardingAbgeschlossen,
     schwelleGelb,
     schwelleRot,

@@ -295,13 +295,19 @@ type DatumFilter =
   | 'future'
   | 'none'
 
+// Sentinel-Wert für „Keine Angabe" — matched auf NULL / '' / undefined.
+// Bewusst doppelte Unterstriche, damit es nie mit echten Enum-Werten oder
+// UUIDs kollidiert.
+const NONE = '__none__' as const
+type NoneFilter = typeof NONE
+
 type Filters = {
   search: string
   status: '' | Status
   datum: DatumFilter
-  strategie: '' | StrategieTyp
-  conversion: '' | ConversionZiel
-  format: '' | PinFormat
+  strategie: '' | StrategieTyp | NoneFilter
+  conversion: '' | ConversionZiel | NoneFilter
+  format: '' | PinFormat | NoneFilter
   boardId: string
   contentId: string
   vorlageId: string
@@ -319,6 +325,26 @@ const EMPTY_FILTERS: Filters = {
   contentId: '',
   vorlageId: '',
   urlId: '',
+}
+
+// Liest die unterstützten ?filter[…]=… Query-Parameter und liefert ein
+// Filters-Objekt für die initiale Tabellen-Anzeige. Aktuell unterstützt:
+// strategie, conversion_ziel, format, board, content, vorlage, url.
+// Wert „keine-angabe" → NONE-Sentinel (deckt NULL / '' / undefined ab).
+function filtersFromSearchParams(
+  params: URLSearchParams | null
+): Filters {
+  if (!params) return EMPTY_FILTERS
+  const next: Filters = { ...EMPTY_FILTERS }
+  const isNone = (v: string | null) => v === 'keine-angabe'
+  if (isNone(params.get('filter[strategie]'))) next.strategie = NONE
+  if (isNone(params.get('filter[conversion_ziel]'))) next.conversion = NONE
+  if (isNone(params.get('filter[format]'))) next.format = NONE
+  if (isNone(params.get('filter[board]'))) next.boardId = NONE
+  if (isNone(params.get('filter[content]'))) next.contentId = NONE
+  if (isNone(params.get('filter[vorlage]'))) next.vorlageId = NONE
+  if (isNone(params.get('filter[url]'))) next.urlId = NONE
+  return next
 }
 
 const DATUM_LABEL: Record<Exclude<DatumFilter, ''>, string> = {
@@ -380,7 +406,10 @@ function PinTable({
   onDelete: (id: string) => void
   deleteDisabled: boolean
 }) {
-  const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS)
+  const searchParams = useSearchParams()
+  const [filters, setFilters] = useState<Filters>(() =>
+    filtersFromSearchParams(searchParams)
+  )
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' } | null>(
     null
   )
@@ -444,15 +473,55 @@ function PinTable({
         if (!haystack.includes(searchTerm)) return false
       }
       if (filters.status && p.status !== filters.status) return false
-      if (filters.strategie && p.strategie_typ !== filters.strategie) return false
-      if (filters.conversion && p.conversion_ziel !== filters.conversion)
-        return false
-      if (filters.format && p.pin_format !== filters.format) return false
-      if (filters.boardId && p.board_id !== filters.boardId) return false
-      if (filters.contentId && p.content_id !== filters.contentId) return false
-      if (filters.vorlageId && p.canva_vorlage_id !== filters.vorlageId)
-        return false
-      if (filters.urlId && p.ziel_url_id !== filters.urlId) return false
+      if (filters.strategie) {
+        if (filters.strategie === NONE) {
+          if (p.strategie_typ && p.strategie_typ.trim() !== '') return false
+        } else if (p.strategie_typ !== filters.strategie) {
+          return false
+        }
+      }
+      if (filters.conversion) {
+        if (filters.conversion === NONE) {
+          if (p.conversion_ziel && p.conversion_ziel.trim() !== '') return false
+        } else if (p.conversion_ziel !== filters.conversion) {
+          return false
+        }
+      }
+      if (filters.format) {
+        if (filters.format === NONE) {
+          if (p.pin_format && p.pin_format.trim() !== '') return false
+        } else if (p.pin_format !== filters.format) {
+          return false
+        }
+      }
+      if (filters.boardId) {
+        if (filters.boardId === NONE) {
+          if (p.board_id) return false
+        } else if (p.board_id !== filters.boardId) {
+          return false
+        }
+      }
+      if (filters.contentId) {
+        if (filters.contentId === NONE) {
+          if (p.content_id) return false
+        } else if (p.content_id !== filters.contentId) {
+          return false
+        }
+      }
+      if (filters.vorlageId) {
+        if (filters.vorlageId === NONE) {
+          if (p.canva_vorlage_id) return false
+        } else if (p.canva_vorlage_id !== filters.vorlageId) {
+          return false
+        }
+      }
+      if (filters.urlId) {
+        if (filters.urlId === NONE) {
+          if (p.ziel_url_id) return false
+        } else if (p.ziel_url_id !== filters.urlId) {
+          return false
+        }
+      }
       if (filters.datum) {
         const d = p.geplante_veroeffentlichung
         if (filters.datum === 'none') {
@@ -564,6 +633,7 @@ function PinTable({
             onChange={(v) => setFilter('strategie', v as Filters['strategie'])}
             options={[
               { value: '', label: 'Alle' },
+              { value: NONE, label: 'Keine Angabe' },
               ...STRATEGIE_TYPEN.map((s) => ({
                 value: s,
                 label: STRATEGIE_LABEL[s],
@@ -576,6 +646,7 @@ function PinTable({
             onChange={(v) => setFilter('conversion', v as Filters['conversion'])}
             options={[
               { value: '', label: 'Alle' },
+              { value: NONE, label: 'Keine Angabe' },
               ...CONVERSION_ZIELE.map((c) => ({
                 value: c,
                 label: CONVERSION_LABEL[c],
@@ -588,6 +659,7 @@ function PinTable({
             onChange={(v) => setFilter('format', v as Filters['format'])}
             options={[
               { value: '', label: 'Alle' },
+              { value: NONE, label: 'Keine Angabe' },
               ...PIN_FORMATE.map((f) => ({
                 value: f,
                 label: PIN_FORMAT_LABEL[f],
@@ -600,6 +672,7 @@ function PinTable({
             onChange={(v) => setFilter('boardId', v)}
             options={[
               { value: '', label: 'Alle' },
+              { value: NONE, label: 'Keine Angabe' },
               ...boards.map((b) => ({ value: b.id, label: b.name })),
             ]}
           />
@@ -609,6 +682,7 @@ function PinTable({
             onChange={(v) => setFilter('contentId', v)}
             options={[
               { value: '', label: 'Alle' },
+              { value: NONE, label: 'Keine Angabe' },
               ...contents.map((c) => ({ value: c.id, label: c.titel })),
             ]}
           />
@@ -618,6 +692,7 @@ function PinTable({
             onChange={(v) => setFilter('vorlageId', v)}
             options={[
               { value: '', label: 'Alle' },
+              { value: NONE, label: 'Keine Angabe' },
               ...vorlagen.map((v) => ({ value: v.id, label: v.name })),
             ]}
           />
@@ -627,6 +702,7 @@ function PinTable({
             onChange={(v) => setFilter('urlId', v)}
             options={[
               { value: '', label: 'Alle' },
+              { value: NONE, label: 'Keine Angabe' },
               ...urls.map((u) => ({ value: u.id, label: u.titel || u.url })),
             ]}
           />

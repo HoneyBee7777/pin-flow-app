@@ -42,6 +42,18 @@ const AREA_LABEL: Record<CheckArea['key'], string> = {
   format: 'Pin-Format-Mix',
 }
 
+// Pin-Datenbank-Filter-URL für die jeweilige Area: zeigt alle Pins, denen
+// das zugehörige Feld fehlt (Strategie / Conversion-Ziel / Format).
+function ohneAngabeFilterHref(areaKey: CheckArea['key']): string {
+  const param =
+    areaKey === 'mix'
+      ? 'strategie'
+      : areaKey === 'ziel'
+        ? 'conversion_ziel'
+        : 'format'
+  return `/dashboard/pin-produktion?filter[${param}]=keine-angabe`
+}
+
 // =====================================================
 // Hauptkomponente
 // =====================================================
@@ -52,13 +64,18 @@ export default function StrategieCheckSection({
 }) {
   const {
     totalPinsImFenster,
-    pinsOhneAngabe,
+    pinsOhneStrategie,
+    pinsOhneConversion,
+    pinsOhneFormat,
     onboardingAbgeschlossen,
     fensterTage,
     areas,
     coachingTop3,
     allInPlan,
   } = result
+
+  const hasOhneAngabe =
+    pinsOhneStrategie > 0 || pinsOhneConversion > 0 || pinsOhneFormat > 0
 
   // Empty-State: keine Pins der letzten 180 Tage
   if (totalPinsImFenster === 0) {
@@ -80,8 +97,13 @@ export default function StrategieCheckSection({
       <div className="space-y-4 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
         {!onboardingAbgeschlossen && <OnboardingHinweis />}
 
-        {pinsOhneAngabe > 0 && (
-          <HinweisOhneDaten count={pinsOhneAngabe} fensterTage={fensterTage} />
+        {hasOhneAngabe && (
+          <HinweisOhneDaten
+            ohneStrategie={pinsOhneStrategie}
+            ohneConversion={pinsOhneConversion}
+            ohneFormat={pinsOhneFormat}
+            fensterTage={fensterTage}
+          />
         )}
 
         <div className="grid gap-6 lg:grid-cols-3">
@@ -126,12 +148,12 @@ function SectionHeader() {
 // =====================================================
 function OnboardingHinweis() {
   return (
-    <div className="hinweis-box">
-      💡 Du hast noch keine Strategie hinterlegt. Hinterlege deine Soll-Strategie
+    <div className="achtung-box">
+      ⚠️ Du hast noch keine Strategie hinterlegt. Hinterlege deine Soll-Strategie
       auf der Strategie-Seite, um einen Soll-Ist-Vergleich zu sehen.{' '}
       <Link
         href="/dashboard/strategie"
-        className="font-medium underline hover:text-blue-700"
+        className="font-medium underline hover:opacity-80"
       >
         Strategie hinterlegen ↗
       </Link>
@@ -140,20 +162,58 @@ function OnboardingHinweis() {
 }
 
 function HinweisOhneDaten({
-  count,
+  ohneStrategie,
+  ohneConversion,
+  ohneFormat,
   fensterTage,
 }: {
-  count: number
+  ohneStrategie: number
+  ohneConversion: number
+  ohneFormat: number
   fensterTage: number
 }) {
+  const rows: Array<{ count: number; label: string; href: string }> = []
+  if (ohneStrategie > 0) {
+    rows.push({
+      count: ohneStrategie,
+      label: 'Pins ohne Strategie-Angabe',
+      href: '/dashboard/pin-produktion?filter[strategie]=keine-angabe',
+    })
+  }
+  if (ohneConversion > 0) {
+    rows.push({
+      count: ohneConversion,
+      label: 'Pins ohne Conversion-Ziel-Angabe',
+      href: '/dashboard/pin-produktion?filter[conversion_ziel]=keine-angabe',
+    })
+  }
+  if (ohneFormat > 0) {
+    rows.push({
+      count: ohneFormat,
+      label: 'Pins ohne Format-Angabe',
+      href: '/dashboard/pin-produktion?filter[format]=keine-angabe',
+    })
+  }
   return (
-    <div className="hinweis-box">
-      💡 {count} {count === 1 ? 'deiner Pins' : 'deiner Pins'} aus den letzten{' '}
-      {fensterTage} Tagen{' '}
-      {count === 1 ? 'hat' : 'haben'} noch keine Strategie-, Conversion-Ziel-
-      oder Format-Angabe. Diese Pins werden im Check nicht berücksichtigt. Du
-      kannst die Angaben beim Pin-Anlegen oder über „Pin bearbeiten"
-      nachtragen.
+    <div className="achtung-box">
+      <p className="text-[13px] leading-relaxed">
+        ⚠️ Folgende Pins aus den letzten {fensterTage} Tagen haben noch keine
+        Angaben. Du kannst die Pins bearbeiten und die Angaben nachtragen.
+      </p>
+      <ul className="mt-2 space-y-1.5">
+        {rows.map((row) => (
+          <li key={row.label} className="text-[13px] leading-relaxed">
+            <span aria-hidden className="mr-1">
+              •
+            </span>
+            <span className="font-medium">{row.count}</span> {row.label}{' '}
+            <span aria-hidden>→ </span>
+            <Link href={row.href} className="underline hover:opacity-80">
+              Fehlende Angaben nachtragen
+            </Link>
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }
@@ -178,9 +238,18 @@ function AreaBlock({
       </p>
 
       {!area.hasData ? (
-        <p className="mt-3 text-xs text-gray-500">
-          Noch keine Pins mit dieser Angabe in den letzten 180 Tagen.
-        </p>
+        <div className="mt-3 text-xs text-gray-500">
+          <p>Noch keine Pins mit dieser Angabe in den letzten 180 Tagen.</p>
+          <p className="mt-0.5">
+            <span aria-hidden>→ </span>
+            <Link
+              href={ohneAngabeFilterHref(area.key)}
+              className="font-medium text-red-600 underline hover:opacity-80"
+            >
+              Fehlende Angaben nachtragen
+            </Link>
+          </p>
+        </div>
       ) : (
         <div className="mt-4 space-y-4">
           {area.items.map((item) => (
@@ -278,8 +347,8 @@ function Bar({
 function CoachingBlock({ items }: { items: CoachingItem[] }) {
   return (
     <div className="coaching-box">
-      <p className="text-base font-semibold">🎯 Größter Hebel</p>
-      <p className="mt-1">
+      <p className="font-medium leading-relaxed">🎯 Größter Hebel</p>
+      <p className="mt-1.5 leading-relaxed">
         Diese {items.length === 1 ? 'Anpassung hat' : 'Anpassungen haben'} den
         größten Einfluss auf deine Pinterest-Strategie:
       </p>
@@ -287,7 +356,7 @@ function CoachingBlock({ items }: { items: CoachingItem[] }) {
         {items.map((item, i) => (
           <li key={i}>
             {item.recommendation}{' '}
-            <span className="text-xs text-amber-800">
+            <span className="text-xs opacity-75">
               (
               {item.label}: {formatDiff(item.diff)}{' '}
               {item.diff > 0 ? 'über' : 'unter'} Plan)
@@ -301,14 +370,9 @@ function CoachingBlock({ items }: { items: CoachingItem[] }) {
 
 function AllInPlanBlock() {
   return (
-    <div className="hinweis-box">
-      <p className="text-base font-semibold">💡 Strategie im Plan</p>
-      <p className="mt-1">
-        Deine tatsächliche Pin-Verteilung passt zu deiner geplanten Strategie.
-        Konzentriere dich darauf, die Frequenz zu halten und deine Pin-Qualität
-        weiter zu verbessern.
-      </p>
-    </div>
+    <p className="text-sm text-green-600">
+      ✓ Strategie im Plan – aktuell keine Anpassungen nötig.
+    </p>
   )
 }
 

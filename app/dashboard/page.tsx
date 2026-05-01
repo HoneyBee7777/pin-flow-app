@@ -1427,6 +1427,9 @@ export default async function DashboardPage() {
         pinsCountByBoard={pinsCountByBoard}
       />
 
+      {/* 12. Phasen-Trenner */}
+      <PhasenTrenner title="Was steht noch an?" />
+
       {/* 14. Aufgaben & Erinnerungen — bleibt ganz unten */}
       <AufgabenSection tasks={aufgabenSorted} today={today} />
     </div>
@@ -1761,7 +1764,7 @@ function ProfilGesundheitWidget({
       {showSeparateWarn && (
         <div className="warn-box flex items-start gap-3">
           <span className="text-lg leading-tight" aria-hidden>
-            ⚠️
+            🚨
           </span>
           <p>
             <span className="font-semibold">
@@ -1913,10 +1916,12 @@ function HandlungsbedarfSection({
     <>
       <h2 className="text-lg font-semibold text-gray-900">Handlungsbedarf</h2>
       <p className="mt-1 text-sm text-gray-600">
-        Hier siehst du alle Pins die aktuell eine konkrete Maßnahme brauchen.
-        Jeder Pin zeigt dir direkt was zu tun ist. Erstelle immer einen neuen
-        Pin — bearbeite nie den bereits bei Pinterest veröffentlichten Pin!
+        Pins, die aktuell eine konkrete Maßnahme brauchen.
       </p>
+      <div className="achtung-box mt-2">
+        ⚠️ Erstelle immer einen neuen Pin – bearbeite nie den bei Pinterest
+        veröffentlichten Pin.
+      </div>
     </>
   )
 
@@ -1924,12 +1929,12 @@ function HandlungsbedarfSection({
     return (
       <section id="pin-handlungsbedarf" className="scroll-mt-4">
         {heading}
-        <div className="hinweis-box mt-3">
-          💡 Trage deine ersten Pin-Analytics ein um Handlungsempfehlungen zu
+        <div className="achtung-box mt-3">
+          ⚠️ Trage deine ersten Pin-Analytics ein um Handlungsempfehlungen zu
           sehen.{' '}
           <Link
             href="/dashboard/analytics"
-            className="font-medium underline hover:text-blue-700"
+            className="font-medium underline hover:opacity-80"
           >
             → Zum Analytics-Tab
           </Link>
@@ -2070,7 +2075,9 @@ function HandlungsbedarfKategorieCard({
         </div>
         <span
           className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-            pins.length === 0 ? 'bg-gray-100 text-gray-400' : cat.counterBg
+            pins.length === 0
+              ? 'bg-gray-100 text-gray-400'
+              : 'bg-orange-100 text-orange-700'
           }`}
         >
           {pins.length}
@@ -2188,8 +2195,8 @@ function SaisonKalenderSection({ columns }: { columns: SaisonKanbanColumns }) {
           <InfoTooltip text="Pinterest-Nutzer:innen suchen 6–12 Wochen vor einem Event. Wer zu spät pinnt, verpasst die Welle. Der Saisonkalender zeigt dir auf einen Blick in welcher Phase jedes Event gerade ist." />
         </h2>
         <p className="mt-1 text-sm text-gray-600">
-          Pinterest-Suchen für saisonale Themen starten 6–12 Wochen vor dem
-          Event – hier siehst du, was wann zu tun ist.
+          Saisonale Themen brauchen 6–12 Wochen Vorlauf — hier siehst du,
+          was wann zu tun ist.
         </p>
       </div>
 
@@ -2404,8 +2411,15 @@ function PinPipelineSection({
   return (
     <section id="content-pipeline" className="scroll-mt-4">
       <h2 className="text-lg font-semibold text-gray-900">
-        Content Pipeline – Was als nächstes pinnen?
+        <LabelWithTooltip
+          label="Content Pipeline – Was als nächstes pinnen?"
+          tooltip="Diese Sektion zeigt zwei Quellen: bestehende Inhalte, die mehr Pins brauchen oder veraltete Pins haben, plus URLs mit hoher CTR aber wenig Pins (Goldnugget-Logik)."
+        />
       </h2>
+      <p className="mt-1 text-sm text-gray-600">
+        Inhalte und URLs aus deiner Datenbank, die noch Pin-Material
+        brauchen.
+      </p>
       <div className="mt-3 space-y-3">
         <PinPipelineInhalteCard
           subA={inhaltePinBedarfA}
@@ -2467,7 +2481,7 @@ function PinPipelineInhalteCard({
           className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
             totalCount === 0
               ? 'bg-gray-100 text-gray-400'
-              : 'bg-violet-100 text-violet-700'
+              : 'bg-orange-100 text-orange-700'
           }`}
         >
           {totalCount}
@@ -2554,7 +2568,7 @@ function PinPipelineInhalteSubList({
           className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
             items.length === 0
               ? 'bg-gray-100 text-gray-400'
-              : 'bg-gray-200 text-gray-700'
+              : 'bg-orange-100 text-orange-700'
           }`}
         >
           {items.length}
@@ -2770,7 +2784,7 @@ function PinPipelineUrlsCard({
           className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
             urls.length === 0
               ? 'bg-gray-100 text-gray-400'
-              : 'bg-teal-100 text-teal-700'
+              : 'bg-orange-100 text-orange-700'
           }`}
         >
           {urls.length}
@@ -2915,8 +2929,9 @@ function BoardGesundheitDashboardSection({
         />
       </h2>
       <p className="mt-1 text-sm text-gray-600">
-        Boards bestimmen ob Pinterest deinem Profil thematisch vertraut – hier
-        siehst du wo du ansetzen solltest.
+        Boards bestimmen, wie thematisch vertraut Pinterest deinem Profil
+        ist. Engagement Rate ist hier wichtiger als Klicks – sie zeigt,
+        ob Nutzer:innen mit deinen Themen interagieren.
       </p>
     </>
   )
@@ -2925,12 +2940,12 @@ function BoardGesundheitDashboardSection({
     return (
       <section id="board-gesundheit" className="scroll-mt-4">
         {heading}
-        <div className="hinweis-box mt-3">
-          💡 Noch keine Board-Analytics eingetragen. Trage deine ersten Board-Daten
+        <div className="achtung-box mt-3">
+          ⚠️ Noch keine Board-Analytics eingetragen. Trage deine ersten Board-Daten
           ein um die Board-Gesundheit zu sehen.{' '}
           <Link
             href="/dashboard/analytics?tab=boards"
-            className="font-medium underline hover:text-blue-700"
+            className="font-medium underline hover:opacity-80"
           >
             → Zum Boards-Tab
           </Link>
@@ -2942,13 +2957,6 @@ function BoardGesundheitDashboardSection({
   return (
     <section id="board-gesundheit" className="scroll-mt-4">
       {heading}
-
-      <div className="mt-3 rounded-md border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
-        💡 Bei Boards zählt die Engagement Rate stärker als Klicks. Sie zeigt,
-        ob Pinterest-Nutzer:innen mit deinen Themen interagieren – das
-        signalisiert dem Algorithmus thematische Autorität. Ausgehende Klicks
-        misst du auf Pin-Ebene, denn dort entstehen Conversions.
-      </div>
 
       <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <BoardKpiCell
@@ -3209,43 +3217,59 @@ function BoardKurzanalyse({
   const r = aktivitaetsratePct
   const d = avgLastPinDays
   const er = profilEr
-  let rec: string | null = null
+  let recHeading: string | null = null
+  let recText: string | null = null
   if (r < 40 && d !== null && d > 14) {
-    rec =
-      '🎯 Größter Hebel: Pinning-Frequenz erhöhen – mindestens 3 neue Pins pro Woche pro aktivem Board.'
+    recHeading = '🎯 Größter Hebel'
+    recText =
+      'Pinning-Frequenz erhöhen – mindestens 3 neue Pins pro Woche pro aktivem Board.'
   } else if (r < 40 && d !== null && d <= 14) {
-    rec =
-      '🎯 Größter Hebel: Inaktive Boards reaktivieren – das Pinning auf mehr Boards verteilen.'
+    recHeading = '🎯 Größter Hebel'
+    recText =
+      'Inaktive Boards reaktivieren – das Pinning auf mehr Boards verteilen.'
   } else if (r >= 70 && er !== null && er < 3) {
-    rec =
-      '🎯 Größter Hebel: Pin-Designs und Hooks optimieren – die Aktivität stimmt, aber das Engagement bleibt zurück.'
+    recHeading = '🎯 Größter Hebel'
+    recText =
+      'Pin-Designs und Hooks optimieren – die Aktivität stimmt, aber das Engagement bleibt zurück.'
   } else if (
     r >= 70 &&
     (d === null || d <= 14) &&
     (er === null || er >= 3)
   ) {
-    rec = '🎯 Weiter so – Dranbleiben ist der wichtigste Hebel.'
+    recText = '🎯 Weiter so – Dranbleiben ist der wichtigste Hebel.'
   }
 
-  if (lines.length === 0 && !rec) return null
+  if (lines.length === 0 && !recText) return null
 
   return (
     <div className="coaching-box mt-3">
-      <div className="flex items-start gap-3">
-        <span aria-hidden className="text-base leading-tight">
-          📊
-        </span>
+      {lines.length > 0 && (
         <div className="space-y-1.5">
           {lines.map((l, i) => (
             <p key={i} className="leading-relaxed">
               {l}
             </p>
           ))}
-          {rec && (
-            <p className="font-medium leading-relaxed">{rec}</p>
+        </div>
+      )}
+      {(recHeading || recText) && (
+        <div className={lines.length > 0 ? 'mt-2' : ''}>
+          {recHeading && (
+            <p className="font-medium leading-relaxed">{recHeading}</p>
+          )}
+          {recText && (
+            <p
+              className={
+                recHeading
+                  ? 'mt-1.5 leading-relaxed'
+                  : 'font-medium leading-relaxed'
+              }
+            >
+              {recText}
+            </p>
           )}
         </div>
-      </div>
+      )}
     </div>
   )
 }
@@ -3347,7 +3371,9 @@ function BoardKategorieCard({
         </div>
         <span
           className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-            boards.length === 0 ? 'bg-gray-100 text-gray-400' : cat.counterBg
+            boards.length === 0
+              ? 'bg-gray-100 text-gray-400'
+              : 'bg-orange-100 text-orange-700'
           }`}
         >
           {boards.length === 0 && cat.emptyTooltip ? (
@@ -3982,7 +4008,7 @@ function HeroSection({
       {/* Warn-Hinweis nur bei rotem Status */}
       {statusTri.state === 'rot' && statusTri.daysSinceUpdate !== null && (
         <div className="warn-box mx-4 mb-3">
-          <span className="font-semibold">⚠️ Daten veraltet</span> – das
+          <span className="font-semibold">🚨 Daten veraltet</span> – das
           Dashboard zeigt Werte vom letzten Update (vor{' '}
           {statusTri.daysSinceUpdate} Tagen). Aktualisiere jetzt deine
           Analytics, damit alle Sektionen verlässliche Empfehlungen zeigen.
@@ -4024,12 +4050,22 @@ function HeroSection({
 }
 
 // ===========================================================
-// Phasen-Trenner — schlichter weißer Callout, nur Titel
+// Phasen-Trenner — Space Grotesk, Titel mittig zwischen zwei Linien
 // ===========================================================
 function PhasenTrenner({ title }: { title: string }) {
   return (
-    <div className="mb-5 mt-10 rounded-lg border border-gray-200 bg-white px-[18px] py-[14px]">
-      <span className="text-[15px] font-medium text-gray-900">{title}</span>
+    <div className="mb-6 mt-10 flex items-center gap-6">
+      <span aria-hidden className="h-px flex-1 bg-gray-200" />
+      <span
+        className="text-[18px] font-medium text-gray-500 sm:text-[20px]"
+        style={{
+          fontFamily: 'var(--font-space-grotesk)',
+          letterSpacing: '-0.3px',
+        }}
+      >
+        {title}
+      </span>
+      <span aria-hidden className="h-px flex-1 bg-gray-200" />
     </div>
   )
 }
@@ -4078,6 +4114,10 @@ function ProfilPerformanceSection({
             tooltip={headingTooltip}
           />
         </h2>
+        <p className="mt-1 text-sm text-gray-600">
+          Wie sich deine Pinterest-Zahlen im Vergleich zum vorherigen
+          Analytics-Update entwickelt haben.
+        </p>
         <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
           {[
             'Ausgehende Klicks',
@@ -4119,6 +4159,10 @@ function ProfilPerformanceSection({
           </span>
         )}
       </h2>
+      <p className="mt-1 text-sm text-gray-600">
+        Wie sich deine Pinterest-Zahlen im Vergleich zum vorherigen
+        Analytics-Update entwickelt haben.
+      </p>
 
       {/* 3-Spalten-Grid: Ergebnis (schmal) | Treiber (schmal) | Chart (flex-1) */}
       <div className="mt-3 grid items-stretch gap-4 lg:grid-cols-[170px_170px_minmax(0,1fr)]">

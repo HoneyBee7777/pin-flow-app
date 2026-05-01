@@ -68,21 +68,41 @@ input[type='range'].pf-slider::-moz-range-thumb {
   cursor: pointer;
 }
 
-/* Drei einheitliche Coaching-Box-Typen für das Dashboard.
+/* Vereinheitlichte Box-Typen für das Dashboard.
    Border-left als Akzent + abgerundete rechte Ecken (linke bleiben eckig
-   wegen der Akzentkante). Vereinheitlicht alle vorherigen Custom-Stile. */
+   wegen der Akzentkante). 12px 16px Padding, 6px Radius rechts.
+   .hinweis-box bleibt Sonderfall (blau, Onboarding-Welcome). */
 @layer components {
   .hinweis-box {
-    @apply rounded-r-lg bg-blue-50 px-4 py-3 text-sm text-blue-900;
+    @apply rounded-r-md bg-blue-50 px-4 py-3 text-sm text-blue-900;
     border-left: 3px solid #60a5fa; /* blue-400 */
   }
+  .achtung-box {
+    background-color: #faeeda;
+    color: #633806;
+    border-left: 3px solid #ef9f27;
+    border-radius: 0 var(--border-radius-md, 6px) var(--border-radius-md, 6px) 0;
+    padding: 12px 16px;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+  }
   .coaching-box {
-    @apply rounded-r-lg bg-amber-50 px-4 py-3 text-sm text-amber-900;
-    border-left: 3px solid #fbbf24; /* amber-400 */
+    background-color: #eeedfe;
+    color: #3c3489;
+    border-left: 3px solid #534ab7;
+    border-radius: 0 var(--border-radius-md, 6px) var(--border-radius-md, 6px) 0;
+    padding: 12px 16px;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
   }
   .warn-box {
-    @apply rounded-r-lg bg-red-50 px-4 py-3 text-sm text-red-900;
-    border-left: 3px solid #ef4444; /* red-500 */
+    background-color: #fcebeb;
+    color: #501313;
+    border-left: 3px solid #a32d2d;
+    border-radius: 0 var(--border-radius-md, 6px) var(--border-radius-md, 6px) 0;
+    padding: 12px 16px;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
   }
 }
 
