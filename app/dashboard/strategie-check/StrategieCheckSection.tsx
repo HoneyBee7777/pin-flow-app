@@ -97,15 +97,6 @@ export default function StrategieCheckSection({
       <div className="space-y-4 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
         {!onboardingAbgeschlossen && <OnboardingHinweis />}
 
-        {hasOhneAngabe && (
-          <HinweisOhneDaten
-            ohneStrategie={pinsOhneStrategie}
-            ohneConversion={pinsOhneConversion}
-            ohneFormat={pinsOhneFormat}
-            fensterTage={fensterTage}
-          />
-        )}
-
         <div className="grid gap-6 lg:grid-cols-3">
           {areas.map((area) => (
             <AreaBlock
@@ -115,6 +106,15 @@ export default function StrategieCheckSection({
             />
           ))}
         </div>
+
+        {hasOhneAngabe && (
+          <HinweisOhneDaten
+            ohneStrategie={pinsOhneStrategie}
+            ohneConversion={pinsOhneConversion}
+            ohneFormat={pinsOhneFormat}
+            fensterTage={fensterTage}
+          />
+        )}
 
         {onboardingAbgeschlossen && allInPlan && <AllInPlanBlock />}
 

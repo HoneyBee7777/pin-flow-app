@@ -706,12 +706,12 @@ export function boardScoreTooltip(args: {
 
   switch (args.score) {
     case 'top': {
-      const base = `ER ${fmt(er)} — Schwellwert erreicht (≥ ${fmt(th.topEr, 1)}) UND in den oberen ${th.topProzent.toFixed(0)}% deines Profils. Bedeutet: Dieses Board hat thematische Autorität bewiesen.`
+      const base = `Engagement Rate ${fmt(er)} — Schwellwert erreicht (≥ ${fmt(th.topEr, 1)}) UND in den oberen ${th.topProzent.toFixed(0)}% deines Profils. Bedeutet: Dieses Board hat thematische Autorität bewiesen.`
       if (args.short) return base
       return `${base} Handlung: Ähnliche Boards aufbauen und Keyword-Cluster erweitern.`
     }
     case 'wachstum': {
-      const base = `ER von ${fmt(erV)} auf ${fmt(er)} gestiegen (${fmtSigned(t)} zum Vormonat) — starkes Momentum-Signal.`
+      const base = `Engagement Rate von ${fmt(erV)} auf ${fmt(er)} gestiegen (${fmtSigned(t)} zum Vormonat) — starkes Momentum-Signal.`
       if (args.short) return base
       return `${base} Handlung: Frequenz halten und mehr Pins zu diesem Thema produzieren.`
     }
@@ -719,19 +719,19 @@ export function boardScoreTooltip(args: {
       if (args.dataInsufficient) {
         return 'Nur ein Analytics-Eintrag vorhanden — noch zu wenig Daten für Trend-Berechnung. Nächsten Monat erneut eintragen.'
       }
-      const base = `ER ${fmt(er)} — Board performt im normalen Bereich.`
+      const base = `Engagement Rate ${fmt(er)} — Board performt im normalen Bereich.`
       if (args.short) return base
       return `${base} Handlung: Weiter beobachten — mit mehr Pins oder optimierten Keywords könnte es Top werden.`
     }
     case 'schwach': {
       const byEr = er !== null && er < th.schwachEr
       if (byEr) {
-        const base = `ER ${fmt(er)} liegt unter dem Schwellwert (< ${fmt(th.schwachEr, 1)}).`
+        const base = `Engagement Rate ${fmt(er)} liegt unter dem Schwellwert (< ${fmt(th.schwachEr, 1)}).`
         if (args.short) return base
         return `${base} Handlung: Keywords in Board-Beschreibung optimieren.`
       }
       // Trend-getriebener Schwach-Fall
-      const base = `ER von ${fmt(erV)} auf ${fmt(er)} gefallen (${fmtSigned(t)} zum Vormonat).`
+      const base = `Engagement Rate von ${fmt(erV)} auf ${fmt(er)} gefallen (${fmtSigned(t)} zum Vormonat).`
       if (args.short) return base
       return `${base} Handlung: Ursache prüfen — zu wenig neue Pins oder falsche Keywords?`
     }

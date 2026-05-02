@@ -767,8 +767,9 @@ Berücksichtige Pinterest-Suchverhalten: Nutzer:innen recherchieren 4-12 Wochen 
           funktioniert. Du startest nicht bei null.
         </Para>
         <Para>
-          Der Pin-Handlungsbedarf im Dashboard zeigt dir automatisch, welche
-          Pins recycelt werden sollten (Kategorie „Eingeschlafener Gewinner").
+          „Bestehende Pins optimieren" im Dashboard zeigt dir automatisch,
+          welche Pins recycelt werden sollten (Kategorie „Eingeschlafener
+          Gewinner").
         </Para>
       </Accordion>
     </div>
@@ -1497,7 +1498,7 @@ function TabDesign() {
         />
         <Para>Monatlicher Produktionstag (4-6 Stunden):</Para>
         <ol className="list-decimal space-y-1 pl-5 text-sm leading-relaxed text-gray-700">
-          <li>Content Pipeline öffnen → welche Themen stehen an?</li>
+          <li>„Neue Pins produzieren" öffnen → welche Themen stehen an?</li>
           <li>Hook, Titel, Beschreibung erstellen</li>
           <li>KI-Bilder für neue Themen generieren</li>
           <li>Canva öffnen → Vorlagen befüllen</li>

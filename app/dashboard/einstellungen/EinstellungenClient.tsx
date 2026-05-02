@@ -825,7 +825,7 @@ function ContentPipelineSchwellwerteSection({
               value={minPinsGesamt}
               onChange={setMinPinsGesamt}
               step={1}
-              help={'Inhalte mit weniger Pins werden in der Content Pipeline als „zu wenig bepinnt" markiert.'}
+              help={'Inhalte mit weniger Pins werden in „Neue Pins produzieren" als „zu wenig bepinnt" markiert.'}
             />
           </div>
         </div>

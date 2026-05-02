@@ -20,7 +20,9 @@
       "Bash(grep -aoE \"ZIELURLS-DEBUG[^<]{0,2000}\" /tmp/r.html)",
       "Bash(tasklist)",
       "Bash(xargs ls *)",
-      "Bash(echo \"EXIT=$?\")"
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(xargs grep *)",
+      "Bash(echo \"exit code: $?\")"
     ]
   }
 }

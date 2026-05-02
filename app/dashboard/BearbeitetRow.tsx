@@ -68,7 +68,7 @@ export default function BearbeitetRow({
         disabled={isPending}
         className="h-4 w-4 cursor-pointer rounded border-gray-300 text-red-600 focus:ring-red-500"
         aria-label="Erledigt-Markierung entfernen"
-        title="Haken entfernen — Pin erscheint wieder im aktiven Handlungsbedarf"
+        title='Haken entfernen — Pin erscheint wieder in „Bestehende Pins optimieren"'
       />
       <span className="flex-1 text-gray-700 line-through">
         {row.titel ?? <span className="text-gray-400">(ohne Titel)</span>}

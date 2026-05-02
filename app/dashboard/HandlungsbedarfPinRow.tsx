@@ -90,57 +90,25 @@ export default function HandlungsbedarfPinRow({
 
   if (hidden) return null
 
-  const warning = boardWarning(pin.boardScoreLabel)
   const coachingText = coachingHint({
     kategorie,
     pin,
     bonusSchwelle: bonusImpressionenSchwelle,
   })
 
-  // Algorithmus-Push (nur Top-Performer-Kategorie) erscheint vor den Buttons
-  // in Zeile 2; die übrigen Metriken stehen oben rechts neben dem Titel.
+  // Algorithmus-Push (nur Top-Performer-Kategorie) steht ganz vorne in der
+  // Metriken-Zeile (Zeile 2); die übrigen Metriken folgen mit · getrennt.
   const pushMetric = metrics.find((m) => m.label === 'Algorithmus-Push')
   const inlineMetrics = metrics.filter((m) => m.label !== 'Algorithmus-Push')
 
   return (
     <li className="space-y-1.5 px-4 py-3 text-sm hover:bg-gray-50">
-      {/* Zeile 1 — Pin-Titel links | Metriken rechts */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="text-[15px] font-semibold text-gray-900">
+      {/* Zeile 1 — Pin-Titel links | Buttons + Checkbox rechts */}
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0 text-[15px] font-semibold text-gray-900">
           {pin.titel ?? <span className="text-gray-400">(ohne Titel)</span>}
         </div>
-        {inlineMetrics.length > 0 && (
-          <div className="flex flex-wrap items-center gap-y-0.5 text-xs text-gray-500">
-            {inlineMetrics.map((m, i) => (
-              <span
-                key={m.label}
-                className="inline-flex items-center whitespace-nowrap"
-              >
-                {i > 0 && (
-                  <span aria-hidden className="mx-1.5">
-                    ·
-                  </span>
-                )}
-                <span className="mr-1 font-semibold">{m.value}</span>
-                {m.label}
-                {m.tooltip && <InfoTooltip text={m.tooltip} />}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Zeile 2 — Board-Chip + Status-Badge links | Buttons + Checkbox rechts */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <BoardLine pin={pin} />
-        <div className="flex flex-wrap items-center gap-2">
-          {pushMetric && (
-            <span className="inline-flex items-center whitespace-nowrap text-xs text-gray-500">
-              <span className="mr-1">{pushMetric.label}:</span>
-              <span className="mr-1 font-semibold">{pushMetric.value}</span>
-              {pushMetric.tooltip && <InfoTooltip text={pushMetric.tooltip} />}
-            </span>
-          )}
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
           {primaryAction.type === 'variante' ? (
             <button
               type="button"
@@ -186,10 +154,36 @@ export default function HandlungsbedarfPinRow({
         </div>
       </div>
 
-      {/* Zeile 3 — Board-Status-Hinweis */}
-      {warning && (
-        <div className={`text-xs ${warning.colorClass}`}>{warning.text}</div>
+      {/* Zeile 2 — Metriken (Algorithmus-Push ganz vorne, dann · getrennt) */}
+      {(pushMetric || inlineMetrics.length > 0) && (
+        <div className="flex flex-wrap items-center gap-y-0.5 text-xs text-gray-500">
+          {pushMetric && (
+            <span className="inline-flex items-center whitespace-nowrap">
+              <span className="mr-1">{pushMetric.label}:</span>
+              <span className="mr-1 font-semibold">{pushMetric.value}</span>
+              {pushMetric.tooltip && <InfoTooltip text={pushMetric.tooltip} />}
+            </span>
+          )}
+          {inlineMetrics.map((m, i) => (
+            <span
+              key={m.label}
+              className="inline-flex items-center whitespace-nowrap"
+            >
+              {(i > 0 || pushMetric) && (
+                <span aria-hidden className="mx-1.5">
+                  ·
+                </span>
+              )}
+              <span className="mr-1 font-semibold">{m.value}</span>
+              {m.label}
+              {m.tooltip && <InfoTooltip text={m.tooltip} />}
+            </span>
+          ))}
+        </div>
       )}
+
+      {/* Zeile 3 — Board-Chip + Status-Badge */}
+      <BoardLine pin={pin} />
 
       {/* Zeile 4 — Coaching-Hinweis (Matrix Pin-Kategorie × Board-Status) */}
       {coachingText && (
@@ -207,14 +201,14 @@ export default function HandlungsbedarfPinRow({
 // Board-Gesundheit-Sektion auf dem Dashboard.
 const BOARD_BADGE: Record<
   BoardScoreLabel,
-  { emoji: string; cls: string }
+  { emoji: string; text: string; cls: string }
 > = {
-  Top: { emoji: '🏆', cls: 'bg-emerald-100 text-emerald-700' },
-  Wachstum: { emoji: '📈', cls: 'bg-blue-100 text-blue-700' },
-  Solide: { emoji: '⚖️', cls: 'bg-slate-100 text-slate-700' },
-  Schwach: { emoji: '📉', cls: 'bg-gray-200 text-gray-700' },
-  Schlafend: { emoji: '💤', cls: 'bg-orange-100 text-orange-700' },
-  Inaktiv: { emoji: '⏸️', cls: 'bg-orange-50 text-orange-700' },
+  Top: { emoji: '🏆', text: 'Top-Board', cls: 'bg-emerald-100 text-emerald-700' },
+  Wachstum: { emoji: '📈', text: 'Wachstums-Board', cls: 'bg-blue-100 text-blue-700' },
+  Solide: { emoji: '⚖️', text: 'Solides Board', cls: 'bg-slate-100 text-slate-700' },
+  Schwach: { emoji: '📉', text: 'Schwaches Board', cls: 'bg-gray-200 text-gray-700' },
+  Schlafend: { emoji: '💤', text: 'Board ohne neue Pins', cls: 'bg-orange-100 text-orange-700' },
+  Inaktiv: { emoji: '⏸️', text: 'Inaktives Board', cls: 'bg-orange-50 text-orange-700' },
 }
 
 function BoardLine({ pin }: { pin: HandlungsbedarfPin }) {
@@ -246,39 +240,11 @@ function BoardLine({ pin }: { pin: HandlungsbedarfPin }) {
         <span
           className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${badge.cls}`}
         >
-          {badge.emoji} {label}
+          {badge.emoji} {badge.text}
         </span>
       )}
     </div>
   )
-}
-
-// Warnhinweis nur bei Aktivitäts- oder Performance-Mangel — Top/Wachstum/Solide
-// bekommen keinen Hinweis. Klassifizierung kommt vorgegeben aus der
-// Board-Gesundheit-Berechnung. Alle drei Hinweise tragen den Achtung-Ton
-// (amber), passend zum Achtung-Box-System.
-function boardWarning(
-  label: BoardScoreLabel | null
-): { text: string; colorClass: string } | null {
-  if (label === 'Schlafend') {
-    return {
-      text: '⚠️ Dieses Board ist aktuell schlafend – der Pin profitiert weniger vom Pinterest-Push, solange keine neuen Pins dazukommen.',
-      colorClass: 'text-amber-700',
-    }
-  }
-  if (label === 'Inaktiv') {
-    return {
-      text: '⚠️ Dieses Board ist aktuell inaktiv – der Pin profitiert weniger vom Pinterest-Push, solange keine neuen Pins dazukommen.',
-      colorClass: 'text-amber-700',
-    }
-  }
-  if (label === 'Schwach') {
-    return {
-      text: '⚠️ Dieser Pin liegt auf einem schwachen Board – das könnte die Reichweite des Pins begrenzen.',
-      colorClass: 'text-amber-700',
-    }
-  }
-  return null
 }
 
 // Coaching-Matrix: Pin-Kategorie × Board-Status → genau ein Hinweistext.
@@ -310,7 +276,7 @@ const COACHING_MATRIX: Record<
     solide:
       'Solides Board, starker Pin – Varianten produzieren, um beide weiter zu pushen.',
     schlafend:
-      'Pin pusht trotz schlafendem Board – verstärke das Board mit 2-3 neuen Pins, dann profitiert der Pin doppelt.',
+      'Pin pusht trotz Board ohne neue Pins – verstärke das Board mit 2-3 neuen Pins, dann profitiert der Pin doppelt.',
     inaktiv:
       'Pin läuft trotz inaktivem Board – ein Reaktivierungs-Pin pro Woche kann das Board wieder beleben.',
     schwach:
@@ -332,18 +298,18 @@ const COACHING_MATRIX: Record<
     kein: 'Hidden Gem ohne Board-Zuordnung – einem thematisch passenden Board zuordnen, dann können Keywords und Board gemeinsam wirken.',
   },
   hohe_impressionen_niedrige_ctr: {
-    top: 'Top-Board liefert Reichweite, aber Hook und Design konvertieren nicht – beides ist der Hebel.',
+    top: 'Top-Board liefert Reichweite, aber Hook und Design konvertieren nicht – erstelle einen neuen Pin mit gleichem Titel und gleicher Beschreibung, aber anderem Hook und Design.',
     wachstum:
-      'Wachstums-Board liefert Sichtbarkeit, aber Klicks fehlen – Hook und Design überarbeiten.',
+      'Wachstums-Board liefert Sichtbarkeit, aber Klicks fehlen – erstelle einen neuen Pin mit gleichem Titel und gleicher Beschreibung, aber anderem Hook und Design.',
     solide:
-      'Solides Board, aber Pin konvertiert nicht – Hook und Design sind der Hebel.',
+      'Solides Board, aber Pin konvertiert nicht – erstelle einen neuen Pin mit gleichem Titel und gleicher Beschreibung, aber anderem Hook und Design.',
     schlafend:
-      'Hook und Design schwach UND Board liefert wenig Push – beides angehen.',
+      'Hook und Design schwach UND Board liefert wenig Push – erstelle einen neuen Pin mit gleichem Titel und gleicher Beschreibung, aber anderem Hook und Design. Board zusätzlich mit neuen Pins reaktivieren.',
     inaktiv:
-      'Inaktives Board – Hook-Optimierung möglich, aber Wirkung begrenzt, solange Board ruht.',
+      'Inaktives Board begrenzt die Wirkung – erstelle einen neuen Pin mit gleichem Titel und gleicher Beschreibung, aber anderem Hook und Design. Board reaktivieren für mehr Reichweite.',
     schwach:
-      'Schwaches Board und schwache Pin-Performance – beides überarbeiten oder Pin auf stärkeres Board verschieben.',
-    kein: 'Pin ohne Board-Zuordnung und Optimierungsbedarf – erst Board zuordnen, dann Hook und Design optimieren.',
+      'Schwaches Board und schwache Pin-Performance – erstelle einen neuen Pin mit gleichem Titel und gleicher Beschreibung, aber anderem Hook und Design. Oder Pin auf stärkeres Board verschieben.',
+    kein: 'Pin ohne Board-Zuordnung und Optimierungsbedarf – erst Board zuordnen, dann neuen Pin mit gleichem Titel und gleicher Beschreibung aber anderem Hook und Design erstellen.',
   },
   eingeschlafener_gewinner: {
     top: 'Top-Board ist da, aber Pin-Frische fehlt – ein Recycling-Pin mit aktualisiertem Design weckt den Algorithmus.',

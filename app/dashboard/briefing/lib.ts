@@ -141,7 +141,7 @@ export function buildBriefingItems(
         parts: [
           bold(String(input.schlafendeTopCount)),
           txt(
-            ` schlafende Top-${input.schlafendeTopCount === 1 ? 'Board' : 'Boards'} – größtes ungenutztes Potenzial.`
+            ` Top-${input.schlafendeTopCount === 1 ? 'Board' : 'Boards'} ohne neue Pins – größtes ungenutztes Potenzial.`
           ),
         ],
         sectionLabel: 'Board-Gesundheit',
@@ -214,7 +214,7 @@ export function buildBriefingItems(
             ` ${input.hiddenGemCount === 1 ? 'Hidden Gem erkannt' : 'Hidden Gems erkannt'} – Pins mit hoher CTR aber wenig Reichweite. Keywords und Boards optimieren.`
           ),
         ],
-        sectionLabel: 'Pin-Handlungsbedarf',
+        sectionLabel: 'Bestehende Pins optimieren',
         sectionId: BRIEFING_ANCHORS.pinHandlung,
         prio: 'hoch',
       })
@@ -227,7 +227,7 @@ export function buildBriefingItems(
             ` ${input.optimierungCount === 1 ? 'Pin' : 'Pins'} mit Optimierungspotenzial – Hooks und Designs überarbeiten.`
           ),
         ],
-        sectionLabel: 'Pin-Handlungsbedarf',
+        sectionLabel: 'Bestehende Pins optimieren',
         sectionId: BRIEFING_ANCHORS.pinHandlung,
         prio: 'hoch',
       })
@@ -240,7 +240,7 @@ export function buildBriefingItems(
             ` ${input.aktivTopPerformerCount === 1 ? 'Pin läuft' : 'Pins laufen'} aktiv – Varianten produzieren, solange der Algorithmus pusht.`
           ),
         ],
-        sectionLabel: 'Pin-Handlungsbedarf',
+        sectionLabel: 'Bestehende Pins optimieren',
         sectionId: BRIEFING_ANCHORS.pinHandlung,
         prio: 'hoch',
       })
@@ -253,7 +253,7 @@ export function buildBriefingItems(
             ` ${input.eingeschlafenerGewinnerCount === 1 ? 'eingeschlafener Pin' : 'eingeschlafene Pins'} – Recycling-Kandidaten mit frischem Design.`
           ),
         ],
-        sectionLabel: 'Pin-Handlungsbedarf',
+        sectionLabel: 'Bestehende Pins optimieren',
         sectionId: BRIEFING_ANCHORS.pinHandlung,
         prio: 'mittel',
       })
@@ -271,7 +271,7 @@ export function buildBriefingItems(
           ` ${input.inhalteOhneAktuellCount === 1 ? 'Inhalt ohne aktuellen Pin' : 'Inhalte ohne aktuellen Pin'} – kontinuierliche Pin-Produktion fehlt.`
         ),
       ],
-      sectionLabel: 'Content Pipeline',
+      sectionLabel: 'Neue Pins produzieren',
       sectionId: BRIEFING_ANCHORS.pipeline,
       prio: 'niedrig',
     })
@@ -282,7 +282,7 @@ export function buildBriefingItems(
         bold(String(input.inhalteMitWenigPinsCount)),
         txt(' Inhalte brauchen mehr Pin-Material.'),
       ],
-      sectionLabel: 'Content Pipeline',
+      sectionLabel: 'Neue Pins produzieren',
       sectionId: BRIEFING_ANCHORS.pipeline,
       prio: 'niedrig',
     })
@@ -295,7 +295,7 @@ export function buildBriefingItems(
           ` ${input.urlsPotenzialCount === 1 ? 'URL' : 'URLs'} mit hoher CTR und wenig Pins – ungenutzte Goldnuggets.`
         ),
       ],
-      sectionLabel: 'Content Pipeline',
+      sectionLabel: 'Neue Pins produzieren',
       sectionId: BRIEFING_ANCHORS.pipeline,
       prio: 'niedrig',
     })
@@ -309,4 +309,121 @@ export function buildBriefingItems(
   })
 
   return items.slice(0, MAX_ITEMS)
+}
+
+// =====================================================
+// "Deine nächsten Schritte" — regelbasierte Handlungsempfehlung
+// (max. 3 Punkte, priorisiert: zeitkritisch → größter Hebel → Boards)
+// Liefert immer mindestens ein Item zurück (Empty-State = ✅-Hinweis).
+// =====================================================
+const NEXT_STEPS_MAX = 3
+const NEXT_STEPS_EVENT_DAYS = 14
+
+export type BuildNextStepsInput = {
+  // Nächstes zeitkritisches Event (kleinste daysToStart unter den
+  // „jetzt produzieren"-Events). null = keines aktiv.
+  nextEvent: { name: string; daysToStart: number } | null
+  // Top-Performer-Pin mit den meisten verbleibenden Push-Tagen.
+  // null = kein aktiver Top-Performer.
+  topPerformerPin: { titel: string; remainingPushDays: number } | null
+  // Anzahl Hidden Gems im Pin-Handlungsbedarf.
+  hiddenGemCount: number
+  // Erstes Top-Board ohne neue Pins. null = keins.
+  schlafendeTopBoardName: string | null
+}
+
+export function buildNextStepsItems(
+  input: BuildNextStepsInput
+): BriefingItem[] {
+  const items: BriefingItem[] = []
+
+  // Schritt 1 — Zeitkritisches zuerst (Event in <14 Tagen)
+  if (
+    input.nextEvent &&
+    input.nextEvent.daysToStart < NEXT_STEPS_EVENT_DAYS
+  ) {
+    const days = Math.max(0, input.nextEvent.daysToStart)
+    items.push({
+      icon: '🗓️',
+      parts: [
+        bold(input.nextEvent.name),
+        txt(' in '),
+        bold(`${days} ${days === 1 ? 'Tag' : 'Tagen'}`),
+        txt(' – Pins jetzt erstellen, das Pin-Fenster schließt sich.'),
+      ],
+      sectionLabel: 'Saisonkalender',
+      sectionId: BRIEFING_ANCHORS.saison,
+      prio: 'sehr_hoch',
+    })
+  }
+
+  // Schritt 2 — Größter Hebel aus Analytics
+  if (items.length < NEXT_STEPS_MAX && input.topPerformerPin) {
+    const titel = input.topPerformerPin.titel.trim() || '(ohne Titel)'
+    items.push({
+      icon: '⭐',
+      parts: [
+        bold(titel),
+        txt(
+          ' läuft stark – Variante produzieren solange der Algorithmus pusht ('
+        ),
+        bold(
+          `${input.topPerformerPin.remainingPushDays} ${input.topPerformerPin.remainingPushDays === 1 ? 'Tag' : 'Tage'}`
+        ),
+        txt(').'),
+      ],
+      sectionLabel: 'Bestehende Pins optimieren',
+      sectionId: BRIEFING_ANCHORS.pinHandlung,
+      prio: 'hoch',
+    })
+  } else if (items.length < NEXT_STEPS_MAX && input.hiddenGemCount > 0) {
+    items.push({
+      icon: '💎',
+      parts: [
+        bold(String(input.hiddenGemCount)),
+        txt(
+          ` ${input.hiddenGemCount === 1 ? 'Hidden Gem wartet' : 'Hidden Gems warten'} auf Keywords – kleine Änderung, große Wirkung.`
+        ),
+      ],
+      sectionLabel: 'Bestehende Pins optimieren',
+      sectionId: BRIEFING_ANCHORS.pinHandlung,
+      prio: 'hoch',
+    })
+  }
+
+  // Schritt 3 — Boards reaktivieren
+  if (
+    items.length < NEXT_STEPS_MAX &&
+    input.schlafendeTopBoardName
+  ) {
+    items.push({
+      icon: '🏆',
+      parts: [
+        bold(input.schlafendeTopBoardName),
+        txt(
+          ' ist ein Top-Board ohne neue Pins – 2-3 neue Pins reaktivieren es sofort.'
+        ),
+      ],
+      sectionLabel: 'Board-Gesundheit',
+      sectionId: BRIEFING_ANCHORS.board,
+      prio: 'hoch',
+    })
+  }
+
+  // Empty-State: alles im grünen Bereich
+  if (items.length === 0) {
+    items.push({
+      icon: '✅',
+      parts: [
+        txt(
+          'Alles im grünen Bereich – halte die Frequenz und prüfe beim nächsten Analytics-Update.'
+        ),
+      ],
+      sectionLabel: '',
+      sectionId: '',
+      prio: 'niedrig',
+    })
+  }
+
+  return items
 }

@@ -125,7 +125,7 @@ export default function PinProduktionClient(props: Props) {
     if (!highlightId) return
     const el = document.getElementById(`pin-row-${highlightId}`)
     if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
     let mouseListener: ((e: MouseEvent) => void) | null = null
     const armMouse = setTimeout(() => {
@@ -329,21 +329,42 @@ const EMPTY_FILTERS: Filters = {
 
 // Liest die unterstützten ?filter[…]=… Query-Parameter und liefert ein
 // Filters-Objekt für die initiale Tabellen-Anzeige. Aktuell unterstützt:
-// strategie, conversion_ziel, format, board, content, vorlage, url.
+// strategie, conversion_ziel, format, board, content, vorlage, url, status.
 // Wert „keine-angabe" → NONE-Sentinel (deckt NULL / '' / undefined ab).
+// Sonstige Werte: board / content / vorlage / url werden direkt als ID
+// übernommen; status wird gegen die STATUS-Enum-Werte validiert.
 function filtersFromSearchParams(
   params: URLSearchParams | null
 ): Filters {
   if (!params) return EMPTY_FILTERS
   const next: Filters = { ...EMPTY_FILTERS }
   const isNone = (v: string | null) => v === 'keine-angabe'
+
   if (isNone(params.get('filter[strategie]'))) next.strategie = NONE
   if (isNone(params.get('filter[conversion_ziel]'))) next.conversion = NONE
   if (isNone(params.get('filter[format]'))) next.format = NONE
-  if (isNone(params.get('filter[board]'))) next.boardId = NONE
-  if (isNone(params.get('filter[content]'))) next.contentId = NONE
-  if (isNone(params.get('filter[vorlage]'))) next.vorlageId = NONE
-  if (isNone(params.get('filter[url]'))) next.urlId = NONE
+
+  const board = params.get('filter[board]')
+  if (isNone(board)) next.boardId = NONE
+  else if (board) next.boardId = board
+
+  const content = params.get('filter[content]')
+  if (isNone(content)) next.contentId = NONE
+  else if (content) next.contentId = content
+
+  const vorlage = params.get('filter[vorlage]')
+  if (isNone(vorlage)) next.vorlageId = NONE
+  else if (vorlage) next.vorlageId = vorlage
+
+  const url = params.get('filter[url]')
+  if (isNone(url)) next.urlId = NONE
+  else if (url) next.urlId = url
+
+  const status = params.get('filter[status]')
+  if (status && (STATUS as readonly string[]).includes(status)) {
+    next.status = status as Status
+  }
+
   return next
 }
 
@@ -777,7 +798,7 @@ function PinTable({
               <tr
                 key={pin.id}
                 id={`pin-row-${pin.id}`}
-                className={`align-top transition-colors duration-700 ${
+                className={`scroll-mt-24 align-top transition-colors duration-700 ${
                   pin.id === highlightId
                     ? 'bg-amber-100 ring-2 ring-amber-300 ring-inset'
                     : 'hover:bg-gray-50'
