@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase-server'
 import AnalyticsClient from './AnalyticsClient'
+import UpdateStatusBanner from './UpdateStatusBanner'
 import {
   boardHandlung,
   boardThresholdsFromSettings,
@@ -28,6 +29,8 @@ type RawPinAnalyticsRow = {
   id: string
   pin_id: string
   datum: string
+  zeitraum_von: string | null
+  zeitraum_bis: string | null
   impressionen: number
   klicks: number
   saves: number
@@ -54,7 +57,7 @@ export default async function AnalyticsPage() {
     supabase
       .from('profil_analytics')
       .select(
-        'id, datum, impressionen, ausgehende_klicks, saves, gesamte_zielgruppe, interagierende_zielgruppe, created_at'
+        'id, datum, zeitraum_von, zeitraum_bis, impressionen, ausgehende_klicks, saves, gesamte_zielgruppe, interagierende_zielgruppe, created_at'
       )
       .order('datum', { ascending: false }),
     supabase
@@ -77,7 +80,7 @@ export default async function AnalyticsPage() {
     supabase
       .from('pins_analytics')
       .select(
-        `id, pin_id, datum, impressionen, klicks, saves, created_at,
+        `id, pin_id, datum, zeitraum_von, zeitraum_bis, impressionen, klicks, saves, created_at,
          pins ( id, titel, status, created_at, geplante_veroeffentlichung )`
       )
       .order('datum', { ascending: false }),
@@ -129,6 +132,8 @@ export default async function AnalyticsPage() {
       id: row.id,
       pin_id: row.pin_id,
       datum: row.datum,
+      zeitraum_von: row.zeitraum_von,
+      zeitraum_bis: row.zeitraum_bis,
       impressionen: row.impressionen,
       klicks: row.klicks,
       saves: row.saves,
@@ -278,12 +283,19 @@ export default async function AnalyticsPage() {
 
   return (
     <div className="p-8">
-      <header className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">Analytics</h1>
-        <p className="mt-1 text-sm text-gray-600">
-          Trage deine Pinterest-Zahlen monatlich ein und beobachte die
-          Entwicklung deines Profils, deiner Pins und Boards.
-        </p>
+      <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Analytics</h1>
+          <p className="mt-1 text-sm text-gray-600">
+            Trage deine Pinterest-Zahlen monatlich ein und beobachte die
+            Entwicklung deines Profils, deiner Pins und Boards.
+          </p>
+        </div>
+        <UpdateStatusBanner
+          analyticsUpdateDatum={
+            settingsRes.data?.analytics_update_datum ?? null
+          }
+        />
       </header>
 
       {loadError && (
@@ -296,9 +308,6 @@ export default async function AnalyticsPage() {
         profilAnalytics={profilAnalytics}
         pinterestAnalyticsUrl={
           settingsRes.data?.pinterest_analytics_url ?? null
-        }
-        analyticsUpdateDatum={
-          settingsRes.data?.analytics_update_datum ?? null
         }
         pins={pins}
         pinAnalytics={pinAnalytics}

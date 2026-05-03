@@ -990,8 +990,8 @@ function StrategySummary({
         </div>
 
         {empfehlung && (
-          <p className="mt-4 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
-            💡 {empfehlung}
+          <p className="mt-4 rounded-md border border-purple-200 border-l-[3px] border-l-purple-400 bg-purple-50 p-3 text-sm text-purple-900">
+            🎯 <strong>Empfehlung:</strong> {empfehlung}
           </p>
         )}
 

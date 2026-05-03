@@ -220,7 +220,7 @@ export function buildBriefingItems(
       })
     } else if (input.optimierungCount > 0) {
       items.push({
-        icon: '🔍',
+        icon: '🔧',
         parts: [
           bold(String(input.optimierungCount)),
           txt(

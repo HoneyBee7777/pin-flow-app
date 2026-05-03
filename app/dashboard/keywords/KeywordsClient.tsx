@@ -1,10 +1,12 @@
 'use client'
 
 import { useMemo, useState, useTransition, type FormEvent } from 'react'
+import Link from 'next/link'
 import {
   addKeyword,
   deleteKeyword,
   importKeywords,
+  matchKeywordsAction,
   updateKeyword,
 } from './actions'
 
@@ -15,6 +17,12 @@ export type ContentOption = {
   titel: string
 }
 
+export type KeywordStats = {
+  pinsCount: number
+  avgCtr: number | null
+  avgKlicks: number | null
+}
+
 export type Keyword = {
   id: string
   keyword: string
@@ -23,6 +31,51 @@ export type Keyword = {
   notizen: string | null
   created_at: string
   contents: Array<{ id: string; titel: string }>
+  stats: KeywordStats
+}
+
+type Signal = 'stark' | 'gut' | 'beobachten' | 'unused'
+
+const SIGNAL_LABEL: Record<Signal, string> = {
+  stark: '🏆 Stark',
+  gut: '📈 Gut',
+  beobachten: '👀 Beobachten',
+  unused: '➕ Noch nicht verwendet',
+}
+
+const SIGNAL_BADGE: Record<Signal, string> = {
+  stark: 'bg-green-100 text-green-800',
+  gut: 'bg-blue-100 text-blue-800',
+  beobachten: 'bg-yellow-100 text-yellow-800',
+  unused: 'bg-gray-100 text-gray-600',
+}
+
+// Sortier-Reihenfolge — Stark zuerst, Noch-nicht-verwendet ans Ende.
+const SIGNAL_SORT_ORDER: Record<Signal, number> = {
+  stark: 0,
+  gut: 1,
+  beobachten: 2,
+  unused: 3,
+}
+
+function deriveSignal(stats: KeywordStats): Signal {
+  if (stats.pinsCount === 0) return 'unused'
+  const ctr = stats.avgCtr ?? 0
+  if (ctr > 2 && stats.pinsCount >= 3) return 'stark'
+  if (ctr >= 1 && ctr <= 2) return 'gut'
+  return 'beobachten'
+}
+
+function formatPercent(v: number | null): string {
+  if (v === null) return '—'
+  return `${v.toFixed(2)}%`
+}
+
+function formatNumber(v: number | null): string {
+  if (v === null) return '—'
+  return v >= 10
+    ? Math.round(v).toLocaleString('de-DE')
+    : v.toFixed(1).replace('.', ',')
 }
 
 const TYP_LABEL: Record<KeywordTyp, string> = {
@@ -74,6 +127,42 @@ export default function KeywordsClient({
     new Set()
   )
   const [isPending, startTransition] = useTransition()
+  const [matching, setMatching] = useState(false)
+  const [matchMessage, setMatchMessage] = useState<string | null>(null)
+  const [matchError, setMatchError] = useState<string | null>(null)
+
+  // Default-Sortierung: Signal-Rang aufsteigend (Stark zuerst), dann Ø CTR
+  // absteigend. Innerhalb der Stufe „Noch nicht verwendet" greift die
+  // ursprüngliche Reihenfolge (created_at desc) als Fallback durch stable sort.
+  const sortedKeywords = useMemo(() => {
+    return [...keywords].sort((a, b) => {
+      const sa = deriveSignal(a.stats)
+      const sb = deriveSignal(b.stats)
+      const rankDiff = SIGNAL_SORT_ORDER[sa] - SIGNAL_SORT_ORDER[sb]
+      if (rankDiff !== 0) return rankDiff
+      const ctrA = a.stats.avgCtr ?? -1
+      const ctrB = b.stats.avgCtr ?? -1
+      return ctrB - ctrA
+    })
+  }, [keywords])
+
+  async function onMatchKeywords() {
+    setMatching(true)
+    setMatchError(null)
+    setMatchMessage(null)
+    try {
+      const result = await matchKeywordsAction()
+      if (result.error) {
+        setMatchError(result.error)
+      } else {
+        setMatchMessage(
+          `${result.matched ?? 0} Keyword-Verknüpfungen gefunden.`
+        )
+      }
+    } finally {
+      setMatching(false)
+    }
+  }
 
   const formOpen = showAddForm || editing !== null
 
@@ -166,13 +255,22 @@ export default function KeywordsClient({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <button
           type="button"
           onClick={() => (showAddForm ? closeForm() : openAdd())}
           className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
         >
           {showAddForm ? 'Abbrechen' : 'Keyword hinzufügen'}
+        </button>
+        <button
+          type="button"
+          onClick={onMatchKeywords}
+          disabled={matching}
+          className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+          title="Gleicht alle Pins erneut mit der Keyword-Datenbank ab — anhand von Pin-Titel, Beschreibung und Board-Name."
+        >
+          {matching ? 'Gleiche ab…' : '🔄 Keywords neu abgleichen'}
         </button>
         <button
           type="button"
@@ -188,6 +286,16 @@ export default function KeywordsClient({
         {importMessage && !showImport && (
           <span className="self-center text-sm text-green-700">
             {importMessage}
+          </span>
+        )}
+        {matchMessage && (
+          <span className="self-center text-sm text-green-700">
+            {matchMessage}
+          </span>
+        )}
+        {matchError && (
+          <span className="self-center text-sm text-red-700">
+            {matchError}
           </span>
         )}
       </div>
@@ -424,6 +532,18 @@ export default function KeywordsClient({
                 Typ
               </th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Signal
+              </th>
+              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Pins
+              </th>
+              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Ø CTR
+              </th>
+              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Ø Klicks
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Saison-Peak
               </th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
@@ -438,76 +558,129 @@ export default function KeywordsClient({
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {keywords.length === 0 ? (
+            {sortedKeywords.length === 0 ? (
               <tr>
                 <td
-                  colSpan={6}
+                  colSpan={10}
                   className="px-4 py-8 text-center text-sm text-gray-500"
                 >
                   Noch keine Keywords. Füge eines hinzu oder importiere mehrere.
                 </td>
               </tr>
             ) : (
-              keywords.map((kw) => (
-                <tr key={kw.id} className="align-top hover:bg-gray-50">
-                  <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                    {kw.keyword}
-                  </td>
-                  <td className="px-4 py-3 text-sm">
-                    <span
-                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${TYP_BADGE[kw.typ]}`}
-                    >
-                      {TYP_LABEL[kw.typ]}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-700">
-                    {kw.saison_peak ?? '—'}
-                  </td>
-                  <td className="px-4 py-3 text-sm">
-                    {kw.contents.length === 0 ? (
-                      <span className="text-gray-400">—</span>
-                    ) : (
-                      <div className="flex flex-wrap gap-1">
-                        {kw.contents.map((c) => (
-                          <span
-                            key={c.id}
-                            className="inline-flex items-center rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-700"
-                          >
-                            {c.titel}
-                          </span>
-                        ))}
+              sortedKeywords.map((kw) => {
+                const signal = deriveSignal(kw.stats)
+                return (
+                  <tr key={kw.id} className="align-top hover:bg-gray-50">
+                    <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                      {kw.keyword}
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      <span
+                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${TYP_BADGE[kw.typ]}`}
+                      >
+                        {TYP_LABEL[kw.typ]}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      <span
+                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${SIGNAL_BADGE[signal]}`}
+                      >
+                        {SIGNAL_LABEL[signal]}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right text-sm tabular-nums text-gray-700">
+                      {kw.stats.pinsCount === 0 ? (
+                        '—'
+                      ) : (
+                        <Link
+                          href={`/dashboard/pin-produktion?keyword=${encodeURIComponent(kw.keyword)}`}
+                          className="font-medium text-blue-600 underline underline-offset-2 hover:text-blue-800"
+                          title={`Pins anzeigen, in denen „${kw.keyword}" automatisch gefunden wurde`}
+                        >
+                          {kw.stats.pinsCount}
+                        </Link>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right text-sm tabular-nums text-gray-700">
+                      {formatPercent(kw.stats.avgCtr)}
+                    </td>
+                    <td className="px-4 py-3 text-right text-sm tabular-nums text-gray-700">
+                      {formatNumber(kw.stats.avgKlicks)}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-700">
+                      {kw.saison_peak ?? '—'}
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      {kw.contents.length === 0 ? (
+                        <span className="text-gray-400">—</span>
+                      ) : (
+                        <div className="flex flex-wrap gap-1">
+                          {kw.contents.map((c) => (
+                            <span
+                              key={c.id}
+                              className="inline-flex items-center rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-700"
+                            >
+                              {c.titel}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-700">
+                      {kw.notizen ?? '—'}
+                    </td>
+                    <td className="px-4 py-3 text-right text-sm">
+                      <div className="flex items-center justify-end gap-3">
+                        <button
+                          type="button"
+                          onClick={() => openEdit(kw)}
+                          className="text-gray-500 hover:text-gray-900"
+                          aria-label="Bearbeiten"
+                          title="Bearbeiten"
+                        >
+                          <PencilIcon />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onDelete(kw.id)}
+                          disabled={isPending}
+                          className="text-sm font-medium text-red-600 hover:text-red-700 disabled:opacity-50"
+                        >
+                          Löschen
+                        </button>
                       </div>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-700">
-                    {kw.notizen ?? '—'}
-                  </td>
-                  <td className="px-4 py-3 text-right text-sm">
-                    <div className="flex items-center justify-end gap-3">
-                      <button
-                        type="button"
-                        onClick={() => openEdit(kw)}
-                        className="text-gray-500 hover:text-gray-900"
-                        aria-label="Bearbeiten"
-                        title="Bearbeiten"
-                      >
-                        <PencilIcon />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onDelete(kw.id)}
-                        disabled={isPending}
-                        className="text-sm font-medium text-red-600 hover:text-red-700 disabled:opacity-50"
-                      >
-                        Löschen
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))
+                    </td>
+                  </tr>
+                )
+              })
             )}
           </tbody>
         </table>
+      </div>
+
+      <div className="rounded-md border border-gray-200 bg-white p-4 text-xs leading-relaxed text-gray-600">
+        <p className="mb-2 font-semibold uppercase tracking-wide text-gray-500">
+          Signal-Erklärung
+        </p>
+        <ul className="space-y-1">
+          <li>
+            🏆 <strong>Stark</strong> — Ø CTR über 2% in mindestens 3 Pins.
+            Dieses Keyword funktioniert — öfter einsetzen.
+          </li>
+          <li>
+            📈 <strong>Gut</strong> — Ø CTR 1–2%. Solide Performance, weiter
+            beobachten.
+          </li>
+          <li>
+            👀 <strong>Beobachten</strong> — Keyword in Pins gefunden aber
+            CTR unter 1%. Pin oder Keyword optimieren.
+          </li>
+          <li>
+            ➕ <strong>Noch nicht verwendet</strong> — Keyword noch in
+            keinem Pin gefunden. Beim nächsten passenden Pin einsetzen.
+          </li>
+        </ul>
       </div>
     </div>
   )

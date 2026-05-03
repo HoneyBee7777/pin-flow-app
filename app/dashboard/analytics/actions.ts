@@ -21,9 +21,18 @@ export async function saveProfilAnalytics(
   } = await supabase.auth.getUser()
   if (!user) return { error: 'Nicht angemeldet.' }
 
-  const datum = String(formData.get('datum') ?? '').trim()
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(datum))
-    return { error: 'Bitte ein gültiges Datum wählen.' }
+  const zeitraum_von = String(formData.get('zeitraum_von') ?? '').trim()
+  const zeitraum_bis = String(formData.get('zeitraum_bis') ?? '').trim()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(zeitraum_von))
+    return { error: 'Bitte ein gültiges „Von"-Datum wählen.' }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(zeitraum_bis))
+    return { error: 'Bitte ein gültiges „Bis"-Datum wählen.' }
+  if (zeitraum_von > zeitraum_bis)
+    return { error: '„Von"-Datum darf nicht nach „Bis"-Datum liegen.' }
+
+  // datum spiegelt zeitraum_bis (minimal-invasive Strategie — Unique-Constraint
+  // (user_id, datum) bleibt unverändert nutzbar).
+  const datum = zeitraum_bis
 
   const fields = {
     impressionen: parseInt0(formData.get('impressionen')),
@@ -45,7 +54,13 @@ export async function saveProfilAnalytics(
   const { error: upsertError } = await supabase
     .from('profil_analytics')
     .upsert(
-      { user_id: user.id, datum, ...fields },
+      {
+        user_id: user.id,
+        datum,
+        zeitraum_von,
+        zeitraum_bis,
+        ...fields,
+      },
       { onConflict: 'user_id,datum' }
     )
   if (upsertError) return { error: upsertError.message }
@@ -86,9 +101,17 @@ export async function savePinAnalytics(
   const pin_id = String(formData.get('pin_id') ?? '').trim()
   if (!pin_id) return { error: 'Bitte einen Pin auswählen.' }
 
-  const datum = String(formData.get('datum') ?? '').trim()
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(datum))
-    return { error: 'Bitte ein gültiges Datum wählen.' }
+  const zeitraum_von = String(formData.get('zeitraum_von') ?? '').trim()
+  const zeitraum_bis = String(formData.get('zeitraum_bis') ?? '').trim()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(zeitraum_von))
+    return { error: 'Bitte ein gültiges „Von"-Datum wählen.' }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(zeitraum_bis))
+    return { error: 'Bitte ein gültiges „Bis"-Datum wählen.' }
+  if (zeitraum_von > zeitraum_bis)
+    return { error: '„Von"-Datum darf nicht nach „Bis"-Datum liegen.' }
+
+  // datum spiegelt zeitraum_bis (Unique-Constraint (pin_id, datum) bleibt nutzbar).
+  const datum = zeitraum_bis
 
   const fields = {
     impressionen: parseInt0(formData.get('impressionen')),
@@ -106,7 +129,14 @@ export async function savePinAnalytics(
   const { error } = await supabase
     .from('pins_analytics')
     .upsert(
-      { user_id: user.id, pin_id, datum, ...fields },
+      {
+        user_id: user.id,
+        pin_id,
+        datum,
+        zeitraum_von,
+        zeitraum_bis,
+        ...fields,
+      },
       { onConflict: 'pin_id,datum' }
     )
   if (error) return { error: error.message }

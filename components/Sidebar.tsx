@@ -65,6 +65,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { name: 'Wissen & Prompts', href: '/dashboard/ressourcen' },
       { name: 'Strategie & Ausrichtung', href: '/dashboard/strategie' },
+      { name: 'FAQ', href: '/dashboard/faq' },
     ],
   },
 ]

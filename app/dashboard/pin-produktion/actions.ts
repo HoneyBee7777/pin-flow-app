@@ -13,6 +13,10 @@ import {
   type Status,
   type StrategieTyp,
 } from './utils'
+import {
+  matchKeywordsAction,
+  matchKeywordsForPinAction,
+} from '../keywords/actions'
 
 // Status wird automatisch aus dem Veröffentlichungsdatum abgeleitet — kein
 // manueller Status-Input mehr (siehe Pin-Anlege-Maske).
@@ -198,6 +202,10 @@ async function syncKeywords(
   pinId: string,
   keywordIds: string[]
 ): Promise<string | null> {
+  // Wir entfernen ALLE pin_keywords für diesen Pin (auch automatische). Die
+  // automatischen werden direkt danach von match_keywords_for_pin() neu
+  // erzeugt. Manuell zugeordnete Keywords werden mit match_source = 'manuell'
+  // markiert, damit sie beim nächsten Auto-Match nicht überschrieben werden.
   const del = await supabase.from('pin_keywords').delete().eq('pin_id', pinId)
   if (del.error) return del.error.message
 
@@ -206,6 +214,7 @@ async function syncKeywords(
     pin_id: pinId,
     keyword_id: kid,
     user_id: userId,
+    match_source: 'manuell' as const,
   }))
   const ins = await supabase.from('pin_keywords').insert(rows)
   return ins.error?.message ?? null
@@ -258,9 +267,15 @@ export async function addPin(
       }
   }
 
+  // Auto-Keyword-Match für den neu angelegten Pin — fügt zusätzlich zu den
+  // manuell ausgewählten Keywords alle Datenbank-Keywords hinzu, die im
+  // Titel, in der Beschreibung oder im Board-Namen vorkommen.
+  await matchKeywordsForPinAction(inserted.id)
+
   revalidatePath('/dashboard/pin-produktion')
   revalidatePath('/dashboard/canva-vorlagen')
   revalidatePath('/dashboard/analytics')
+  revalidatePath('/dashboard/keywords')
   revalidatePath('/dashboard')
   return {}
 }
@@ -308,9 +323,14 @@ export async function updatePin(
       error: `Pin aktualisiert, aber Keywords konnten nicht synchronisiert werden: ${err}`,
     }
 
+  // Auto-Keyword-Match nach Update — Titel/Beschreibung/Board können sich
+  // geändert haben, also alle automatischen Matches neu berechnen.
+  await matchKeywordsForPinAction(id)
+
   revalidatePath('/dashboard/pin-produktion')
   revalidatePath('/dashboard/canva-vorlagen')
   revalidatePath('/dashboard/analytics')
+  revalidatePath('/dashboard/keywords')
   revalidatePath('/dashboard')
   return {}
 }
@@ -407,8 +427,14 @@ export async function importPins(args: {
   const { error } = await supabase.from('pins').insert(inserts)
   if (error) return { error: error.message }
 
+  // Nach dem Massen-Insert in einem Rutsch alle Pins des Users mit der
+  // Keyword-Datenbank abgleichen. Schneller als pro Zeile match_for_pin
+  // aufzurufen, weil der CROSS JOIN in einer einzigen SQL-Funktion läuft.
+  await matchKeywordsAction()
+
   revalidatePath('/dashboard/pin-produktion')
   revalidatePath('/dashboard/analytics')
+  revalidatePath('/dashboard/keywords')
   revalidatePath('/dashboard')
   return { imported: inserts.length }
 }

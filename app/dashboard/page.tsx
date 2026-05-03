@@ -419,7 +419,7 @@ const HANDLUNGS_CATEGORIES: HandlungsCategory[] = [
   },
   {
     diagnose: 'hohe_impressionen_niedrige_ctr',
-    emoji: '🔍',
+    emoji: '🔧',
     label: 'Optimierungspotenzial',
     subtitle:
       'Viel ausgespielt wenig geklickt – SEO läuft, Hook und Design optimieren.',
@@ -482,6 +482,8 @@ export default async function DashboardPage() {
     boardsCountRes,
     boardAnalyticsRes,
     contentInhalteRes,
+    keywordsRes,
+    pinKeywordsRes,
   ] = await Promise.all([
     supabase
       .from('profil_analytics')
@@ -575,6 +577,26 @@ export default async function DashboardPage() {
       )
     ).catch((err: unknown) => {
       console.error('[Dashboard] content_inhalte query failed:', err)
+      return { data: [], error: err as Error }
+    }),
+    // Keywords & SEO Sektion: keywords + pin_keywords des aktuellen Users.
+    // Performance pro Keyword wird aus pinAnalyticsRes (latest per pin) abgeleitet.
+    Promise.resolve(
+      supabase
+        .from('keywords')
+        .select('id, keyword, typ')
+        .eq('user_id', user.id)
+    ).catch((err: unknown) => {
+      console.error('[Dashboard] keywords query failed:', err)
+      return { data: [], error: err as Error }
+    }),
+    Promise.resolve(
+      supabase
+        .from('pin_keywords')
+        .select('pin_id, keyword_id')
+        .eq('user_id', user.id)
+    ).catch((err: unknown) => {
+      console.error('[Dashboard] pin_keywords query failed:', err)
       return { data: [], error: err as Error }
     }),
   ])
@@ -1403,6 +1425,102 @@ export default async function DashboardPage() {
     schlafendeTopBoardName: nextStepBoardName,
   })
 
+  // ===== Keywords & SEO Sektion =====
+  // Pro Keyword: Pins-Count, Ø CTR (latest analytics pro Pin), Ø Klicks.
+  // Daraus 4 Buckets: stark, ungenutzt, untergenutzt, beobachten.
+  type KeywordRow = {
+    id: string
+    keyword: string
+    typ: 'haupt' | 'mid_tail' | 'longtail'
+  }
+  type PinKeywordRow = { pin_id: string; keyword_id: string }
+  const keywordRows = (keywordsRes.data ?? []) as unknown as KeywordRow[]
+  const pinKeywordRows =
+    (pinKeywordsRes.data ?? []) as unknown as PinKeywordRow[]
+
+  // Latest analytics row pro Pin — first occurrence wins (rawPinAnalytics
+  // ist DESC sortiert).
+  const latestAnalyticsByPinForKw = new Map<
+    string,
+    { impressionen: number; klicks: number }
+  >()
+  for (const row of rawPinAnalytics) {
+    if (!latestAnalyticsByPinForKw.has(row.pin_id)) {
+      latestAnalyticsByPinForKw.set(row.pin_id, {
+        impressionen: row.impressionen ?? 0,
+        klicks: row.klicks ?? 0,
+      })
+    }
+  }
+
+  const pinIdsByKeyword = new Map<string, Set<string>>()
+  for (const row of pinKeywordRows) {
+    const set = pinIdsByKeyword.get(row.keyword_id) ?? new Set<string>()
+    set.add(row.pin_id)
+    pinIdsByKeyword.set(row.keyword_id, set)
+  }
+
+  type KeywordWithStats = {
+    id: string
+    keyword: string
+    typ: KeywordRow['typ']
+    pinsCount: number
+    avgCtr: number | null
+    avgKlicks: number | null
+  }
+  const keywordsWithStats: KeywordWithStats[] = keywordRows.map((kw) => {
+    const pinIds = pinIdsByKeyword.get(kw.id)
+    if (!pinIds || pinIds.size === 0) {
+      return {
+        id: kw.id,
+        keyword: kw.keyword,
+        typ: kw.typ,
+        pinsCount: 0,
+        avgCtr: null,
+        avgKlicks: null,
+      }
+    }
+    let ctrSum = 0
+    let ctrCount = 0
+    let klicksSum = 0
+    let klicksCount = 0
+    pinIds.forEach((pinId) => {
+      const a = latestAnalyticsByPinForKw.get(pinId)
+      if (!a) return
+      if (a.impressionen > 0) {
+        ctrSum += (a.klicks / a.impressionen) * 100
+        ctrCount += 1
+      }
+      klicksSum += a.klicks
+      klicksCount += 1
+    })
+    return {
+      id: kw.id,
+      keyword: kw.keyword,
+      typ: kw.typ,
+      pinsCount: pinIds.size,
+      avgCtr: ctrCount > 0 ? ctrSum / ctrCount : null,
+      avgKlicks: klicksCount > 0 ? klicksSum / klicksCount : null,
+    }
+  })
+
+  const keywordsBuckets = {
+    stark: keywordsWithStats
+      .filter((k) => k.pinsCount >= 3 && (k.avgCtr ?? 0) > 2)
+      .sort((a, b) => (b.avgCtr ?? 0) - (a.avgCtr ?? 0)),
+    unused: keywordsWithStats
+      .filter((k) => k.pinsCount === 0)
+      .sort((a, b) => a.keyword.localeCompare(b.keyword)),
+    underused: keywordsWithStats
+      .filter(
+        (k) => k.pinsCount > 0 && k.pinsCount < 3 && (k.avgCtr ?? 0) > 1
+      )
+      .sort((a, b) => (b.avgCtr ?? 0) - (a.avgCtr ?? 0)),
+    reconsider: keywordsWithStats
+      .filter((k) => k.pinsCount > 0 && (k.avgCtr ?? 0) < 1)
+      .sort((a, b) => (a.avgCtr ?? 0) - (b.avgCtr ?? 0)),
+  }
+
   return (
     <div className="space-y-8 p-8">
       <header>
@@ -1462,6 +1580,13 @@ export default async function DashboardPage() {
         inhaltePinBedarfB={inhaltePinBedarfB}
         urlPotenzial={urlPotenzial}
         thresholds={pipelineThresholds}
+      />
+
+      {/* 8b. Keywords & SEO */}
+      <KeywordsSeoSection
+        buckets={keywordsBuckets}
+        hasAnyKeywords={keywordRows.length > 0}
+        hasAnyAnalytics={hasAnyAnalytics}
       />
 
       {/* 9. Pin-Handlungsbedarf */}
@@ -2639,6 +2764,359 @@ function PinPipelineSection({
         </Link>
       </div>
     </section>
+  )
+}
+
+// ===========================================================
+// Keywords & SEO Sektion — 4 regelbasierte Buckets aus der
+// Keyword-Datenbank gegen die latest pin_analytics gerechnet.
+// ===========================================================
+
+type KeywordSeoTyp = 'haupt' | 'mid_tail' | 'longtail'
+
+type KeywordSeoEntry = {
+  id: string
+  keyword: string
+  typ: KeywordSeoTyp
+  pinsCount: number
+  avgCtr: number | null
+  avgKlicks: number | null
+}
+
+type KeywordsSeoBuckets = {
+  stark: KeywordSeoEntry[]
+  unused: KeywordSeoEntry[]
+  underused: KeywordSeoEntry[]
+  reconsider: KeywordSeoEntry[]
+}
+
+const KEYWORD_TYP_LABEL: Record<KeywordSeoTyp, string> = {
+  haupt: 'Haupt',
+  mid_tail: 'Mid-Tail',
+  longtail: 'Longtail',
+}
+
+const KEYWORD_TYP_BADGE: Record<KeywordSeoTyp, string> = {
+  haupt: 'bg-red-100 text-red-700',
+  mid_tail: 'bg-yellow-100 text-yellow-800',
+  longtail: 'bg-green-100 text-green-700',
+}
+
+function fmtPercent(v: number | null): string {
+  if (v === null) return '—'
+  return `${v.toFixed(2)}%`
+}
+
+function fmtAvgKlicks(v: number | null): string {
+  if (v === null) return '—'
+  return v >= 10
+    ? Math.round(v).toLocaleString('de-DE')
+    : v.toFixed(1).replace('.', ',')
+}
+
+function buildKeywordPinHref(keyword: string): string {
+  return `/dashboard/pin-produktion?keyword=${encodeURIComponent(keyword)}`
+}
+
+function KeywordsSeoSection({
+  buckets,
+  hasAnyKeywords,
+  hasAnyAnalytics,
+}: {
+  buckets: KeywordsSeoBuckets
+  hasAnyKeywords: boolean
+  hasAnyAnalytics: boolean
+}) {
+  const heading = (
+    <>
+      <h2 className="text-lg font-semibold text-gray-900">Keywords & SEO</h2>
+      <p className="mt-1 text-sm text-gray-600">
+        Basierend auf deiner Keyword-Datenbank und Analytics — wo steckt das
+        größte Potenzial?
+      </p>
+    </>
+  )
+
+  if (!hasAnyKeywords) {
+    return (
+      <section id="keywords-seo" className="scroll-mt-4">
+        {heading}
+        <div className="achtung-box mt-3">
+          →{' '}
+          <Link
+            href="/dashboard/keywords"
+            className="font-medium underline hover:opacity-80"
+          >
+            Zuerst Keywords in der Keyword-Datenbank anlegen
+          </Link>
+          .
+        </div>
+      </section>
+    )
+  }
+
+  if (!hasAnyAnalytics) {
+    return (
+      <section id="keywords-seo" className="scroll-mt-4">
+        {heading}
+        <div className="achtung-box mt-3">
+          ⚠️ Füge Analytics-Daten hinzu um Keyword-Performance zu sehen.{' '}
+          <Link
+            href="/dashboard/analytics"
+            className="font-medium underline hover:opacity-80"
+          >
+            → Zum Analytics-Tab
+          </Link>
+        </div>
+      </section>
+    )
+  }
+
+  return (
+    <section id="keywords-seo" className="scroll-mt-4">
+      {heading}
+      <div className="mt-3 space-y-3">
+        <KeywordsSeoCard
+          icon="🔑"
+          title="Stark performende Keywords — mehr davon produzieren"
+          subtitle="Keywords mit Ø CTR über 2% in mindestens 3 Pins."
+          counterClass="bg-green-100 text-green-800"
+          entries={buckets.stark}
+          emptyText="Noch keine stark performenden Keywords — füge Analytics-Daten hinzu um Signale zu sehen."
+          renderEntry={(kw) => (
+            <KeywordRowStark key={kw.id} kw={kw} />
+          )}
+        />
+        <KeywordsSeoCard
+          icon="🌱"
+          title="Verstecktes Potenzial — ungenutzte Keywords"
+          subtitle="Keywords aus deiner Datenbank die noch in keinem Pin verwendet wurden."
+          counterClass="bg-gray-100 text-gray-700"
+          entries={buckets.unused}
+          emptyText="✅ Alle Keywords sind bereits in Pins eingesetzt."
+          renderEntry={(kw) => (
+            <KeywordRowUnused key={kw.id} kw={kw} />
+          )}
+        />
+        <KeywordsSeoCard
+          icon="🚀"
+          title="Quick Wins — untergenutzte Keywords"
+          subtitle="Keywords mit Ø CTR über 1%, aber nur in 1–2 Pins."
+          counterClass="bg-blue-100 text-blue-800"
+          entries={buckets.underused}
+          emptyText="Keine untergenutzten Keywords — alles im grünen Bereich."
+          renderEntry={(kw) => (
+            <KeywordRowUnderused key={kw.id} kw={kw} />
+          )}
+        />
+        <KeywordsSeoCard
+          icon="🔍"
+          title="Keywords überdenken"
+          subtitle="Keywords in Pins, aber Ø CTR unter 1%."
+          counterClass="bg-yellow-100 text-yellow-800"
+          entries={buckets.reconsider}
+          emptyText="Keine schwach performenden Keywords — alles im grünen Bereich."
+          renderEntry={(kw) => (
+            <KeywordRowReconsider key={kw.id} kw={kw} />
+          )}
+        />
+      </div>
+      <p className="pt-2 text-xs text-gray-500">
+        →{' '}
+        <Link
+          href="/dashboard/keywords"
+          className="font-medium text-red-600 hover:underline"
+        >
+          Zur Keyword-Datenbank
+        </Link>
+      </p>
+    </section>
+  )
+}
+
+function KeywordsSeoCard({
+  icon,
+  title,
+  subtitle,
+  counterClass,
+  entries,
+  emptyText,
+  renderEntry,
+}: {
+  icon: string
+  title: string
+  subtitle: string
+  counterClass: string
+  entries: KeywordSeoEntry[]
+  emptyText: string
+  renderEntry: (kw: KeywordSeoEntry) => JSX.Element
+}) {
+  const visible = entries.slice(0, 5)
+  const remaining = entries.length - visible.length
+  return (
+    <details className="group rounded-lg border border-gray-200 bg-white shadow-sm">
+      <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
+        <span className="text-2xl leading-none text-gray-400" aria-hidden>
+          <span className="inline group-open:hidden">▸</span>
+          <span className="hidden group-open:inline">▾</span>
+        </span>
+        <span
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-gray-300 bg-white text-base"
+          aria-hidden
+        >
+          {icon}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-medium text-gray-900">{title}</div>
+          <p className="mt-0.5 text-xs text-gray-600">{subtitle}</p>
+        </div>
+        <span
+          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+            entries.length === 0 ? 'bg-gray-100 text-gray-400' : counterClass
+          }`}
+        >
+          {entries.length}
+        </span>
+      </summary>
+
+      <div className="border-t border-gray-200 px-4 py-2">
+        {entries.length === 0 ? (
+          <p className="px-1 py-3 text-sm text-gray-500">{emptyText}</p>
+        ) : (
+          <ul className="divide-y divide-gray-100">
+            {visible.map((kw) => renderEntry(kw))}
+          </ul>
+        )}
+        {remaining > 0 && (
+          <p className="px-1 pb-2 pt-3 text-xs text-gray-500">
+            + {remaining} weitere — siehe{' '}
+            <Link
+              href="/dashboard/keywords"
+              className="font-medium text-red-600 hover:underline"
+            >
+              Keyword-Datenbank
+            </Link>
+          </p>
+        )}
+      </div>
+    </details>
+  )
+}
+
+function KeywordRowStark({ kw }: { kw: KeywordSeoEntry }) {
+  const fewPins = kw.pinsCount < 5
+  return (
+    <li className="px-1 py-3">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-semibold text-gray-900">
+            {kw.keyword}
+          </div>
+          <div className="mt-0.5 text-xs text-gray-500">
+            {kw.pinsCount} Pin{kw.pinsCount === 1 ? '' : 's'} · Ø CTR:{' '}
+            {fmtPercent(kw.avgCtr)} · Ø Klicks: {fmtAvgKlicks(kw.avgKlicks)}
+          </div>
+          {fewPins && (
+            <div className="achtung-box mt-2 !px-2 !py-1.5 text-xs">
+              ⚠️ Nur {kw.pinsCount} Pin{kw.pinsCount === 1 ? '' : 's'} mit
+              diesem Keyword — mehr Pins würden die Reichweite steigern.
+            </div>
+          )}
+        </div>
+        <Link
+          href={buildKeywordPinHref(kw.keyword)}
+          className="inline-flex shrink-0 items-center justify-center rounded-md bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700"
+        >
+          Pin erstellen
+        </Link>
+      </div>
+    </li>
+  )
+}
+
+function KeywordRowUnused({ kw }: { kw: KeywordSeoEntry }) {
+  return (
+    <li className="px-1 py-3">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-semibold text-gray-900">
+              {kw.keyword}
+            </span>
+            <span
+              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${KEYWORD_TYP_BADGE[kw.typ]}`}
+            >
+              {KEYWORD_TYP_LABEL[kw.typ]}
+            </span>
+          </div>
+          <div className="mt-0.5 text-xs text-gray-500">
+            0 Pins — noch in keinem Pin verwendet
+          </div>
+        </div>
+        <Link
+          href={buildKeywordPinHref(kw.keyword)}
+          className="inline-flex shrink-0 items-center justify-center rounded-md bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700"
+        >
+          Pin erstellen
+        </Link>
+      </div>
+    </li>
+  )
+}
+
+function KeywordRowUnderused({ kw }: { kw: KeywordSeoEntry }) {
+  return (
+    <li className="px-1 py-3">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-semibold text-gray-900">
+            {kw.keyword}
+          </div>
+          <div className="mt-0.5 text-xs text-gray-500">
+            {kw.pinsCount} Pin{kw.pinsCount === 1 ? '' : 's'} · Ø CTR:{' '}
+            {fmtPercent(kw.avgCtr)}
+          </div>
+          <div className="mt-2 rounded-md border border-green-200 bg-green-50 px-2 py-1.5 text-xs text-green-800">
+            ✅ Dieses Keyword performt gut — mehr Pins würden die Reichweite
+            deutlich steigern.
+          </div>
+        </div>
+        <Link
+          href={buildKeywordPinHref(kw.keyword)}
+          className="inline-flex shrink-0 items-center justify-center rounded-md bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700"
+        >
+          Pin erstellen
+        </Link>
+      </div>
+    </li>
+  )
+}
+
+function KeywordRowReconsider({ kw }: { kw: KeywordSeoEntry }) {
+  return (
+    <li className="px-1 py-3">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-semibold text-gray-900">
+            {kw.keyword}
+          </div>
+          <div className="mt-0.5 text-xs text-gray-500">
+            {kw.pinsCount} Pin{kw.pinsCount === 1 ? '' : 's'} · Ø CTR:{' '}
+            {fmtPercent(kw.avgCtr)}
+          </div>
+          <div className="achtung-box mt-2 !px-2 !py-1.5 text-xs">
+            ⚠️ Dieses Keyword wird verwendet aber erzielt kaum Klicks —
+            entweder das Keyword oder den Hook der Pins optimieren.
+          </div>
+        </div>
+        <Link
+          href="/dashboard/keywords"
+          className="shrink-0 rounded-md border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+        >
+          Keywords optimieren →
+        </Link>
+      </div>
+    </li>
   )
 }
 

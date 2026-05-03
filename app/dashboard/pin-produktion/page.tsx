@@ -5,6 +5,8 @@ import type {
   CanvaVorlageOption,
   ContentOption,
   KeywordOption,
+  KeywordSignal,
+  PinKeywordMatchSource,
   PinWithRelations,
   SaisonEventOption,
   ZielUrlOption,
@@ -20,7 +22,7 @@ const PIN_SELECT = `
   ziel_urls ( id, titel, url ),
   boards ( id, name ),
   saison_events ( id, event_name ),
-  pin_keywords ( keyword_id, keywords ( id, keyword, typ ) )
+  pin_keywords ( keyword_id, match_source, keywords ( id, keyword, typ ) )
 `
 
 type RawPinRow = Omit<
@@ -34,6 +36,7 @@ type RawPinRow = Omit<
   saison_events: { id: string; event_name: string } | null
   pin_keywords: Array<{
     keyword_id: string
+    match_source: PinKeywordMatchSource
     keywords: {
       id: string
       keyword: string
@@ -120,6 +123,8 @@ export default async function PinProduktionPage() {
     saisonRes,
     duplCountRes,
     settingsRes,
+    pinKeywordsRes,
+    pinAnalyticsRes,
   ] = await Promise.all([
     supabase
       .from('pins')
@@ -159,6 +164,27 @@ export default async function PinProduktionPage() {
       .select('eigene_signalwoerter')
       .eq('user_id', user.id)
       .maybeSingle(),
+    // Für Keyword-Signale (Stark / Gut / Beobachten) brauchen wir alle
+    // pin_keywords + die latest pins_analytics pro Pin. Defensiv eingewickelt
+    // damit ein Fehler die Tabelle nicht crasht — Spalte zeigt dann '—'.
+    Promise.resolve(
+      supabase
+        .from('pin_keywords')
+        .select('pin_id, keyword_id')
+        .eq('user_id', user.id)
+    ).catch((err: unknown) => {
+      console.error('[PinProduktion] pin_keywords query failed:', err)
+      return { data: [], error: err as Error }
+    }),
+    Promise.resolve(
+      supabase
+        .from('pins_analytics')
+        .select('pin_id, datum, impressionen, klicks')
+        .order('datum', { ascending: false })
+    ).catch((err: unknown) => {
+      console.error('[PinProduktion] pins_analytics query failed:', err)
+      return { data: [], error: err as Error }
+    }),
   ])
 
   const customSignalwoerter =
@@ -190,6 +216,7 @@ export default async function PinProduktionPage() {
           id: pk.keywords!.id,
           keyword: pk.keywords!.keyword,
           typ: pk.keywords!.typ,
+          match_source: pk.match_source,
         })),
       variante_von_titel: row.variante_von_pin_id
         ? titelById.get(row.variante_von_pin_id) ?? null
@@ -217,6 +244,66 @@ export default async function PinProduktionPage() {
     comboCount[key] = (comboCount[key] ?? 0) + 1
   }
 
+  // Keyword-Signal pro Keyword: gleiche Logik wie auf der Keywords-Seite —
+  // pinsCount + Ø CTR (latest analytics pro Pin) → Signal.
+  type PinKeywordRow = { pin_id: string; keyword_id: string }
+  type PinAnalyticsRow = {
+    pin_id: string
+    datum: string
+    impressionen: number
+    klicks: number
+  }
+  const pinKeywordRows =
+    (pinKeywordsRes.data ?? []) as unknown as PinKeywordRow[]
+  const pinAnalyticsRows =
+    (pinAnalyticsRes.data ?? []) as unknown as PinAnalyticsRow[]
+
+  const latestAnalyticsByPin = new Map<
+    string,
+    { impressionen: number; klicks: number }
+  >()
+  for (const row of pinAnalyticsRows) {
+    if (!latestAnalyticsByPin.has(row.pin_id)) {
+      latestAnalyticsByPin.set(row.pin_id, {
+        impressionen: row.impressionen ?? 0,
+        klicks: row.klicks ?? 0,
+      })
+    }
+  }
+
+  const pinIdsByKeyword = new Map<string, Set<string>>()
+  for (const row of pinKeywordRows) {
+    const set = pinIdsByKeyword.get(row.keyword_id) ?? new Set<string>()
+    set.add(row.pin_id)
+    pinIdsByKeyword.set(row.keyword_id, set)
+  }
+
+  const keywordSignalById: Record<string, KeywordSignal> = {}
+  pinIdsByKeyword.forEach((pinIds, keywordId) => {
+    if (pinIds.size === 0) {
+      keywordSignalById[keywordId] = 'unused'
+      return
+    }
+    let ctrSum = 0
+    let ctrCount = 0
+    pinIds.forEach((pinId) => {
+      const a = latestAnalyticsByPin.get(pinId)
+      if (!a) return
+      if (a.impressionen > 0) {
+        ctrSum += (a.klicks / a.impressionen) * 100
+        ctrCount += 1
+      }
+    })
+    const avgCtr = ctrCount > 0 ? ctrSum / ctrCount : 0
+    if (avgCtr > 2 && pinIds.size >= 3) {
+      keywordSignalById[keywordId] = 'stark'
+    } else if (avgCtr >= 1 && avgCtr <= 2) {
+      keywordSignalById[keywordId] = 'gut'
+    } else {
+      keywordSignalById[keywordId] = 'beobachten'
+    }
+  })
+
   const loadError =
     pinsRes.error?.message ??
     contentsRes.error?.message ??
@@ -232,8 +319,13 @@ export default async function PinProduktionPage() {
     <div className="p-8">
       <header className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900">Pin-Produktion</h1>
-        <p className="mt-1 text-sm text-gray-600">
-          Plane, erstelle und verwalte deine Pinterest-Pins zentral.
+        <p className="mt-1 text-sm text-gray-500">
+          Hier erfasst du alle Pins — veröffentlichte, geplante und
+          Entwürfe. Du siehst welche Keywords in deinen Pins stecken
+          (📌 Titel · 📝 Beschreibung), kannst nach Board, Status,
+          Keyword und mehr filtern und neue Pins direkt anlegen oder per
+          CSV importieren. Die Grundlage für dein monatliches
+          Analytics-Update.
         </p>
       </header>
 
@@ -253,6 +345,7 @@ export default async function PinProduktionPage() {
         saisonEvents={saisonEvents}
         comboCount={comboCount}
         customSignalwoerter={customSignalwoerter}
+        keywordSignalById={keywordSignalById}
       />
     </div>
   )

@@ -14,7 +14,7 @@ import {
   saveBoardAnalyticsBulk,
   type BoardAnalyticsBulkRow,
 } from './actions'
-import AnalyticsDateHelper from './AnalyticsDateHelper'
+import CopyStartDateButton from './CopyStartDateButton'
 import {
   BOARD_SCORE_BADGE,
   BOARD_SCORE_LABEL,
@@ -148,17 +148,12 @@ export default function BoardsTab({
 
   return (
     <div className="space-y-6">
-      <AnalyticsDateHelper />
-
-      <div className="rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
-        Keywords sind der wichtigste SEO-Faktor auf Pinterest — sie bestimmen
-        wer deinen Pin findet. Boards sind der zweitwichtigste Faktor — sie
-        geben Pinterest den Kontext in dem dein Pin erscheint. Ein
-        keyword-optimiertes Board mit klarem Thema verstärkt jeden einzelnen
-        Pin der darauf gespeichert wird. Prüfe einmal im Monat welche Boards
-        wachsen und welche stagnieren — schwache Boards bremsen alle Pins
-        darauf.
-      </div>
+      <p style={{ color: '#111827', fontWeight: '600', fontSize: '14px' }}>
+        Boards sind entscheidend für deine Reichweite auf Pinterest —
+        korrekte Keywords im Board-Namen und der Board-Beschreibung helfen
+        Pinterest zu verstehen worum es auf deinem Account geht und wem deine
+        Pins gezeigt werden sollen.
+      </p>
 
       {publicBoardsWithoutAnalytics.length > 0 && (
         <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
@@ -187,12 +182,29 @@ export default function BoardsTab({
 
       <details className="rounded-md border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
         <summary className="cursor-pointer font-medium text-gray-900">
-          So findest du deine Board-Zahlen
+          So findest du deine Zahlen
         </summary>
-        <p className="mt-2 text-xs">
-          Pinterest Analytics öffnen → Übersicht → nach unten scrollen → Top
-          Boards → dort siehst du Impressionen, Klicks und Saves pro Board für
-          den gewählten Zeitraum (Empfehlung: Letzte 90 Tage).
+        <ol className="mt-2 list-decimal space-y-1 pl-5 text-gray-600">
+          <li>Pinterest öffnen → Analytics → Übersicht</li>
+          <li>
+            Zeitraum: „Benutzerdefiniert" → Startdatum 180 Tage zurück (sollte
+            noch von der Pin-Eingabe eingestellt sein)
+          </li>
+          <li>
+            Ans Ende der Seite scrollen → dort sind deine besten Pinnwände zu
+            finden
+          </li>
+          <li>
+            Über ein Board hovern → Statistiken erscheinen → Werte übertragen
+          </li>
+        </ol>
+        <div className="mt-2">
+          <CopyStartDateButton />
+        </div>
+        <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
+          ⚠️ Hinweis: Pinterest zeigt nur die erfolgreichsten 30 Boards der
+          letzten 6 Monate an. Boards ohne Aktivität in diesem Zeitraum
+          erscheinen möglicherweise nicht.
         </p>
       </details>
 

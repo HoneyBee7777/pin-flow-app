@@ -44,6 +44,7 @@ export default async function BoardsPage() {
     urlsRes,
     pinsRes,
     pinAnalyticsRes,
+    contentKeywordsRes,
   ] = await Promise.all([
     supabase
       .from('boards')
@@ -84,6 +85,7 @@ export default async function BoardsPage() {
       .from('pins_analytics')
       .select('pin_id, datum, impressionen, klicks')
       .order('datum', { ascending: false }),
+    supabase.from('content_keywords').select('content_id, keyword_id'),
   ])
 
   const rawRows = (boardsRes.data ?? []) as unknown as RawBoardRow[]
@@ -123,6 +125,19 @@ export default async function BoardsPage() {
   const availableKeywords = (keywordsRes.data ?? []) as KeywordOption[]
   const availableContents = (contentsRes.data ?? []) as ContentOption[]
   const availableUrls = (urlsRes.data ?? []) as UrlOption[]
+
+  // contentKeywordIds: für jeden Content die Liste der zugeordneten Keyword-IDs
+  // — wird im KI-Prompt-Modal genutzt, um die Keyword-Auswahl zu filtern.
+  const contentKeywordsRows = (contentKeywordsRes.data ?? []) as Array<{
+    content_id: string
+    keyword_id: string
+  }>
+  const contentKeywordIds: Record<string, string[]> = {}
+  for (const row of contentKeywordsRows) {
+    const arr = contentKeywordIds[row.content_id] ?? []
+    arr.push(row.keyword_id)
+    contentKeywordIds[row.content_id] = arr
+  }
 
   // Pins pro Board mit aktuellster CTR (aus pins_analytics)
   type PinRow = {
@@ -173,6 +188,7 @@ export default async function BoardsPage() {
     urlsRes.error?.message ??
     pinsRes.error?.message ??
     pinAnalyticsRes.error?.message ??
+    contentKeywordsRes.error?.message ??
     null
 
   return (
@@ -196,6 +212,7 @@ export default async function BoardsPage() {
         availableContents={availableContents}
         availableUrls={availableUrls}
         pinsByBoardId={pinsByBoardId}
+        contentKeywordIds={contentKeywordIds}
       />
     </div>
   )

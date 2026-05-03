@@ -150,6 +150,22 @@ export type Pin = {
   pinterest_pin_url: string | null
 }
 
+export type PinKeywordMatchSource =
+  | 'titel'
+  | 'beschreibung'
+  | 'board_name'
+  | 'manuell'
+  | null
+
+export type PinKeywordWithSource = {
+  id: string
+  keyword: string
+  typ: KeywordTyp
+  match_source: PinKeywordMatchSource
+}
+
+export type KeywordSignal = 'stark' | 'gut' | 'beobachten' | 'unused'
+
 export type PinWithRelations = Pin & {
   variante_von_titel?: string | null
   content: { id: string; titel: string } | null
@@ -157,7 +173,7 @@ export type PinWithRelations = Pin & {
   url: { id: string; titel: string; url: string } | null
   board: { id: string; name: string } | null
   saison_event: { id: string; event_name: string } | null
-  keywords: Array<{ id: string; keyword: string; typ: KeywordTyp }>
+  keywords: PinKeywordWithSource[]
 }
 
 export type ContentOption = {

@@ -1,20 +1,36 @@
 'use client'
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import type { StrategieRow } from './lib'
 import MyStrategy from './MyStrategy'
 
-type TabKey = 'meine' | 'grundlagen' | 'strategien' | 'design'
+type TabKey =
+  | 'meine'
+  | 'grundlagen'
+  | 'strategien'
+  | 'design'
+  | 'keywords'
+  | 'analytics'
 
 const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'meine', label: '🎯 Meine Strategie' },
   { key: 'grundlagen', label: '📚 Pinterest-Grundlagen' },
   { key: 'strategien', label: '💼 Die drei Strategien' },
   { key: 'design', label: '🎨 Pin-Design & Formate' },
+  { key: 'keywords', label: '🔍 Keywords & SEO' },
+  { key: 'analytics', label: '📊 Analytics & Boards' },
 ]
 
-const TAB_KEYS: TabKey[] = ['meine', 'grundlagen', 'strategien', 'design']
+const TAB_KEYS: TabKey[] = [
+  'meine',
+  'grundlagen',
+  'strategien',
+  'design',
+  'keywords',
+  'analytics',
+]
 
 export default function StrategieClient({
   strategie,
@@ -63,6 +79,8 @@ export default function StrategieClient({
         {active === 'grundlagen' && <TabGrundlagen />}
         {active === 'strategien' && <TabStrategien />}
         {active === 'design' && <TabDesign />}
+        {active === 'keywords' && <TabKeywords />}
+        {active === 'analytics' && <TabAnalytics />}
       </div>
     </div>
   )
@@ -168,9 +186,23 @@ function CopyPromptBlock({
   )
 }
 
-function HinweisBox({ children }: { children: ReactNode }) {
+type HinweisVariant = 'tipp' | 'merke'
+
+function HinweisBox({
+  children,
+  variant = 'tipp',
+}: {
+  children: ReactNode
+  variant?: HinweisVariant
+}) {
+  // Tipp = amber (Handlungsempfehlung), Merke = teal (Prinzip / Wissen).
+  // Beide nutzen einen left-border als visueller Akzent.
+  const cls =
+    variant === 'merke'
+      ? 'border border-teal-200 border-l-[3px] border-l-teal-400 bg-teal-50 text-teal-800'
+      : 'border border-amber-200 border-l-[3px] border-l-amber-400 bg-amber-50 text-amber-900'
   return (
-    <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm leading-relaxed text-amber-900">
+    <div className={`rounded-md p-4 text-sm leading-relaxed ${cls}`}>
       {children}
     </div>
   )
@@ -262,7 +294,7 @@ function CodeBlock({ children }: { children: ReactNode }) {
 function TabGrundlagen() {
   return (
     <div className="space-y-3">
-      <Accordion title="Was Pinterest wirklich ist" defaultOpen>
+      <Accordion title="Was Pinterest wirklich ist">
         <Para>
           Pinterest funktioniert grundlegend anders als Google oder Social
           Media. Wer Pinterest mit Instagram oder TikTok vergleicht, versteht
@@ -335,7 +367,7 @@ function TabGrundlagen() {
           Google zeigt Text-Ergebnisse, Pinterest zeigt visuelle Ergebnisse.
           Wer auf beiden präsent ist, verdoppelt seine Sichtbarkeit.
         </Para>
-        <HinweisBox>
+        <HinweisBox variant="merke">
           💡 <strong>Merke:</strong> Pinterest ist keine Social-Media-Plattform,
           die tägliche Aufmerksamkeit braucht. Es ist eine Suchmaschine, die
           mit einmaliger Arbeit langfristige Ergebnisse liefert.
@@ -419,67 +451,425 @@ function TabGrundlagen() {
    → Coaching / Premium-Angebot`}
         </CodeBlock>
 
-        <HinweisBox>
+        <HinweisBox variant="merke">
           💡 <strong>Merke:</strong> Pinterest ist der Kanal – nicht die
           Einnahmequelle. Wer nur auf eine Einnahmequelle setzt, ist abhängig.
           Wer diversifiziert, baut echte Einkommenssicherheit auf.
         </HinweisBox>
       </Accordion>
 
-      <Accordion title="Posting-Frequenz – Konsistenz ist König">
+      <Accordion title="Posting-Frequenz — wie viele Pins pro Tag in 2026?">
+        <H4>Die ehrliche Antwort: Pinterest gibt offiziell keine Zahl vor</H4>
         <Para>
-          Pinterest belohnt Accounts, die regelmäßig und verlässlich posten.
+          Pinterest selbst sagt: Es gibt kein Limit wie viele Pins du
+          erstellen kannst. Die offizielle Empfehlung lautet nur — regelmäßig
+          frischen Content posten, mindestens wöchentlich, ohne feste
+          Stückzahl. Pinterest betont Fokus auf Content-Qualität, nicht auf
+          eine fixe Pin-Anzahl pro Woche.
         </Para>
+        <Para>
+          Das heißt: Alle konkreten Zahlen die du online findest sind
+          Erfahrungswerte von Pinterest-Manager:innen und Tools wie Tailwind
+          — keine offiziellen Pinterest-Vorgaben.
+        </Para>
+
+        <H4>Der Konsens für 2026</H4>
+        <Para>
+          Die Empfehlungen haben sich in den letzten Jahren deutlich nach
+          unten verschoben. Was 2020 noch normal war (25–50 Pins/Tag) gilt
+          heute als Spam-Risiko.
+        </Para>
+        <Para>Aktuelle Richtwerte (Stand 2026):</Para>
+        <Bullets
+          items={[
+            <>
+              <strong>Tailwind (offiziell):</strong> 5 Pins pro Tag
+            </>,
+            <>
+              <strong>Adobe / Black Pug Studio:</strong> 3–10 Pins pro Tag
+            </>,
+            <>
+              <strong>Your Pin Coach:</strong> Maximal ~10 Pins pro Tag, oft
+              sogar weniger
+            </>,
+            <>
+              <strong>12AM Agency:</strong> Der „tägliche Grind" von 20 Pins/
+              Tag ist Vergangenheit — Pinterest belohnt stetiges, ruhiges
+              Posten statt Bursts
+            </>,
+            <>
+              <strong>Persönliche Erfahrungswerte aus der Community:</strong>{' '}
+              3–15 reichen je nach Account
+            </>,
+          ]}
+        />
+        <HinweisBox variant="merke">
+          💡 Der gesunde Korridor für die meisten Accounts liegt 2026 bei{' '}
+          <strong>3–10 frischen Pins pro Tag</strong>.
+        </HinweisBox>
+
+        <H4>Warum die Zahlen gesunken sind</H4>
+        <Para>
+          Drei Gründe haben die „Mehr ist mehr"-Ära beendet:
+        </Para>
+        <ol className="list-decimal space-y-2 pl-5 text-sm leading-relaxed text-gray-700">
+          <li>
+            <strong>Algorithmus-Shift zu Qualität</strong> — Ein Pin mit 100
+            Saves ist mehr wert als 100 Pins mit null Interaktion. Pinterest
+            belohnt Engagement, nicht Volumen.
+          </li>
+          <li>
+            <strong>Spam-Filter</strong> — Aggressives Pinning — besonders
+            Recyceln derselben Pins und Links über zu viele Boards — kann zu
+            Shadow-Ban oder Account-Sperre führen.
+          </li>
+          <li>
+            <strong>Search-Intent-Logik</strong> — Pinterest funktioniert wie
+            eine Suchmaschine. Wenige starke, gut keyword-optimierte Pins
+            schlagen Masse.
+          </li>
+        </ol>
+
+        <H4>Was wirklich zählt — wichtiger als die Zahl</H4>
+
+        <div>
+          <H4>1. Konsistenz über Volumen</H4>
+          <Para>
+            Lieber 3 Pins jeden Tag als 21 am Sonntag. Regelmäßiges
+            Auftauchen zählt mehr als Bursts.
+          </Para>
+        </div>
+
+        <div>
+          <H4>2. Pin-Anzahl an Content-Pipeline anpassen</H4>
+          <Para>
+            Die richtige Zahl hängt davon ab wie viele einzigartige URLs du
+            hast. Pinne so viele Pins pro Tag wie du wirklich verschiedene
+            Designs zu unterschiedlichen URLs erstellen kannst — ohne in
+            Duplikate abzurutschen. Ein Blog mit 10 Posts kann nicht dasselbe
+            Pin-Volumen tragen wie ein Shop mit 200 Produkten.
+          </Para>
+        </div>
+
+        <div>
+          <H4>3. Spacing wichtiger als Volumen</H4>
+          <Bullets
+            items={[
+              'Gleiche URL: nicht öfter als 1× in 24h, ideal 3–7 Tage Abstand',
+              'Gleicher Pin auf verschiedene Boards (mit Variation): 2 Tage Minimum, 7 Tage besser',
+            ]}
+          />
+        </div>
+
+        <div>
+          <H4>4. Native Scheduler bevorzugen</H4>
+          <Para>
+            Mehrere 2026er-Quellen empfehlen den Pinterest-eigenen Scheduler
+            statt Drittanbieter — weil das Engagement-Signale verbessert.
+          </Para>
+        </div>
+
+        <H4>Dein Korridor je nach Account-Phase</H4>
         <Table
-          head={['Phase', 'Pins pro Tag', 'Zeitaufwand pro Monat']}
+          head={['Phase', 'Content-Pool', 'Empfehlung']}
           rows={[
-            ['Anfänger (0-6 Monate)', '3-5 Pins', '~2 Stunden'],
-            ['Wachstum (6-18 Monate)', '5-15 Pins', '~4 Stunden'],
-            ['Etabliert (18+ Monate)', '10-25 Pins', '~6 Stunden'],
+            ['Einsteiger', 'weniger als 20 URLs', '1–3 frische Pins/Tag'],
+            ['Wachstumsphase', '20–100 URLs', '3–5 frische Pins/Tag'],
+            ['Etablierter Account', '100+ URLs', '5–10 frische Pins/Tag'],
+            ['Absolute Obergrenze', '—', '15/Tag, niemals darüber'],
+          ]}
+        />
+
+        <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm leading-relaxed text-amber-900">
+          <p>
+            ⚠️ <strong>Wichtig:</strong> Pinterest gibt keine offizielle Zahl
+            vor. Diese Empfehlungen basieren auf aktuellen Erfahrungswerten
+            aus 2026 — sie können sich ändern.
+          </p>
+          <p className="mt-3">
+            <strong>Hier findest du gute Hilfe:</strong>
+          </p>
+          <ul className="mt-2 space-y-1">
+            <li>
+              <a
+                href="https://help.pinterest.com/en/article/limits-for-pins-boards-and-follows"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="break-all text-amber-900 underline hover:text-amber-700"
+              >
+                https://help.pinterest.com/en/article/limits-for-pins-boards-and-follows
+              </a>
+            </li>
+            <li>
+              <a
+                href="https://business.pinterest.com/blog/how-to-build-audience-pinterest/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="break-all text-amber-900 underline hover:text-amber-700"
+              >
+                https://business.pinterest.com/blog/how-to-build-audience-pinterest/
+              </a>
+            </li>
+          </ul>
+        </div>
+      </Accordion>
+
+      <Accordion title="Multi-Board-Pinning — wie du denselben Inhalt richtig auf mehreren Boards teilst">
+        <Para>
+          Multi-Board-Pinning bedeutet: denselben Inhalt (dieselbe URL) auf
+          mehreren Boards pinnen — aber niemals mit demselben Bild. Das ist
+          der entscheidende Unterschied.
+        </Para>
+
+        <H4>Was Pinterest unter einem Duplikat versteht</H4>
+        <Para>
+          Pinterest definiert einen Duplicate Pin als exakte Bild + URL-
+          Kombination. Auch wenn du nur die Beschreibung änderst gilt der Pin
+          als Duplikat — weil Pinterest Pins primär am visuellen Eindruck
+          erkennt (Perceptual Hashing / pHash). Selbst kleine Änderungen wie
+          Verblassen, Helligkeit anpassen oder einen Filter setzen reichen
+          nicht — Pinterest erkennt das als dasselbe Motiv.
+        </Para>
+
+        <H4>Was als echter frischer Pin gilt</H4>
+        <Para>
+          Pinterest wertet einen Pin als frisch wenn er mindestens einen
+          substanziellen visuellen Unterschied hat:
+        </Para>
+        <Bullets
+          items={[
+            'Anderes Foto oder Motiv',
+            'Deutlich anderes Layout (Text oben statt unten, Collage statt Einzelbild)',
+            'Anderer Text-Hook / Headline — kombiniert mit visueller Änderung',
+            'Anderer Pin-Typ (Standard → Video → Carousel)',
           ]}
         />
         <Para>
-          Die wichtigste Erkenntnis: Du musst nicht täglich Content
-          produzieren. Produziere einmal im Monat – plane alles mit Tailwind
-          oder dem Pinterest-Scheduler für den ganzen Monat vor.
+          <strong>Faustregel:</strong> Wenn deine Zielgruppe auf den ersten
+          Blick erkennen würde dass es derselbe Pin ist — ist es für Pinterest
+          auch derselben Pin.
         </Para>
-        <H4>Beispielrechnung – nicht täglich Content produzieren:</H4>
-        <CodeBlock>
-{`30 Blogbeiträge auf deiner Website
-× 3 Pin-Varianten pro Beitrag = 90 Pins
-× je 3 Boards verteilt        = 270 Pins im Pool
-÷ 30 Tage                     = 9 Pins pro Tag
 
-Plus monatlich 20 neue Pins   = 10+ Pins täglich`}
-        </CodeBlock>
-        <HinweisBox>
-          💡 <strong>Merke:</strong> Pinterest ist ein Marathon, kein Sprint.
-          Konsistenz über 12 Monate schlägt jeden kurzfristigen
-          Intensiv-Sprint.
+        <H4>Warum identische Pins schaden</H4>
+        <Para>
+          Der Pinterest-Algorithmus bestraft Duplikate nicht mit einer Sperre,
+          aber:
+        </Para>
+        <Bullets
+          items={[
+            'Er distribuiert sie schlechter in Home-Feed und Suche',
+            'Bei identischem Bild auf zwei thematisch unterschiedlichen Boards wird der Algorithmus verwirrt und priorisiert den Pin im Zweifel gar nicht',
+            'Bei wiederholtem Verhalten kann es zu Spam-Flag bis Account-Suspension kommen',
+          ]}
+        />
+
+        <H4>Die richtige Vorgehensweise</H4>
+        <Para>
+          1 Blogpost / Produkt-URL → 3–5 visuell unterschiedliche Pin-Designs
+          (verschiedene Bilder, andere Hooks, andere Layouts) → jeder Pin geht
+          auf das thematisch passendste Board zuerst → frühestens nach 2–3
+          Tagen ein zweites passendes Board → maximal ~10 Boards für denselben
+          Content
+        </Para>
+
+        <H4>Wichtiger Hinweis zu UTM-Parametern</H4>
+        <Para>
+          Auch das Hinzufügen von UTM-Parametern zur URL macht keinen frischen
+          Pin. Pinterest schaut auf die canonical URL plus das Bild — UTM-
+          Parameter werden ignoriert.
+        </Para>
+
+        <HinweisBox variant="merke">
+          💡 <strong>Merke:</strong> Variation bedeutet substanziell anderes
+          Design — nicht kosmetische Änderungen. Dein Pin-Produktions-Workflow
+          zwingt dich strukturell zur richtigen Variation.
         </HinweisBox>
       </Accordion>
 
-      <Accordion title="Multi-Board-Pinning">
+      <Accordion title="Die 9 Ranking-Faktoren — dein Fahrplan für Pinterest-Erfolg">
         <Para>
-          Pinterest verteilt Pins nach thematischer Relevanz. Derselbe Pin auf
-          drei verschiedenen Boards erreicht drei verschiedene Zielgruppen.
+          Pinterest ist eine Suchmaschine — kein Social Media. Wer alle 9
+          Faktoren konsequent optimiert wird belohnt. Wer nur am Bild arbeitet
+          aber Titel und URL vernachlässigt verschenkt Potenzial.
         </Para>
-        <H4>Die Regeln:</H4>
+        <Para>
+          Pinterest bewertet jeden Pin nach diesen Faktoren — in dieser
+          Reihenfolge:
+        </Para>
+
+        <div>
+          <H4>1. Pin Titel — der wichtigste SEO-Faktor</H4>
+          <Para>
+            Das Haupt-Keyword gehört ganz an den Anfang. Die ersten 30–35
+            Zeichen erscheinen im Feed — alles danach wird abgeschnitten.
+            Max. 100 Zeichen.
+          </Para>
+        </div>
+
+        <div>
+          <H4>2. Pin Beschreibung</H4>
+          <Para>
+            Natürlich formuliert mit mehreren relevanten Keywords. Immer mit
+            Call-to-Action enden. Max. 500 Zeichen.
+          </Para>
+        </div>
+
+        <div>
+          <H4>3. URL</H4>
+          <Para>
+            Pinterest liest die URL deiner Zielseite nach Keywords. Eine URL
+            wie „soulfulspace.de/yogaraum-einrichten" ist stärker als
+            „soulfulspace.de/post-123". Achte darauf dass deine URLs sprechend
+            sind.
+          </Para>
+        </div>
+
+        <div>
+          <H4>4. Board-Name</H4>
+          <Para>
+            Der Board-Name auf dem du den Pin speicherst beeinflusst direkt
+            die Reichweite. Ein thematisch passender Board-Name verstärkt das
+            SEO-Signal des Pins.
+          </Para>
+        </div>
+
+        <div>
+          <H4>5. Board-Beschreibung</H4>
+          <Para>
+            Wird von Pinterest vollständig gelesen und zur thematischen
+            Einordnung genutzt. Max. 500 Zeichen, Longtail-Keywords verwenden.
+          </Para>
+        </div>
+
+        <div>
+          <H4>6. Website-Titel & Meta-Beschreibung</H4>
+          <Para>
+            Pinterest crawlt die Zielseite deines Pins. Der Seitentitel und
+            die Meta-Beschreibung deiner Website fließen in die Bewertung ein
+            — optimiere beides mit relevanten Keywords.
+          </Para>
+        </div>
+
+        <div>
+          <H4>7. Bilder & Bildqualität — inkl. OCR</H4>
+          <Para>
+            Pinterest nutzt OCR (Optical Character Recognition) — der Hook-
+            Text auf deinem Pin-Bild wird gelesen und als SEO-Signal gewertet.
+            Außerdem:
+          </Para>
+          <Bullets
+            items={[
+              'Bilddatei beim Upload mit Keywords benennen (nicht „IMG_1234.jpg" sondern „yoga-matte-aufbewahren-ideen.jpg")',
+              'Alt Text beim Pin-Upload ausfüllen (max. 500 Zeichen, wichtigste Keywords)',
+              'Hochauflösende, helle und klare Bilder performen besser',
+            ]}
+          />
+        </div>
+
+        <div>
+          <H4>8. Pin-Kohärenz</H4>
+          <Para>
+            Pinterest prüft ob Bild, Titel, Beschreibung, URL und Board
+            thematisch zusammenpassen. Ein Pin über „Yogaraum einrichten" der
+            auf einem „Kochrezepte" Board gespeichert ist sendet
+            widersprüchliche Signale — und wird schlechter ausgespielt.
+            Konsistenz ist Pflicht.
+          </Para>
+        </div>
+
+        <div>
+          <H4>9. Pin-Engagement</H4>
+          <Para>
+            Klicks, Saves und Kommentare signalisieren Pinterest dass dein
+            Pin relevant ist. Je mehr Engagement desto mehr Reichweite. Das
+            ist der einzige Faktor den du nicht direkt kontrollieren kannst —
+            aber durch alle anderen Faktoren positiv beeinflussen.
+          </Para>
+        </div>
+
+        <H4>Empfehlungen für Board-Titel und -Beschreibungen:</H4>
         <Bullets
           items={[
-            'Identischer Pin → erlaubt mit 7-14 Tage Abstand',
-            'Minimale Variante (anderer Hook, andere Farbe) → noch besser',
-            'Maximum 3-5 Boards pro Pin',
-            'Boards müssen thematisch zum Pin passen',
+            <>
+              <strong>Board-Titel:</strong> Wenn möglich offizielle Pinterest-
+              Kategorienamen verwenden oder meist gesuchte Keywords
+            </>,
+            <span key="bad" className="text-gray-700">
+              ❌ „Meine Yoga-Welt" → keine Kategorie, kein Keyword
+            </span>,
+            <span key="good1" className="text-gray-700">
+              ✅ „Yoga zuhause: Yogaraum & Yoga Ecke einrichten" → Keyword +
+              Unterthema
+            </span>,
+            <span key="good2" className="text-gray-700">
+              ✅ „Achtsamkeit & Meditation: Morgenroutine für mehr Ruhe" →
+              Kategorie + Longtail
+            </span>,
+            <>
+              <strong>Board-Beschreibung:</strong> 500 Zeichen, schnelle
+              Beschreibung + beste gesuchte Longtail-Keywords
+            </>,
+            <>
+              <strong>So findest du Pinterest-Kategorienamen:</strong>{' '}
+              Pinterest öffnen → linkes Menü → „Entdecken" → dort siehst du
+              alle offiziellen Kategorien
+            </>,
           ]}
         />
-        <H4>Praktisches Beispiel:</H4>
-        <CodeBlock>
-{`Woche 1:  Pin A          → Board "Garten gestalten"
-Woche 3:  Pin A          → Board "Outdoor-Wohnen"
-Woche 5:  Pin A          → Board "DIY & Heimwerken"
-Woche 7:  Pin B (Variante) → Board "Garten gestalten"`}
-        </CodeBlock>
+
+        <HinweisBox variant="merke">
+          💡 <strong>Merke:</strong> Pinterest ist eine Suchmaschine — kein
+          Social Media. Wer alle 9 Faktoren konsequent optimiert wird belohnt.
+        </HinweisBox>
+      </Accordion>
+
+      <Accordion title="Geheime Boards — das unterschätzte Schutzinstrument">
+        <Para>
+          Die meisten Pinterest-Nutzer wissen nicht dass öffentliche Boards
+          den Algorithmus verwirren können — wenn sie themenfremde Inhalte
+          enthalten.
+        </Para>
+
+        <H4>Das Problem mit öffentlichen privaten Interessen</H4>
+        <Para>
+          Wenn du privat nach Themen suchst die nichts mit deiner Nische zu
+          tun haben — Rezepte, Reisen, Mode — und diese Pins auf öffentlichen
+          Boards speicherst sendest du Pinterest widersprüchliche Signale.
+          Pinterest denkt dein Account bedient mehrere unzusammenhängende
+          Themen und spielt deine Pins weniger zielgerichtet aus.
+        </Para>
+
+        <H4>Die Lösung: Geheime Boards</H4>
+        <Para>
+          Geheime Boards sind nur für dich sichtbar — Pinterest wertet sie
+          nicht für die öffentliche Reichweite.
+        </Para>
+
+        <H4>Wann geheime Boards nutzen:</H4>
+        <Bullets
+          items={[
+            'Private Interessen (Reisen, Kochen, Mode) die nicht zur Nische passen',
+            'Boards die noch aufgebaut werden und noch zu wenig Pins haben',
+            'Inspiration-Boards für deine eigene Arbeit (Moodboards etc.)',
+            'Test-Boards für neue Themen die du noch nicht öffentlich zeigen möchtest',
+          ]}
+        />
+
+        <H4>Warum Boards entscheidend sind</H4>
+        <Para>
+          Boards sind der zweitwichtigste SEO-Faktor auf Pinterest — direkt
+          nach den Keywords. Pinterest nutzt sie als Kontext-Signal: Ein Board
+          mit klarem Thema, guten Keywords und regelmäßigen Pins wird
+          bevorzugt — und alle Pins darauf bekommen mehr Reichweite. Ein
+          schwaches oder inaktives Board bremst nicht nur sich selbst sondern
+          zieht den gesamten Account runter.
+        </Para>
+
+        <HinweisBox>
+          💡 <strong>Tipp:</strong> Prüfe einmal im Monat welche Boards
+          wachsen und welche stagnieren. Top Boards zeigen dir wo deine
+          Zielgruppe aktiv ist — dort solltest du mehr produzieren.
+        </HinweisBox>
       </Accordion>
 
       <Accordion
@@ -500,7 +890,7 @@ Woche 7:  Pin B (Variante) → Board "Garten gestalten"`}
           Ausspielung. Das gibt dir einen enormen Vorteil: Du kannst Trends
           antizipieren, statt darauf zu reagieren.
         </Para>
-        <HinweisBox>
+        <HinweisBox variant="merke">
           <strong>Die goldene Regel:</strong> Zu früh ist besser als zu spät.
           Ein Pin, der 8 Wochen vor dem Event veröffentlicht wird, hat Zeit
           ausgespielt zu werden. Ein Pin, der eine Woche vorher erscheint,
@@ -783,7 +1173,7 @@ Berücksichtige Pinterest-Suchverhalten: Nutzer:innen recherchieren 4-12 Wochen 
 function TabStrategien() {
   return (
     <div className="space-y-3">
-      <Accordion title="Warum eine Strategie wichtig ist" defaultOpen>
+      <Accordion title="Warum eine Strategie wichtig ist">
         <Para>
           Die meisten Menschen, die Pinterest für ihr Business nutzen, machen
           denselben Fehler: Sie pinnen fleißig – aber ohne klares Ziel. Sie
@@ -899,7 +1289,7 @@ function TabStrategien() {
           </div>
         </div>
 
-        <HinweisBox>
+        <HinweisBox variant="merke">
           💡 <strong>Die wichtigste Regel:</strong> Ein Pin – eine Strategie.
           Entscheide beim Erstellen jedes Pins bewusst, wohin der Traffic
           fließen soll.
@@ -952,7 +1342,7 @@ Besucher   Kontakt    Kunde`}
             ['Kurs-Warteliste / Lead-Magnet', 'Produkt', 'Lead'],
           ]}
         />
-        <HinweisBox>
+        <HinweisBox variant="merke">
           💡 Traffic ist Aufmerksamkeit. Leads sind Beziehungen. Sales sind
           Vertrauen, das sich ausgezahlt hat.
         </HinweisBox>
@@ -1059,7 +1449,7 @@ Besucher   Kontakt    Kunde`}
             </span>
           </li>
         </ol>
-        <HinweisBox>
+        <HinweisBox variant="merke">
           💡 Eine mittelmäßige Strategie konsequent umgesetzt schlägt eine
           perfekte Strategie, die nie umgesetzt wird.
         </HinweisBox>
@@ -1075,7 +1465,7 @@ Besucher   Kontakt    Kunde`}
 function TabDesign() {
   return (
     <div className="space-y-3">
-      <Accordion title="Pin-Formate" defaultOpen>
+      <Accordion title="Pin-Formate">
         <Para>
           Pinterest belohnt Accounts, die verschiedene Formate nutzen.
         </Para>
@@ -1149,7 +1539,7 @@ function TabDesign() {
           ]}
         />
 
-        <HinweisBox>
+        <HinweisBox variant="merke">
           💡 <strong>Merke:</strong> Fange klein an – aber fange an. Ein
           Video-Pin pro Monat ist besser als keiner.
         </HinweisBox>
@@ -1274,7 +1664,7 @@ function TabDesign() {
             ['Ton', 'Emotional / neugierig', 'Klar / informativ'],
           ]}
         />
-        <HinweisBox>
+        <HinweisBox variant="merke">
           Das Bild ist der Köder – der Hook ist der Haken.
         </HinweisBox>
       </Accordion>
@@ -1510,12 +1900,1032 @@ function TabDesign() {
           <strong>Ergebnis:</strong> 30-50 Pins für einen ganzen Monat in
           4-6 Stunden.
         </Para>
-        <HinweisBox>
+        <HinweisBox variant="merke">
           💡 Vorlagen und Systeme sind keine Abkürzung – sie sind die
           Voraussetzung dafür, dass Pinterest-Marketing nachhaltig
           funktioniert. Wer jeden Pin von Grund auf neu erstellt, verliert
           nach 3 Monaten die Motivation. Wer mit Systemen arbeitet, pinnt noch
           in 3 Jahren.
+        </HinweisBox>
+      </Accordion>
+
+      <Accordion title="Pin-Felder optimal ausfüllen — Zeichenlimits & Best Practices">
+        <Para>
+          Jedes Feld beim Pin-Upload wird von Pinterest als SEO-Signal
+          gewertet. Hier sind die wichtigsten Regeln:
+        </Para>
+
+        <div>
+          <H4>Pinnwand-Titel</H4>
+          <Para>
+            Pinterest-Kategorienamen oder meist gesuchte Keywords verwenden.
+            Klar und thematisch eindeutig — kein kreativer Name der nichts
+            aussagt.
+          </Para>
+        </div>
+
+        <div>
+          <H4>Pinnwand-Beschreibung</H4>
+          <Para>
+            500 Zeichen. Kurze Beschreibung des Themas + beste gesuchte
+            Longtail-Keywords. Natürlich formuliert, nicht keyword-gestopft.
+          </Para>
+        </div>
+
+        <div>
+          <H4>Pin-Titel</H4>
+          <Para>
+            100 Zeichen. Die ersten 30–35 werden im Feed angezeigt — das
+            Haupt-Keyword gehört ganz an den Anfang. Kombiniere Keyword +
+            Signalwort + konkreten Nutzen.
+          </Para>
+        </div>
+
+        <div>
+          <H4>Pin-Beschreibung</H4>
+          <Para>
+            500 Zeichen. Mehrere relevante Keywords natürlich einbauen. Immer
+            mit einer Call-to-Action enden („Jetzt lesen", „Hier klicken",
+            „Mehr erfahren").
+          </Para>
+        </div>
+
+        <div>
+          <H4>Alt Text</H4>
+          <Para>
+            500 Zeichen. Hochgesuchte, relevante Keywords. Beschreibt was auf
+            dem Bild zu sehen ist — kombiniert mit dem Thema des Pins.
+          </Para>
+        </div>
+
+        <div>
+          <H4>URL</H4>
+          <Para>
+            Pinterest liest auch die URL nach Keywords. Sprechende URLs sind
+            stärker als generische („soulfulspace.de/yoga-morgenroutine"
+            stärker als „soulfulspace.de/post-47").
+          </Para>
+        </div>
+
+        <div>
+          <H4>Pin-Bild & Dateiname</H4>
+          <Bullets
+            items={[
+              'Bilddatei vor dem Upload umbenennen: nicht „IMG_1234.jpg" sondern „yoga-matte-aufbewahren-tipps.jpg"',
+              'Pinterest liest den Text auf dem Bild (OCR) — der Hook auf dem Pin wird als SEO-Signal gewertet',
+              'Hochauflösend, hell, klar — das Motiv und der Text müssen sofort erkennbar sein',
+            ]}
+          />
+        </div>
+
+        <H4>Ranking der Felder nach Wichtigkeit:</H4>
+        <ol className="list-decimal space-y-1 pl-5 text-sm leading-relaxed text-gray-700">
+          <li>Pin-Titel</li>
+          <li>Pin-Beschreibung</li>
+          <li>URL</li>
+          <li>Pinnwand-Name</li>
+          <li>Pinnwand-Beschreibung</li>
+          <li>Website-Titel & Meta-Beschreibung</li>
+          <li>Bild & Bildqualität (inkl. OCR)</li>
+          <li>Pin-Kohärenz (alle Felder passen thematisch zusammen)</li>
+          <li>Pin-Engagement</li>
+        </ol>
+
+        <HinweisBox>
+          💡 <strong>Tipp:</strong> Listen, Checklisten und Infografiken
+          werden am häufigsten geklickt und gespeichert — sie sind ideal für
+          hohe Engagement Rate.
+        </HinweisBox>
+      </Accordion>
+    </div>
+  )
+}
+
+// ===========================================================
+// Tab 5 — Keywords & SEO
+// ===========================================================
+
+function TabKeywords() {
+  return (
+    <div className="space-y-3">
+      <p className="mb-6 text-sm leading-relaxed text-gray-600">
+        Keywords sind das Fundament deiner gesamten Reichweite auf Pinterest.
+        Pinterest ist eine visuelle Suchmaschine — wer die Sprache seiner
+        Zielgruppe kennt und konsequent einsetzt wird ausgespielt. Wer
+        generisch schreibt verschwindet in der Masse.
+      </p>
+
+      <Accordion title="Warum Pinterest-Keywords anders funktionieren als bei Google">
+        <Para>
+          Pinterest ist keine Suchmaschine im klassischen Sinne — es ist
+          eine visuelle Suchmaschine. Das verändert alles.
+        </Para>
+        <Para>
+          Wenn jemand bei Google sucht will er eine Antwort auf eine Frage.
+          Wenn jemand bei Pinterest sucht sucht er Inspiration, Ideen und
+          Lösungen — oft ohne genau zu wissen was er sucht. Das bedeutet:
+          Pinterest-Nutzer tippen andere Begriffe ein als Google-Nutzer.
+        </Para>
+
+        <H4>Ein Beispiel:</H4>
+        <Para>
+          Bei Google sucht jemand „schnelle vegane Rezepte unter 30 Minuten
+          Anleitung". Bei Pinterest tippt dieselbe Person eher „schnelle
+          vegane Abendessen" oder „gesund kochen vegan einfach". Kürzer.
+          Visueller. Inspirationsgetrieben.
+        </Para>
+
+        <H4>Was das für dich bedeutet:</H4>
+        <Para>
+          Pinterest belohnt Pins die exakt die Sprache der Nutzer sprechen.
+          Der Algorithmus liest deinen Pin-Titel, deine Beschreibung, deinen
+          Board-Namen und sogar den Text auf deinem Bild — und entscheidet
+          dann wem er deinen Pin zeigt.
+        </Para>
+        <Para>
+          Wer die richtigen Keywords verwendet wird ausgespielt. Wer
+          generisch schreibt verschwindet in der Masse.
+        </Para>
+
+        <HinweisBox variant="merke">
+          💡 <strong>Merke:</strong> Keywords auf Pinterest sind nicht
+          optional. Sie sind das Fundament deiner gesamten Reichweite.
+        </HinweisBox>
+      </Accordion>
+
+      <Accordion title="Die drei Keyword-Typen — und wann du welchen einsetzt">
+        <Para>
+          Nicht alle Keywords sind gleich. Je nachdem wie spezifisch ein
+          Keyword ist hat es unterschiedliche Stärken und Schwächen.
+        </Para>
+
+        <div className="rounded-md border border-red-200 bg-red-50 p-4">
+          <H3>🔴 Haupt-Keywords — breite Reichweite, hohe Konkurrenz</H3>
+          <Para>
+            Bestehen aus einem einzigen Wort oder einem sehr allgemeinen
+            Begriff.
+          </Para>
+          <Para>
+            <em>Beispiele:</em> „Outfit", „Rezept",
+            „Persönlichkeitsentwicklung", „Handmade"
+          </Para>
+          <Para>
+            Hohes Suchvolumen — aber auch viel Konkurrenz. Haupt-Keywords
+            gehören immer in den Titel — möglichst ganz am Anfang. Sie
+            signalisieren Pinterest das übergeordnete Thema.
+          </Para>
+        </div>
+
+        <div className="rounded-md border border-yellow-200 bg-yellow-50 p-4">
+          <H3>🟡 Mid-Tail Keywords — die goldene Mitte</H3>
+          <Para>Bestehen aus zwei bis drei Wörtern.</Para>
+          <Para>
+            <em>Beispiele:</em> „Outfit Herbst Frauen", „schnelle vegane
+            Rezepte", „Selbstvertrauen stärken Tipps", „Yogaraum gestalten
+            Ideen"
+          </Para>
+          <Para>
+            Spezifischer als Haupt-Keywords aber noch breit genug um von
+            vielen Menschen gesucht zu werden. Mid-Tail Keywords sind dein
+            wichtigstes Werkzeug. Sie gehören in den Titel und in die
+            Beschreibung.
+          </Para>
+        </div>
+
+        <div className="rounded-md border border-green-200 bg-green-50 p-4">
+          <H3>🟢 Longtail Keywords — hohe Conversion</H3>
+          <Para>Bestehen aus vier oder mehr Wörtern.</Para>
+          <Para>
+            <em>Beispiele:</em> „Outfit Herbst Frauen 40 casual", „schnelle
+            vegane Rezepte unter 30 Minuten", „Selbstvertrauen stärken nach
+            Trennung Tipps", „Yoga Retreat Österreich Wellness Hotel Alpen"
+          </Para>
+          <Para>
+            Wenig Suchvolumen — aber wer danach sucht weiß genau was er
+            will. Die Klickwahrscheinlichkeit ist deutlich höher als bei
+            breiten Keywords. Longtail Keywords gehören in die Beschreibung
+            — als natürlicher Satz formuliert, niemals als bloße
+            Aneinanderreihung.
+          </Para>
+        </div>
+
+        <H4>Beispiel für gute Keyword-Nutzung:</H4>
+        <Para>Thema: Schnelle vegane Rezepte</Para>
+        <Bullets
+          items={[
+            <>
+              <strong>Titel:</strong> „Schnelle vegane Rezepte: 5 Abendessen
+              unter 20 Minuten"
+            </>,
+            <>
+              <strong>Beschreibung:</strong> „Du suchst nach schnellen
+              veganen Rezepten für den Alltag? Diese veganen Abendessen sind
+              in unter 20 Minuten fertig — einfach, gesund und perfekt für
+              die ganze Familie."
+            </>,
+          ]}
+        />
+        <Para>
+          Keywords enthalten: <em>schnelle vegane Rezepte</em> (Mid-Tail),{' '}
+          <em>vegane Abendessen</em> (Mid-Tail),{' '}
+          <em>schnelle vegane Rezepte Alltag</em> (Longtail-Variante).
+          Natürlich formuliert. Kein Keyword-Stuffing.
+        </Para>
+      </Accordion>
+
+      <Accordion title="Keywords recherchieren — die Autocomplete-Methode">
+        <Para>
+          Die beste Keyword-Quelle für Pinterest ist Pinterest selbst. Der
+          Grund: Pinterest zeigt dir direkt was seine Nutzer suchen — in
+          Echtzeit.
+        </Para>
+
+        <div>
+          <H4>Schritt 1 — Haupt-Keyword eingeben</H4>
+          <Para>
+            Öffne Pinterest und tippe dein Thema in die Suchleiste. Zum
+            Beispiel „Mode". Drücke noch nicht Enter — schau was Pinterest
+            dir vorschlägt. Diese Vorschläge sind deine Haupt- und Mid-Tail
+            Keywords.
+          </Para>
+        </div>
+
+        <div>
+          <H4>Schritt 2 — Farbige Blöcke beachten</H4>
+          <Para>
+            Direkt unter der Suchleiste erscheinen farbige Keyword-Blöcke.
+            Diese zeigen die beliebtesten Unterthemen zu deinem
+            Haupt-Keyword. Klicke darauf und notiere die Kombinationen — das
+            sind wertvolle Mid-Tail Keywords.
+          </Para>
+        </div>
+
+        <div>
+          <H4>Schritt 3 — Spezifischer werden</H4>
+          <Para>
+            Tippe dein Haupt-Keyword und füge einen Buchstaben hinzu. Aus
+            „Mode" wird „Mode H" — Pinterest zeigt dir jetzt spezifischere
+            Begriffe wie „Mode Herbst", „Mode Herbst Frauen 40", „Mode
+            Herbst casual". Das sind deine Mid-Tail Keywords.
+          </Para>
+        </div>
+
+        <div>
+          <H4>Schritt 4 — Longtail Keywords finden</H4>
+          <Para>
+            Tippe eine vollständige Phrase wie „Outfit Herbst Frauen" —
+            Pinterest zeigt dir noch spezifischere Varianten. Das sind deine
+            Longtail Keywords.
+          </Para>
+        </div>
+
+        <div>
+          <H4>Schritt 5 — In die Keyword-Datenbank eintragen</H4>
+          <Para>
+            Trage jedes gefundene Keyword direkt in deine →{' '}
+            <Link
+              href="/dashboard/keywords"
+              className="text-red-700 underline underline-offset-2 hover:text-red-800"
+            >
+              Keyword-Datenbank
+            </Link>{' '}
+            ein. Vergib den Keyword-Typ (Haupt, Mid-Tail oder Longtail) und
+            ordne es dem passenden Content-Inhalt zu.
+          </Para>
+        </div>
+
+        <H4>Wie oft recherchieren?</H4>
+        <Para>
+          Mindestens einmal pro neuem Thema das du bepinnen möchtest.
+          Zusätzlich alle 3 Monate eine neue Recherche —
+          Pinterest-Suchtrends ändern sich und neue Keywords tauchen auf.
+        </Para>
+      </Accordion>
+
+      <Accordion title="Keywords überall einsetzen — nicht nur im Titel">
+        <Para>
+          Ein häufiger Fehler: Keywords werden nur in Titel und Beschreibung
+          eingesetzt. Aber Pinterest liest an viel mehr Stellen:
+        </Para>
+
+        <div>
+          <H4>Pin-Titel (max. 100 Zeichen)</H4>
+          <Para>
+            Haupt-Keyword ganz an den Anfang. Die ersten 30–35 Zeichen
+            erscheinen im Feed — alles danach wird abgeschnitten.
+          </Para>
+        </div>
+
+        <div>
+          <H4>Pin-Beschreibung (max. 500 Zeichen)</H4>
+          <Para>
+            Mid-Tail und Longtail Keywords natürlich integriert. Immer mit
+            Call-to-Action enden.
+          </Para>
+        </div>
+
+        <div>
+          <H4>Alt Text (max. 500 Zeichen)</H4>
+          <Para>
+            Wird von Pinterest als SEO-Signal gewertet. Beschreibe das Bild
+            UND das Thema. Wichtigste Keywords natürlich integrieren.
+          </Para>
+        </div>
+
+        <div>
+          <H4>Bilddateiname</H4>
+          <Para>
+            Bevor du ein Bild hochlädst — benenne die Datei mit Keywords:
+          </Para>
+          <Bullets
+            items={[
+              '❌ „IMG_1234.jpg"',
+              '✅ „schnelle-vegane-rezepte-abendessen.jpg"',
+            ]}
+          />
+          <Para>
+            Pinterest liest den Dateinamen als zusätzliches Keyword-Signal.
+          </Para>
+        </div>
+
+        <div>
+          <H4>OCR — Text auf dem Bild</H4>
+          <Para>
+            Pinterest kann Text auf Bildern lesen (Optical Character
+            Recognition). Der Hook-Text auf deinem Pin-Bild wird als
+            Keyword-Signal gewertet. Nutze das bewusst — Haupt-Keyword im
+            Hook-Text verwenden, gut lesbar mit hohem Kontrast.
+          </Para>
+        </div>
+
+        <div>
+          <H4>URL der Zielseite</H4>
+          <Para>Pinterest crawlt die URL deiner Zielseite. Sprechende URLs sind stärker:</Para>
+          <Bullets
+            items={[
+              '❌ „meinblog.de/p=123"',
+              '✅ „meinblog.de/schnelle-vegane-rezepte"',
+            ]}
+          />
+        </div>
+
+        <div>
+          <H4>Board-Name und Board-Beschreibung</H4>
+          <Para>
+            Pinterest liest auch den Board-Namen und die Board-Beschreibung
+            auf dem der Pin gespeichert ist — als thematisches
+            Kontext-Signal. Ein Pin über „Yogaraum gestalten" auf einem
+            Board namens „Yoga zuhause: Yogaraum gestalten & einrichten"
+            bekommt ein doppeltes SEO-Signal. Details dazu im Accordion →
+            Board-Keywords weiter unten auf dieser Seite.
+          </Para>
+        </div>
+
+        <div>
+          <H4>Website Meta-Daten</H4>
+          <Para>
+            Pinterest liest auch den Seitentitel und die Meta-Beschreibung
+            deiner Zielseite. Stelle sicher dass beide relevante Keywords
+            enthalten.
+          </Para>
+        </div>
+
+        <HinweisBox>
+          💡 Der Pin-Erstellungs-Prompt in →{' '}
+          <Link
+            href="/dashboard/wissen-prompts"
+            className="text-amber-900 underline underline-offset-2 hover:text-amber-700"
+          >
+            Wissen & Prompts
+          </Link>{' '}
+          berücksichtigt Titel, Beschreibung und Keywords automatisch. Alt
+          Text und Dateiname musst du manuell ergänzen.
+        </HinweisBox>
+      </Accordion>
+
+      <Accordion title="Wie viele Keywords pro Pin — und warum weniger mehr ist">
+        <Para>
+          Ein häufiger Anfängerfehler: So viele Keywords wie möglich in
+          einen Pin stopfen in der Hoffnung dass der Algorithmus ihn öfter
+          ausspielt. Das Gegenteil ist der Fall.
+        </Para>
+        <Para>
+          Pinterest bewertet die thematische Relevanz eines Pins. Wenn ein
+          Pin zu viele verschiedene Keywords enthält verliert er seine
+          thematische Schärfe — Pinterest weiß nicht mehr genau wem es ihn
+          zeigen soll.
+        </Para>
+
+        <H4>Die Faustregel:</H4>
+        <Bullets
+          items={[
+            <>
+              <strong>1 Haupt-Keyword</strong> — immer im Titel ganz vorne
+            </>,
+            <>
+              <strong>1–2 Mid-Tail Keywords</strong> — in Titel und
+              Beschreibung
+            </>,
+            <>
+              <strong>1 Longtail Keyword</strong> — in der Beschreibung als
+              natürlicher Satz
+            </>,
+          ]}
+        />
+        <Para>
+          Das klingt nach wenig — aber diese Keywords erzählen Pinterest
+          eine klare Geschichte: Worum geht es in diesem Pin, wer sucht
+          danach und was bekommt der Nutzer wenn er klickt.
+        </Para>
+
+        <H4>Beispiel Yoga-Blog: Yogaraum gestalten</H4>
+        <Bullets
+          items={[
+            <>
+              <strong>Titel:</strong> „Yogaraum gestalten: 7 Ideen für ein
+              entspanntes Yoga zuhause"
+            </>,
+            <>
+              <strong>Beschreibung:</strong> „Du möchtest deinen Yogaraum
+              zuhause gemütlich und inspirierend gestalten? Diese Ideen für
+              die Yoga Ecke zuhause helfen dir einen Raum zu schaffen der
+              dich täglich zur Praxis einlädt — auch auf kleiner Fläche."
+            </>,
+          ]}
+        />
+        <Para>
+          Keywords enthalten: <em>Yogaraum gestalten</em> (Mid-Tail),{' '}
+          <em>Yoga zuhause</em> (Mid-Tail),{' '}
+          <em>Yoga Ecke zuhause Ideen</em> (Longtail). Natürlich
+          formuliert. Kein Keyword-Stuffing. Trotzdem SEO-stark.
+        </Para>
+      </Accordion>
+
+      <Accordion title="Board-Keywords — der vergessene SEO-Hebel">
+        <Para>
+          Die meisten Pinterest-Nutzer optimieren ihre Pins mit Keywords —
+          aber vergessen dabei ihre Boards. Das ist ein teurer Fehler.
+          Pinterest liest nicht nur Pin-Titel und Beschreibung — es liest
+          auch den Board-Namen und die Board-Beschreibung in dem der Pin
+          gespeichert ist.
+        </Para>
+        <Para>
+          Ein perfekt optimierter Pin auf einem schwachen Board verliert
+          Reichweite. Ein gut optimiertes Board verstärkt jeden einzelnen
+          Pin der darauf gespeichert wird.
+        </Para>
+
+        <H4>Wie Pinterest Boards bewertet:</H4>
+        <Para>
+          Pinterest nutzt deine Boards um zu verstehen worum es in deinem
+          gesamten Account geht. Ein Board mit klarem Thema, keyword-starkem
+          Namen und ausführlicher Beschreibung signalisiert: „Dieser Account
+          ist eine Autorität für dieses Thema." Thematische Autorität ist
+          einer der wichtigsten Faktoren für die Reichweite deiner Pins.
+        </Para>
+
+        <H4>Board-Name optimieren (max. 50 Zeichen inkl. Leerzeichen):</H4>
+        <Bullets
+          items={[
+            'Haupt-Keyword möglichst am Anfang',
+            'Klar und beschreibend — kein kreativer oder witziger Name',
+            '❌ „Meine Yoga Welt" — Pinterest weiß nicht genau worum es geht',
+            '✅ „Yoga Retreat Österreich: Wellness Hotels & Yoga Urlaub" — klares Keyword, spezifisches Unterthema',
+          ]}
+        />
+
+        <H4>Board-Beschreibung optimieren (max. 500 Zeichen):</H4>
+        <Para>
+          Wird von vielen Nutzern leer gelassen — dabei eine der
+          wertvollsten SEO-Flächen auf Pinterest.
+        </Para>
+        <Bullets
+          items={[
+            '2–3 Sätze',
+            'Haupt-Keyword im ersten Satz ganz vorne',
+            'Mid-Tail und Longtail Keywords natürlich integriert',
+            'Zielgruppe direkt ansprechen',
+          ]}
+        />
+        <Para>
+          <strong>Beispiel (Yoga Retreats):</strong>
+          <br />
+          „Yoga Retreat Österreich und Deutschland — die schönsten Yoga
+          Hotels, Wellness Retreats und Yoga Urlaub Angebote für Anfänger
+          und Fortgeschrittene. Hier findest du inspirierende Orte für
+          deine nächste Auszeit und dein Yoga Wochenende."
+        </Para>
+
+        <H4>Die Verbindung zwischen Board- und Pin-Keywords:</H4>
+        <Para>
+          Das Mächtigste was du tun kannst: Board-Keywords und Pin-Keywords
+          aufeinander abstimmen.
+        </Para>
+        <Para>
+          Wenn dein Board heißt „Yoga Retreat Österreich: Wellness Hotels
+          & Yoga Urlaub" und dein Pin-Titel lautet „Yoga Retreat
+          Österreich: Die 10 schönsten Wellness Hotels in den Alpen" —
+          sieht Pinterest eine konsistente thematische Linie. Diese
+          Konsistenz signalisiert thematische Autorität und belohnt wird
+          sie mit mehr Reichweite.
+        </Para>
+
+        <H4>Wie viele Boards brauchst du?</H4>
+        <Para>
+          Weniger als du denkst. Ein Account mit 10 starken, klar
+          definierten Boards ist besser als 30 unstrukturierte Boards.
+          Faustregel: Ein Board pro Hauptthema — nicht mehr als 15–20
+          Boards insgesamt.
+        </Para>
+
+        <HinweisBox>
+          💡 Nutze den →{' '}
+          <Link
+            href="/dashboard/boards"
+            className="text-amber-900 underline underline-offset-2 hover:text-amber-700"
+          >
+            KI-Prompt Generator
+          </Link>{' '}
+          auf der Boards-Seite um direkt einen SEO-optimierten Board-Namen
+          und eine Beschreibung zu generieren.
+        </HinweisBox>
+      </Accordion>
+
+      <Accordion title="Keywords tracken — der monatliche Review">
+        <Para>
+          Die Keyword-Datenbank in Pin-Flow ist nicht nur zur Verwaltung da
+          — sie ist ein strategisches Planungs-Werkzeug.
+        </Para>
+
+        <H4>Was du tracken kannst</H4>
+        <Para>
+          Pin-Flow gleicht automatisch alle Pins in deiner Datenbank mit der
+          Keyword-Datenbank ab — anhand von Pin-Titel, Beschreibung und
+          Board-Name. Du musst nichts manuell zuordnen. Nach jedem
+          Analytics-Update siehst du in der Keyword-Datenbank für jedes
+          Keyword wie viele Pins es enthalten, welche Ø CTR und Ø Klicks
+          diese Pins erzielen — und ob das Keyword stark oder schwach
+          performt.
+        </Para>
+
+        <H4>Was die Performance-Signale bedeuten:</H4>
+        <Bullets
+          items={[
+            <>
+              🏆 <strong>Stark</strong> — Ø CTR über 2% in mindestens 3
+              Pins. Dieses Keyword funktioniert — öfter einsetzen.
+            </>,
+            <>
+              📈 <strong>Gut</strong> — Ø CTR 1–2%. Solide Performance,
+              weiter beobachten.
+            </>,
+            <>
+              👀 <strong>Beobachten</strong> — Keyword in Pins gefunden
+              aber CTR unter 1%. Pin oder Keyword optimieren.
+            </>,
+            <>
+              ➕ <strong>Noch nicht verwendet</strong> — Keyword noch in
+              keinem Pin gefunden. Beim nächsten passenden Pin einsetzen.
+            </>,
+          ]}
+        />
+
+        <H4>Der monatliche Keyword-Review (5 Minuten):</H4>
+        <Para>
+          Direkt nach dem Analytics-Update diese drei Fragen beantworten:
+        </Para>
+        <ol className="list-decimal space-y-1 pl-5 text-sm leading-relaxed text-gray-700">
+          <li>
+            Welche meiner Keywords stecken in Pins die gut performen? Diese
+            öfter einsetzen.
+          </li>
+          <li>
+            Gibt es Keywords in der Datenbank die noch nie in einem Pin
+            verwendet wurden? Prüfen ob sie relevant sind.
+          </li>
+          <li>
+            Gibt es Content-Inhalte die noch gar nicht bepinnt wurden?
+          </li>
+        </ol>
+        <Para>
+          Diese drei Fragen in fünf Minuten beantwortet — und du weißt
+          genau wohin deine nächsten Pins gehen sollten.
+        </Para>
+        <Para>
+          Öffne dazu die →{' '}
+          <Link
+            href="/dashboard/keywords"
+            className="text-red-700 underline underline-offset-2 hover:text-red-800"
+          >
+            Keyword-Datenbank
+          </Link>{' '}
+          und prüfe welche Keywords welchen Content-Inhalten zugeordnet
+          sind und ob alle Inhalte ausreichend Pins haben.
+        </Para>
+
+        <HinweisBox variant="merke">
+          💡 <strong>Merke:</strong> Keywords sind keine Tricks. Sie sind
+          die Sprache deiner Zielgruppe. Wer lernt wie seine Wunschkunden
+          auf Pinterest suchen und diese Sprache in seine Pins überträgt
+          wird langfristig mehr Reichweite aufbauen als jeder der einfach
+          viele Pins veröffentlicht ohne strategisch zu denken.
+        </HinweisBox>
+      </Accordion>
+    </div>
+  )
+}
+
+// ===========================================================
+// Tab 6 — Analytics & Boards
+// ===========================================================
+
+function TabAnalytics() {
+  return (
+    <div className="space-y-3">
+      <p className="mb-6 text-sm leading-relaxed text-gray-600">
+        Die meisten Pinterest-Nutzer schauen auf Follower und Impressionen —
+        und verpassen dabei das Wesentliche. Analytics zeigen dir nicht nur
+        wie viele Menschen deinen Pin gesehen haben. Sie zeigen dir{' '}
+        <strong>warum ein Pin funktioniert oder nicht</strong> — und was du
+        als nächstes tun sollst.
+      </p>
+
+      <Accordion title="Wie Pinterest Inhalte bewertet — die zwei Stufen">
+        <Para>
+          Pinterest funktioniert in zwei Stufen. Nur wenn beide funktionieren
+          entsteht echte Performance:
+        </Para>
+
+        <div>
+          <H4>Stufe 1: Distribution → gemessen durch Impressionen</H4>
+          <Para>
+            Pinterest entscheidet wie oft dein Pin ausgespielt wird —
+            basierend auf Relevanz, Keywords und Board-Qualität. Hohe
+            Impressionen bedeuten: Der Algorithmus vertraut diesem Pin.
+          </Para>
+        </div>
+
+        <div>
+          <H4>Stufe 2: Reaktion → gemessen durch Klicks & Saves</H4>
+          <Para>
+            Ein Klick bedeutet dass jemand mehr wissen wollte. Ein Save
+            signalisiert Pinterest dass der Inhalt wertvoll ist — und sorgt
+            für organische Weiterdistribution.
+          </Para>
+        </div>
+
+        <H4>Was du trackst — und was es bedeutet:</H4>
+        <Bullets
+          items={[
+            <>
+              <strong>Impressionen</strong> — wie oft wurde der Pin ausgespielt
+            </>,
+            <>
+              <strong>Ausgehende Klicks</strong> — wie oft wurde auf die
+              Website geklickt (direkter Traffic)
+            </>,
+            <>
+              <strong>Saves</strong> — wie oft wurde der Pin gespeichert
+              (langfristiger Wachstumshebel)
+            </>,
+            <>
+              <strong>CTR</strong> = Klicks ÷ Impressionen — zeigt wie
+              überzeugend der Hook ist
+            </>,
+            <>
+              <strong>Engagement Rate</strong> = (Saves + Klicks) ÷
+              Impressionen × 100 — misst die Gesamtwirkung
+            </>,
+          ]}
+        />
+
+        <HinweisBox variant="merke">
+          💡 <strong>Merke:</strong> Analytics ist kein Bewertungssystem für
+          deine Arbeit. Es ist ein Navigationssystem für deine nächsten
+          Schritte.
+        </HinweisBox>
+      </Accordion>
+
+      <Accordion title="4 Pin-Signale — was deine Analytics dir sagen und was zu tun ist">
+        <Para>
+          Jede Kombination aus Distribution und Reaktion erzählt eine andere
+          Geschichte:
+        </Para>
+
+        <Table
+          head={['Distribution', 'Reaktion', 'Diagnose', 'Kategorie']}
+          rows={[
+            ['✅ Hoch', '✅ Hoch', 'Alles funktioniert', '🏆 Top Performer'],
+            [
+              '✅ Hoch',
+              '❌ Niedrig',
+              'SEO gut, Hook schwach',
+              '🔧 Optimierungspotenzial',
+            ],
+            [
+              '❌ Niedrig',
+              '✅ Hoch',
+              'Hook gut, SEO schwach',
+              '💎 Hidden Gem',
+            ],
+            ['❌ Niedrig', '❌ Niedrig', 'Kein Signal', '💤 Stiller Pin'],
+          ]}
+        />
+
+        <div className="rounded-md border border-yellow-200 bg-yellow-50 p-4">
+          <H3>🏆 Top Performer</H3>
+          <Para>
+            Diese Pins haben bewiesen dass Pinterest sie ausspielt, Menschen
+            sie anklicken und das Thema echte Nachfrage hat. Sie sind dein
+            Blueprint.
+          </Para>
+          <Para>
+            Hohe Impressionen zeigen dass der Algorithmus dem Pin vertraut.
+            Eine gute CTR beweist dass der Hook funktioniert. Beides zusammen
+            ist selten — und wertvoll.
+          </Para>
+          <Para>
+            <strong>Deine Handlung:</strong> Produziere Varianten desselben
+            Themas mit leicht abgewandeltem Hook oder Design. Baue den
+            Keyword-Cluster aus. Repliziere das Format auf ähnliche Themen.
+          </Para>
+          <Para>
+            <strong>Wichtig — der Zeitfaktor:</strong> Pinterest spielt neue
+            Pins in den ersten 60–90 Tagen besonders stark aus. Nutze dieses
+            Fenster — produziere Varianten solange der Algorithmus den Pin
+            pusht. Nach 3–6 Monaten schläft auch der stärkste Pin ein. Dann
+            wird er zum Recycling-Kandidaten.
+          </Para>
+        </div>
+
+        <div className="rounded-md border border-blue-200 bg-blue-50 p-4">
+          <H3>💎 Hidden Gem</H3>
+          <Para>
+            Menschen klicken auf sie — aber Pinterest spielt sie zu selten
+            aus. Das ist kein Versagen des Inhalts. Es ist ein SEO-Problem
+            das du lösen kannst.
+          </Para>
+          <Para>
+            Niedrige Impressionen bei gleichzeitig hoher CTR. Die Botschaft
+            ist klar: Wenn jemand diesen Pin sieht überzeugt er. Das Problem
+            liegt nicht im Hook — es liegt in schwachen Keywords.
+          </Para>
+          <Para>
+            <strong>Deine Handlung:</strong> Überprüfe Keywords in Titel und
+            Beschreibung. Wechsle das Board wenn es thematisch nicht perfekt
+            passt. Recycele den Pin mit optimiertem SEO als neue Variante.
+          </Para>
+        </div>
+
+        <div className="rounded-md border border-orange-200 bg-orange-50 p-4">
+          <H3>🔧 Optimierungspotenzial</H3>
+          <Para>
+            Diese Pins haben Reichweite aber keine Wirkung. Pinterest spielt
+            sie aus — aber die Zielgruppe scrollt vorbei. Das ist kein SEO-
+            Problem. Das ist ein Hook-Problem.
+          </Para>
+          <Para>
+            Hohe Impressionen bei niedriger CTR. Du musst das SEO nicht neu
+            aufbauen — du musst nur den ersten Eindruck verbessern.
+          </Para>
+          <Para>
+            <strong>Deine Handlung:</strong> Erstelle einen neuen Pin mit
+            gleichem Titel und gleicher Beschreibung aber anderem Hook und
+            Design. Du hast bereits die Reichweite — du brauchst nur den
+            richtigen ersten Satz.
+          </Para>
+        </div>
+
+        <div className="rounded-md border border-gray-200 bg-gray-50 p-4">
+          <H3>💤 Stiller Pin</H3>
+          <Para>
+            Zeigt weder Reichweite noch Reaktion. Pinterest spielt ihn kaum
+            aus und wenn doch klickt niemand.
+          </Para>
+          <Para>
+            Entweder hat das Thema keine ausreichende Nachfrage auf Pinterest,
+            die Keywords sind zu schwach oder Hook und Design überzeugen
+            nicht.
+          </Para>
+          <Para>
+            <strong>Deine Handlung:</strong> Ist dieses Thema strategisch
+            wichtig? Wenn ja — Keywords, Board und Hook komplett neu
+            optimieren und als neue Variante testen. Wenn nein — Energie in
+            Inhalte mit mehr Potenzial investieren. Nicht jeder Pin muss
+            gerettet werden.
+          </Para>
+        </div>
+
+        <div className="rounded-md border border-green-200 bg-green-50 p-4">
+          <H3>♻️ Recycling-Kandidaten</H3>
+          <Para>
+            Eingeschlafene Gewinner. Diese Pins haben bereits bewiesen dass
+            sie funktionieren — aber tauchen nicht mehr in den aktuellen
+            Top-Pins auf.
+          </Para>
+          <Para>
+            Ein Pin ist ein Recycling-Kandidat wenn er alt genug ist um
+            bewertet zu werden, bereits eine Mindestanzahl an Klicks erzielt
+            hat — aber aktuell kein Top Performer mehr ist.
+          </Para>
+          <Para>
+            <strong>Deine Handlung:</strong> Produziere eine neue Variante
+            mit frischem Design und aktualisierten Keywords. Du startest
+            nicht bei null — du baust auf einem bewiesenen Fundament auf.
+          </Para>
+        </div>
+      </Accordion>
+
+      <Accordion title="Deine Analytics: welche Pins und welche Kennzahlen du tracken musst">
+        <H4>Die drei Kennzahlen die du brauchst</H4>
+        <Para>
+          Alles in diesem System basiert auf drei Datenpunkten die du einmal
+          im Monat aus Pinterest Analytics überträgst:
+        </Para>
+        <Bullets
+          items={[
+            <>
+              <strong>Gesamt-Impressionen</strong> — wie oft wurde der Pin
+              ausgespielt
+            </>,
+            <>
+              <strong>Gesamt-Klicks</strong> — wie oft wurde geklickt
+            </>,
+            <>
+              <strong>Gesamt-Saves</strong> — wie oft wurde gespeichert
+            </>,
+          ]}
+        />
+        <Para>Daraus berechnet dieses System automatisch:</Para>
+        <Bullets
+          items={[
+            <>
+              <strong>CTR</strong> = Klicks ÷ Impressionen
+            </>,
+            <>
+              <strong>Engagement Rate</strong> = (Saves + Klicks) ÷
+              Impressionen × 100
+            </>,
+          ]}
+        />
+        <Para>
+          Drei Zahlen. Zwei berechnete Werte. Vier klare Kategorien. Für
+          jeden Pin weißt du sofort was zu tun ist.
+        </Para>
+
+        <H4>Welchen Zeitraum du verwendest</H4>
+        <Para>
+          Verwende immer die rollierenden letzten 180 Tage — keine
+          Unterscheidung zwischen Gesamtlaufzeit und letzten 30 Tagen. Der
+          180-Tage-Zeitraum gibt dir einen stabilen, vergleichbaren Blick auf
+          deine Pin-Performance ohne kurzfristige Ausreißer überzubewerten.
+        </Para>
+
+        <H4>Das Pareto-Prinzip für deine Pins</H4>
+        <Para>
+          Pinterest folgt dem Pareto-Prinzip: 20 % deiner Pins bringen 80 %
+          deiner Ergebnisse. Das bedeutet konkret — du wirst niemals alle
+          Pins gleich performen sehen, und das ist auch nicht das Ziel.
+        </Para>
+        <Para>
+          Das eigentliche Ziel: Erkenne welche 20 % deiner Pins 80 % deiner
+          Klicks, Saves und Reichweite bringen — und konzentriere deine
+          Energie genau dort. Mehr von dem was funktioniert produzieren.
+          Weniger von dem was nicht funktioniert.
+        </Para>
+        <Para>
+          Dieses System hilft dir genau dabei: Du siehst auf einen Blick
+          welche Pins zu welcher Kategorie gehören — und was als nächstes zu
+          tun ist.
+        </Para>
+
+        <H4>Welche Pins du trackst</H4>
+        <Para>
+          Pinterest zeigt dir immer die Top 50 Pins an — du musst nicht alle
+          50 in dieses System übertragen. Nimm die für dich wichtigsten Pins
+          — wenn es nur 20 sind ist das vollkommen ausreichend.
+        </Para>
+        <Para>Relevant sind Pins die:</Para>
+        <Bullets
+          items={[
+            'Klicks generiert haben (Traffic-Potenzial)',
+            'Saves generiert haben (Reichweiten-Potenzial)',
+            'Neu sind und gerade Momentum aufbauen',
+          ]}
+        />
+
+        <HinweisBox variant="merke">
+          💡 <strong>Merke:</strong> Drei Zahlen. Zwei berechnete Werte. Vier
+          klare Kategorien. Für jeden Pin weißt du sofort was zu tun ist.
+        </HinweisBox>
+      </Accordion>
+
+      <Accordion title="Board-Performance — wie Boards die Reichweite deiner Pins steuern">
+        <Para>
+          Viele Pinterest-Nutzer optimieren ihre Pins — aber vergessen ihre
+          Boards. Das ist ein Fehler. Boards sind neben Keywords in Pin-
+          Titel und Pin-Beschreibung der zweitwichtigste Faktor für die
+          Distribution deiner Pins. Pinterest nutzt das Board als Kontext-
+          Signal: Es entscheidet mit welchen Suchanfragen dein Pin
+          ausgespielt wird. Ein thematisch starkes Board verstärkt jeden Pin
+          darauf — ein schwaches Board bremst selbst gute Pins aus.
+        </Para>
+
+        <H4>Was ist wichtiger: Engagement Rate oder ausgehende Klicks?</H4>
+        <Para>Beide Kennzahlen sind relevant — aber für verschiedene Fragen:</Para>
+        <Bullets
+          items={[
+            <>
+              <strong>Engagement Rate (ER)</strong> → zeigt ob Pinterest dem
+              Board thematisch vertraut. Eine hohe ER signalisiert dem
+              Algorithmus dass dein Board relevant für eine Nische ist — und
+              sorgt dafür dass Pins darauf bevorzugt ausgespielt werden. ER
+              ist das wichtigste Signal für Board-Gesundheit und
+              Distribution.
+            </>,
+            <>
+              <strong>Ausgehende Klicks</strong> → zeigen ob das Board
+              Traffic auf deine Website schickt. Das ist der direkte
+              Business-Impact — wie viel Website-Traffic kommt von diesem
+              Board?
+            </>,
+          ]}
+        />
+        <HinweisBox variant="merke">
+          💡 <strong>Faustregel:</strong> Engagement Rate misst ob Pinterest
+          dein Board liebt. Ausgehende Klicks messen ob deine Zielgruppe dein
+          Board liebt. Beide zusammen zeigen dir ob ein Board wirklich
+          funktioniert.
+        </HinweisBox>
+
+        <H4>Was du daraus ableitest:</H4>
+        <Bullets
+          items={[
+            'Board mit hohen Impressionen aber wenig Klicks → Hook-Problem: Die Pins darauf überzeugen nicht zum Klicken — Design und Hook überarbeiten',
+            'Board mit wenig Impressionen → SEO-Problem: Board-Name und Beschreibung sind zu schwach — Keywords optimieren',
+            'Board mit niedriger ER → Relevanz-Problem: Pinterest vertraut dem Board thematisch nicht — Konsistenz und Aktivität erhöhen',
+          ]}
+        />
+
+        <H4>Board-Optimierung in 4 Schritten:</H4>
+
+        <div>
+          <H4>Schritt 1 — Board-Name prüfen</H4>
+          <Para>
+            Enthält der Board-Name das wichtigste Keyword? Steht es ganz
+            vorne? Ein Board namens „Meine Yoga Welt" ist schwächer als „Yoga
+            zuhause: Yogaraum & Yoga Ecke einrichten". Pinterest indexiert
+            den neuen Namen innerhalb weniger Tage.
+          </Para>
+        </div>
+
+        <div>
+          <H4>Schritt 2 — Board-Beschreibung überarbeiten</H4>
+          <Para>
+            Leer oder zu kurz? 2–3 Sätze mit den wichtigsten Keywords
+            schreiben — natürlich formuliert. Nutze den{' '}
+            <Link
+              href="/dashboard/boards"
+              className="text-red-700 underline underline-offset-2 hover:text-red-800"
+            >
+              → KI-Prompt Generator
+            </Link>{' '}
+            auf der Boards-Seite um direkt einen SEO-optimierten Board-Namen
+            und eine Beschreibung zu generieren.
+          </Para>
+        </div>
+
+        <div>
+          <H4>Schritt 3 — Board reaktivieren</H4>
+          <Para>
+            Inaktive Boards brauchen neue Pins. Mindestens 3–5 neue Pins pro
+            Woche bis das Board wieder als aktiv gilt.
+          </Para>
+        </div>
+
+        <div>
+          <H4>Schritt 4 — Board-Score prüfen</H4>
+          <Para>
+            Nach 30 Tagen erneut prüfen. Hat sich die Performance verbessert?
+            Wenn nicht — Keywords weiter optimieren oder Board strategisch
+            überdenken.
+          </Para>
+        </div>
+
+        <H4>Wann du ein Board löschen solltest:</H4>
+        <Para>
+          Lösche ein Board nur wenn es thematisch komplett falsch ist und
+          keine Verbindung zu deiner Nische hat. In allen anderen Fällen ist
+          Optimieren besser als Löschen — Pinterest verliert beim Löschen
+          alle historischen Daten des Boards.
+        </Para>
+
+        <HinweisBox>
+          💡 <strong>Tipp:</strong> Prüfe einmal im Monat deine Board-Zahlen
+          im Dashboard unter Board-Gesundheit. Top Boards zeigen dir wo
+          deine Zielgruppe aktiv ist — dort mehr produzieren. Schwache
+          Boards entweder aktiv bespielen oder Board-Beschreibung mit
+          stärkeren Keywords überarbeiten.
         </HinweisBox>
       </Accordion>
     </div>

@@ -151,12 +151,14 @@ export default function BoardsClient({
   availableContents,
   availableUrls,
   pinsByBoardId = {},
+  contentKeywordIds = {},
 }: {
   boards: Board[]
   availableKeywords: KeywordOption[]
   availableContents: ContentOption[]
   availableUrls: UrlOption[]
   pinsByBoardId?: Record<string, BoardPin[]>
+  contentKeywordIds?: Record<string, string[]>
 }) {
   const searchParams = useSearchParams()
   const [showAddForm, setShowAddForm] = useState(
@@ -190,6 +192,7 @@ export default function BoardsClient({
   const [selectedUrlIds, setSelectedUrlIds] = useState<Set<string>>(new Set())
   const [isPending, startTransition] = useTransition()
   const [expandedBoardId, setExpandedBoardId] = useState<string | null>(null)
+  const [showAiModal, setShowAiModal] = useState(false)
 
   const formOpen = showAddForm || editing !== null
 
@@ -312,7 +315,7 @@ export default function BoardsClient({
 
   return (
     <div className="space-y-6">
-      <div>
+      <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={() => (showAddForm ? closeForm() : openAdd())}
@@ -320,7 +323,23 @@ export default function BoardsClient({
         >
           {showAddForm ? 'Abbrechen' : 'Board erstellen'}
         </button>
+        <button
+          type="button"
+          onClick={() => setShowAiModal(true)}
+          className="rounded-md border border-red-600 bg-white px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50"
+        >
+          ✨ Board mit KI erstellen
+        </button>
       </div>
+
+      {showAiModal && (
+        <BoardAiPromptModal
+          onClose={() => setShowAiModal(false)}
+          availableKeywords={availableKeywords}
+          availableContents={availableContents}
+          contentKeywordIds={contentKeywordIds}
+        />
+      )}
 
       {formOpen && (
         <form
@@ -861,6 +880,329 @@ export default function BoardsClient({
             )}
           </tbody>
         </table>
+      </div>
+    </div>
+  )
+}
+
+// ===========================================================
+// Board KI-Prompt Modal
+// — generiert einen Pinterest-SEO-Prompt für Board-Name & -Beschreibung.
+// ===========================================================
+
+function BoardAiPromptModal({
+  onClose,
+  availableKeywords,
+  availableContents,
+  contentKeywordIds,
+}: {
+  onClose: () => void
+  availableKeywords: KeywordOption[]
+  availableContents: ContentOption[]
+  contentKeywordIds: Record<string, string[]>
+}) {
+  const [thema, setThema] = useState('')
+  const [contentId, setContentId] = useState<string>('')
+  const [selectedKeywordIds, setSelectedKeywordIds] = useState<Set<string>>(
+    new Set()
+  )
+  const [zielgruppe, setZielgruppe] = useState('')
+  const [generated, setGenerated] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  // Bei Wechsel des Content-Inhalts: bisherige Keyword-Auswahl verwerfen,
+  // damit der Nutzer nicht versehentlich Keywords aus dem alten Kontext mitschleppt.
+  function onContentChange(newId: string) {
+    setContentId(newId)
+    setSelectedKeywordIds(new Set())
+  }
+
+  // Welche Keywords stehen zur Auswahl? Wenn ein Content gewählt ist,
+  // nur die zugeordneten — sonst alle.
+  const selectableKeywords = useMemo(() => {
+    if (!contentId) return availableKeywords
+    const ids = new Set(contentKeywordIds[contentId] ?? [])
+    return availableKeywords.filter((k) => ids.has(k.id))
+  }, [contentId, availableKeywords, contentKeywordIds])
+
+  function toggleKeyword(id: string) {
+    setSelectedKeywordIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function removeKeyword(id: string) {
+    setSelectedKeywordIds((prev) => {
+      const next = new Set(prev)
+      next.delete(id)
+      return next
+    })
+  }
+
+  const selectedKeywords = useMemo(
+    () => availableKeywords.filter((k) => selectedKeywordIds.has(k.id)),
+    [availableKeywords, selectedKeywordIds]
+  )
+
+  const canGenerate =
+    thema.trim() !== '' && selectedKeywordIds.size > 0
+
+  function generate() {
+    const keywordsLine = selectedKeywords.map((k) => k.keyword).join(', ')
+    const hasZielgruppe = zielgruppe.trim() !== ''
+    const zielgruppeLine = hasZielgruppe
+      ? `\nZIELGRUPPE: ${zielgruppe.trim()}`
+      : ''
+    const zielgruppeRule = hasZielgruppe
+      ? '- Direkt an Zielgruppe gerichtet'
+      : '- Allgemein formuliert (keine spezifische Zielgruppenansprache)'
+
+    const prompt = `Du bist ein erfahrener Pinterest-SEO-Stratege der sich mit Pinterest-Kategorienamen, Suchalgorithmen und keyword-optimierten Board-Titeln auskennt.
+
+=== INPUT ===
+THEMA: ${thema.trim()}
+KEYWORDS: ${keywordsLine}${zielgruppeLine}
+
+=== AUFGABE ===
+Erstelle eine vollständige Board-Optimierung für Pinterest.
+
+=== LIEFERE ===
+
+1. BOARD-NAME
+- Haupt-Keyword möglichst am Anfang
+- Klar und beschreibend — kein kreativer oder witziger Name
+- STRIKT maximal 50 Zeichen inklusive Leerzeichen — das ist das Pinterest-Limit
+- Format: Haupt-Keyword: Unterthema & Ergänzung
+- Orientiere dich wenn möglich an offiziellen Pinterest-Kategorienamen
+
+2. BOARD-BESCHREIBUNG
+- 2–3 Sätze, maximal 500 Zeichen (gerne ausnutzen)
+- Haupt-Keyword im ersten Satz ganz vorne
+- So viele relevante Mid-Tail und Longtail-Keywords natürlich integrieren wie sinnvoll — kein Keyword-Stuffing, natürlich lesbar
+${zielgruppeRule}
+- Kein Call-to-Action
+
+=== REGELN ===
+- Keine kreativen oder witzigen Namen
+- Keine Emojis
+- Keine generischen Aussagen wie "Alles rund um..."
+- Pinterest SEO Logik: thematische Klarheit über Kreativität
+- Sprache: Deutsch
+- WICHTIG: Board-Name MUSS unter 50 Zeichen bleiben — zähle die Zeichen bevor du antwortest
+
+=== AUSGABEFORMAT ===
+Board-Name: [Name] ([Zeichenanzahl] Zeichen)
+Board-Beschreibung: [Beschreibung]`
+
+    setGenerated(prompt)
+    setCopied(false)
+  }
+
+  async function copyPrompt() {
+    if (!generated) return
+    try {
+      await navigator.clipboard.writeText(generated)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // Clipboard nicht verfügbar — Nutzer kann den Prompt manuell markieren.
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:items-center"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="board-ai-prompt-modal-title"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-2xl rounded-lg bg-white p-6 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2
+              id="board-ai-prompt-modal-title"
+              className="text-lg font-semibold text-gray-900"
+            >
+              ✨ Board mit KI erstellen
+            </h2>
+            <p className="mt-1 text-sm text-gray-600">
+              Fülle die Felder aus — wir generieren daraus einen
+              Pinterest-SEO-Prompt für Board-Name und Beschreibung.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Schließen"
+            className="shrink-0 rounded-md px-2 py-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="mt-4 space-y-4">
+          <div>
+            <label
+              htmlFor="board-ai-thema"
+              className="block text-xs font-medium text-gray-700"
+            >
+              Worum geht es auf diesem Board?{' '}
+              <span className="text-red-600">*</span>
+            </label>
+            <textarea
+              id="board-ai-thema"
+              rows={3}
+              value={thema}
+              onChange={(e) => setThema(e.target.value)}
+              placeholder="Beschreibe das Thema des Boards — z.B. Yoga zuhause für Anfänger: Morgenroutinen, Atemübungen und einfache Übungen für mehr Energie im Alltag"
+              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm placeholder-gray-400 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+            />
+          </div>
+
+          <div>
+            <label
+              htmlFor="board-ai-content"
+              className="block text-xs font-medium text-gray-700"
+            >
+              Content-Inhalt auswählen (optional — lädt zugehörige Keywords)
+            </label>
+            <select
+              id="board-ai-content"
+              value={contentId}
+              onChange={(e) => onContentChange(e.target.value)}
+              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+            >
+              <option value="">Inhalt auswählen…</option>
+              {availableContents.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.titel}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <span className="block text-xs font-medium text-gray-700">
+              Keywords auswählen <span className="text-red-600">*</span>
+            </span>
+
+            {selectedKeywords.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {selectedKeywords.map((k) => (
+                  <span
+                    key={k.id}
+                    className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700"
+                  >
+                    {k.keyword}
+                    <button
+                      type="button"
+                      onClick={() => removeKeyword(k.id)}
+                      aria-label={`Keyword ${k.keyword} entfernen`}
+                      className="text-red-500 hover:text-red-700"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-2 max-h-48 space-y-1 overflow-y-auto rounded-md border border-gray-300 p-3">
+              {selectableKeywords.length === 0 ? (
+                <p className="text-sm text-gray-500">
+                  {contentId
+                    ? 'Diesem Content sind noch keine Keywords zugeordnet.'
+                    : 'Noch keine Keywords vorhanden.'}
+                </p>
+              ) : (
+                selectableKeywords.map((k) => {
+                  const checked = selectedKeywordIds.has(k.id)
+                  return (
+                    <label
+                      key={k.id}
+                      className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-sm hover:bg-gray-50"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleKeyword(k.id)}
+                        className="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
+                      />
+                      <span className="text-gray-700">{k.keyword}</span>
+                    </label>
+                  )
+                })
+              )}
+            </div>
+          </div>
+
+          <div>
+            <label
+              htmlFor="board-ai-zielgruppe"
+              className="block text-xs font-medium text-gray-700"
+            >
+              Zielgruppe (optional)
+            </label>
+            <input
+              id="board-ai-zielgruppe"
+              type="text"
+              value={zielgruppe}
+              onChange={(e) => setZielgruppe(e.target.value)}
+              placeholder="z.B. Frauen 30–45 die Yoga zuhause praktizieren"
+              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm placeholder-gray-400 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+            />
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <button
+            type="button"
+            onClick={generate}
+            disabled={!canGenerate}
+            className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Prompt generieren
+          </button>
+        </div>
+
+        {generated && (
+          <div className="mt-5">
+            <div className="relative rounded-md border border-gray-200 bg-gray-50">
+              <button
+                type="button"
+                onClick={copyPrompt}
+                aria-label={copied ? 'Kopiert' : 'Prompt kopieren'}
+                title={copied ? 'Kopiert' : 'Prompt kopieren'}
+                className={`absolute right-2 top-2 rounded-md border px-2 py-1 text-xs ${
+                  copied
+                    ? 'border-green-300 bg-green-50 text-green-700'
+                    : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                {copied ? '✓' : '📋'}
+              </button>
+              <pre className="max-h-72 overflow-auto whitespace-pre-wrap p-4 pr-12 font-mono text-xs leading-relaxed text-gray-800">
+{generated}
+              </pre>
+            </div>
+            <div className="mt-3 flex justify-end">
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100"
+              >
+                Schließen
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

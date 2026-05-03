@@ -1,18 +1,20 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import BoardsTab, { type BoardWithoutAnalytics } from './BoardsTab'
 import PinsTab from './PinsTab'
 import ProfilTab from './ProfilTab'
-import type {
-  BoardAnalyticsRow,
-  BoardOption,
-  BoardThresholds,
-  PinAnalyticsRow,
-  PinAnalyticsThresholds,
-  PinOption,
-  ProfilAnalyticsWithGrowth,
+import WorkflowBanner from './WorkflowBanner'
+import {
+  effectiveZeitraum,
+  type BoardAnalyticsRow,
+  type BoardOption,
+  type BoardThresholds,
+  type PinAnalyticsRow,
+  type PinAnalyticsThresholds,
+  type PinOption,
+  type ProfilAnalyticsWithGrowth,
 } from './utils'
 
 type Tab = 'profil' | 'pins' | 'boards'
@@ -30,7 +32,6 @@ function isTab(v: string | null | undefined): v is Tab {
 export default function AnalyticsClient({
   profilAnalytics,
   pinterestAnalyticsUrl,
-  analyticsUpdateDatum,
   pins,
   pinAnalytics,
   thresholds,
@@ -41,7 +42,6 @@ export default function AnalyticsClient({
 }: {
   profilAnalytics: ProfilAnalyticsWithGrowth[]
   pinterestAnalyticsUrl: string | null
-  analyticsUpdateDatum: string | null
   pins: PinOption[]
   pinAnalytics: PinAnalyticsRow[]
   thresholds: PinAnalyticsThresholds
@@ -54,8 +54,27 @@ export default function AnalyticsClient({
   const initialTab = searchParams?.get('tab')
   const [tab, setTab] = useState<Tab>(isTab(initialTab) ? initialTab : 'profil')
 
+  // Einheitliche Datumsquelle für Profil- und Pins-Tab: das jüngste
+  // zeitraum_bis aus beiden Tabellen. So zeigen beide Tabs denselben
+  // „nächster Zeitraum"-Vorschlag, egal welche der beiden Quellen
+  // zuletzt aktualisiert wurde.
+  const latestZeitraumBis = useMemo<string | null>(() => {
+    let max: string | null = null
+    for (const r of profilAnalytics) {
+      const eff = effectiveZeitraum(r)
+      if (!max || eff.bis > max) max = eff.bis
+    }
+    for (const r of pinAnalytics) {
+      const eff = effectiveZeitraum(r)
+      if (!max || eff.bis > max) max = eff.bis
+    }
+    return max
+  }, [profilAnalytics, pinAnalytics])
+
   return (
     <div className="space-y-6">
+      <WorkflowBanner pinterestAnalyticsUrl={pinterestAnalyticsUrl} />
+
       <div className="border-b border-gray-200">
         <nav className="flex gap-6" aria-label="Tabs">
           {TABS.map((t) => {
@@ -65,7 +84,7 @@ export default function AnalyticsClient({
                 key={t.id}
                 type="button"
                 onClick={() => setTab(t.id)}
-                className={`whitespace-nowrap border-b-2 px-1 py-3 text-sm font-medium transition-colors ${
+                className={`whitespace-nowrap border-b-2 px-4 py-3 text-[15px] font-semibold transition-colors ${
                   active
                     ? 'border-red-600 text-red-600'
                     : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
@@ -82,8 +101,7 @@ export default function AnalyticsClient({
       {tab === 'profil' && (
         <ProfilTab
           profilAnalytics={profilAnalytics}
-          pinterestAnalyticsUrl={pinterestAnalyticsUrl}
-          analyticsUpdateDatum={analyticsUpdateDatum}
+          latestZeitraumBis={latestZeitraumBis}
         />
       )}
 
@@ -92,6 +110,7 @@ export default function AnalyticsClient({
           pins={pins}
           pinAnalytics={pinAnalytics}
           thresholds={thresholds}
+          latestZeitraumBis={latestZeitraumBis}
         />
       )}
       {tab === 'boards' && (

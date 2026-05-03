@@ -175,3 +175,49 @@ export async function importKeywords(
   revalidatePath('/dashboard/keywords')
   return { imported: lines.length }
 }
+
+// ===========================================================
+// Auto-Keyword-Match — ruft die PostgreSQL-Funktionen auf,
+// die Pins serverseitig per ILIKE gegen die Keyword-Datenbank
+// abgleichen. Manuell zugeordnete Keywords (match_source = 'manuell')
+// bleiben unberührt.
+// ===========================================================
+
+export async function matchKeywordsAction(): Promise<{
+  error?: string
+  matched?: number
+}> {
+  const supabase = createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: 'Nicht angemeldet.' }
+
+  const { data, error } = await supabase.rpc('match_keywords_for_all_pins', {
+    user_id_param: user.id,
+  })
+  if (error) return { error: error.message }
+
+  revalidatePath('/dashboard/keywords')
+  return { matched: typeof data === 'number' ? data : 0 }
+}
+
+export async function matchKeywordsForPinAction(
+  pinId: string
+): Promise<{ error?: string }> {
+  if (!pinId) return { error: 'pin_id fehlt.' }
+
+  const supabase = createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: 'Nicht angemeldet.' }
+
+  const { error } = await supabase.rpc('match_keywords_for_pin', {
+    pin_id_param: pinId,
+    user_id_param: user.id,
+  })
+  if (error) return { error: error.message }
+
+  return {}
+}

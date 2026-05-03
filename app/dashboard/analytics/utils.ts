@@ -1,12 +1,40 @@
 export type ProfilAnalytics = {
   id: string
   datum: string
+  // zeitraum_von / zeitraum_bis seit dem Zeitraum-Umbau. Backfill via SQL
+  // füllt sie für Altdaten (zeitraum_bis = datum, zeitraum_von = datum-30).
+  // Trotzdem nullable typisieren, damit defensive Helper greifen können.
+  zeitraum_von: string | null
+  zeitraum_bis: string | null
   impressionen: number
   ausgehende_klicks: number
   saves: number
   gesamte_zielgruppe: number
   interagierende_zielgruppe: number
   created_at: string
+}
+
+// Liefert das effektive Zeitraum-Tupel für einen Datensatz. Falls Backfill
+// fehlt, fallback auf (datum-30, datum), damit UI niemals leere Werte zeigt.
+export function effectiveZeitraum(row: {
+  datum: string
+  zeitraum_von: string | null
+  zeitraum_bis: string | null
+}): { von: string; bis: string } {
+  const bis = row.zeitraum_bis ?? row.datum
+  const von = row.zeitraum_von ?? addDays(bis, -30)
+  return { von, bis }
+}
+
+export function formatZeitraumKurz(von: string, bis: string): string {
+  // 06.04. – 26.04.26 (zwei-stelliges Jahr)
+  const [vy, vm, vd] = von.split('-')
+  const [by, bm, bd] = bis.split('-')
+  const sameYear = vy === by
+  const yy = by.slice(2)
+  const left = sameYear ? `${vd}.${vm}.` : `${vd}.${vm}.${vy.slice(2)}`
+  const right = `${bd}.${bm}.${yy}`
+  return `${left} – ${right}`
 }
 
 export type ProfilAnalyticsWithGrowth = ProfilAnalytics & {
@@ -299,6 +327,8 @@ export type PinAnalyticsEntry = {
   id: string
   pin_id: string
   datum: string
+  zeitraum_von: string | null
+  zeitraum_bis: string | null
   impressionen: number
   klicks: number
   saves: number

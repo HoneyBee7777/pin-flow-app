@@ -46,7 +46,10 @@ import {
   type ConversionZiel,
   type HookArt,
   type KeywordOption,
+  type KeywordSignal,
   type PinFormat,
+  type PinKeywordMatchSource,
+  type PinKeywordWithSource,
   type PinWithRelations,
   type SaisonEventOption,
   type Status,
@@ -64,6 +67,146 @@ type Props = {
   saisonEvents: SaisonEventOption[]
   comboCount: Record<string, number>
   customSignalwoerter: string | null
+  keywordSignalById?: Record<string, KeywordSignal>
+}
+
+const MATCH_SOURCE_LABEL: Record<Exclude<PinKeywordMatchSource, null>, string> = {
+  titel: 'Titel',
+  beschreibung: 'Beschreibung',
+  board_name: 'Board-Name',
+  manuell: 'Manuell zugeordnet',
+}
+
+function matchSourceTooltip(source: PinKeywordMatchSource): string {
+  if (!source) return 'Quelle unbekannt'
+  return `Gefunden in: ${MATCH_SOURCE_LABEL[source]}`
+}
+
+// Chip-Farbe nach Signal: Stark grün, Beobachten amber, sonst dezent grau
+// (matched „grauer Chip wie Board-Chips" für Gut, Ungenutzt und unbekannt).
+function chipClassForSignal(signal: KeywordSignal | undefined): string {
+  if (signal === 'stark') {
+    return 'bg-green-100 text-green-800'
+  }
+  if (signal === 'beobachten') {
+    return 'bg-amber-100 text-amber-800'
+  }
+  return 'bg-gray-100 text-gray-700'
+}
+
+// Welche Felder enthalten das Keyword? Wir prüfen direkt am Text statt am
+// gespeicherten match_source — das macht den Filter robust gegen das
+// ON-CONFLICT-Problem (manuell-Rows blockieren keine Auto-Matches mehr).
+type KeywordPresence = {
+  inTitel: boolean
+  inBeschreibung: boolean
+  inBoardName: boolean
+}
+
+function checkKeywordPresence(
+  keyword: string,
+  titel: string | null,
+  beschreibung: string | null,
+  boardName: string | null
+): KeywordPresence {
+  const kw = keyword.toLowerCase()
+  return {
+    inTitel: (titel ?? '').toLowerCase().includes(kw),
+    inBeschreibung: (beschreibung ?? '').toLowerCase().includes(kw),
+    inBoardName: (boardName ?? '').toLowerCase().includes(kw),
+  }
+}
+
+function fundortEmoji(p: KeywordPresence): string {
+  if (p.inTitel && p.inBeschreibung) return '📌📝'
+  if (p.inTitel) return '📌'
+  if (p.inBeschreibung) return '📝'
+  return ''
+}
+
+function KeywordChips({
+  keywords,
+  signalById,
+  titel,
+  beschreibung,
+  boardName,
+}: {
+  keywords: PinKeywordWithSource[]
+  signalById: Record<string, KeywordSignal>
+  titel: string | null
+  beschreibung: string | null
+  boardName: string | null
+}) {
+  const [expanded, setExpanded] = useState(false)
+  // Filter direkt am Text: nur Keywords zeigen die tatsächlich in Titel,
+  // Beschreibung oder Board-Name vorkommen. Rein manuell zugeordnete
+  // Keywords ohne Text-Match werden ausgeblendet.
+  const visibleKeywords = keywords
+    .map((kw) => ({
+      kw,
+      presence: checkKeywordPresence(kw.keyword, titel, beschreibung, boardName),
+    }))
+    .filter(
+      ({ presence }) =>
+        presence.inTitel || presence.inBeschreibung || presence.inBoardName
+    )
+
+  if (visibleKeywords.length === 0) {
+    return <span className="text-gray-400">—</span>
+  }
+  const hidden = visibleKeywords.length - 2
+  const visible = expanded ? visibleKeywords : visibleKeywords.slice(0, 2)
+  return (
+    // Vertikales Stapeln: jeder Chip auf eigener Zeile, links bündig.
+    // Chip-Form bleibt klein (inline-flex), aber items-start verhindert
+    // dass sie sich auf volle Zellenbreite ziehen.
+    <div className="flex flex-col items-start gap-1">
+      {visible.map(({ kw, presence }) => {
+        const emoji = fundortEmoji(presence)
+        return (
+          <span
+            key={kw.id}
+            title={`${kw.keyword} — ${matchSourceTooltip(kw.match_source)}`}
+            className={`inline-flex items-center gap-1 whitespace-nowrap rounded px-2 py-0.5 text-xs ${chipClassForSignal(signalById[kw.id])}`}
+          >
+            <span>{kw.keyword}</span>
+            {emoji && <span>{emoji}</span>}
+          </span>
+        )
+      })}
+      {hidden > 0 && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium text-red-700 hover:underline"
+        >
+          {expanded ? `− ${hidden} weniger` : `+ ${hidden} weitere`}
+        </button>
+      )}
+    </div>
+  )
+}
+
+function DescriptionCell({ text }: { text: string | null }) {
+  const [expanded, setExpanded] = useState(false)
+  if (!text) return <span className="text-gray-400">—</span>
+  const limit = 60
+  const tooLong = text.length > limit
+  if (!tooLong) {
+    return <span className="break-words">{text}</span>
+  }
+  return (
+    <div className="break-words">
+      <span>{expanded ? text : `${text.slice(0, limit)}…`}</span>{' '}
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="text-xs font-medium text-red-700 hover:underline"
+      >
+        {expanded ? 'weniger anzeigen' : 'mehr anzeigen'}
+      </button>
+    </div>
+  )
 }
 
 function PencilIcon() {
@@ -267,10 +410,12 @@ export default function PinProduktionClient(props: Props) {
         contents={props.contents}
         vorlagen={props.vorlagen}
         urls={props.urls}
+        keywords={props.keywords}
         highlightId={highlightId}
         onEdit={openEdit}
         onDelete={onDelete}
         deleteDisabled={isPending}
+        keywordSignalById={props.keywordSignalById ?? {}}
       />
     </div>
   )
@@ -312,6 +457,7 @@ type Filters = {
   contentId: string
   vorlageId: string
   urlId: string
+  keyword: string
 }
 
 const EMPTY_FILTERS: Filters = {
@@ -325,6 +471,7 @@ const EMPTY_FILTERS: Filters = {
   contentId: '',
   vorlageId: '',
   urlId: '',
+  keyword: '',
 }
 
 // Liest die unterstützten ?filter[…]=… Query-Parameter und liefert ein
@@ -364,6 +511,12 @@ function filtersFromSearchParams(
   if (status && (STATUS as readonly string[]).includes(status)) {
     next.status = status as Status
   }
+
+  // Keyword-Filter: ?keyword=…  (Cross-Page Deep-Link aus der
+  // Keyword-Datenbank). Wir akzeptieren auch ?filter[keyword]=… für
+  // Symmetrie mit den anderen Filter-Parametern.
+  const keyword = params.get('keyword') ?? params.get('filter[keyword]')
+  if (keyword) next.keyword = keyword
 
   return next
 }
@@ -412,20 +565,24 @@ function PinTable({
   contents,
   vorlagen,
   urls,
+  keywords,
   highlightId,
   onEdit,
   onDelete,
   deleteDisabled,
+  keywordSignalById,
 }: {
   pins: PinWithRelations[]
   boards: BoardOption[]
   contents: ContentOption[]
   vorlagen: CanvaVorlageOption[]
   urls: ZielUrlOption[]
+  keywords: KeywordOption[]
   highlightId: string | null
   onEdit: (pin: PinWithRelations) => void
   onDelete: (id: string) => void
   deleteDisabled: boolean
+  keywordSignalById: Record<string, KeywordSignal>
 }) {
   const searchParams = useSearchParams()
   const [filters, setFilters] = useState<Filters>(() =>
@@ -558,6 +715,25 @@ function PinTable({
         } else if (filters.datum === 'future') {
           if (d < today) return false
         }
+      }
+      if (filters.keyword.trim() !== '') {
+        // Filter MUSS exakt dieselbe Logik haben wie die Anzeige in der
+        // Keywords-Spalte (📌 / 📝): Pin matcht nur wenn ein Keyword aus der
+        // pin_keywords-Verknüpfung dieses Pins existiert, dessen Name
+        // case-insensitive identisch mit dem Filter ist UND das tatsächlich
+        // im Titel oder in der Beschreibung vorkommt. Board-Treffer alleine
+        // qualifizieren nicht — analog zur Emoji-Anzeige.
+        const filterKw = filters.keyword.trim().toLowerCase()
+        const titelLower = (p.titel ?? '').toLowerCase()
+        const beschreibungLower = (p.beschreibung ?? '').toLowerCase()
+        const hasMatch = p.keywords.some((k) => {
+          if (k.keyword.toLowerCase() !== filterKw) return false
+          return (
+            titelLower.includes(filterKw) ||
+            beschreibungLower.includes(filterKw)
+          )
+        })
+        if (!hasMatch) return false
       }
       return true
     })
@@ -727,6 +903,11 @@ function PinTable({
               ...urls.map((u) => ({ value: u.id, label: u.titel || u.url })),
             ]}
           />
+          <FilterKeyword
+            value={filters.keyword}
+            onChange={(v) => setFilter('keyword', v)}
+            keywords={keywords}
+          />
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-3 text-xs">
           <span className="text-gray-600">
@@ -755,20 +936,21 @@ function PinTable({
           <thead className="sticky top-0 z-10 bg-gray-50">
             <tr>
               <SortableTh dir={dirOf('titel')} onClick={() => toggleSort('titel')}>
-                Titel
+                Titel 📌
               </SortableTh>
-              <SortableTh dir={dirOf('board')} onClick={() => toggleSort('board')}>
-                Board
-              </SortableTh>
-              <Th>Content</Th>
-              <Th>Hook</Th>
-              <Th>Beschreibung</Th>
               <SortableTh dir={dirOf('status')} onClick={() => toggleSort('status')}>
                 Status
               </SortableTh>
               <SortableTh dir={dirOf('datum')} onClick={() => toggleSort('datum')}>
                 Veröffentlichung
               </SortableTh>
+              <SortableTh dir={dirOf('board')} onClick={() => toggleSort('board')}>
+                Board
+              </SortableTh>
+              <Th>Keywords</Th>
+              <Th>Content</Th>
+              <Th>Hook</Th>
+              <Th>Beschreibung 📝</Th>
               <SortableTh dir={dirOf('strategie')} onClick={() => toggleSort('strategie')}>
                 Strategie
               </SortableTh>
@@ -785,7 +967,7 @@ function PinTable({
             {sortedPins.length === 0 ? (
               <tr>
                 <td
-                  colSpan={13}
+                  colSpan={14}
                   className="px-4 py-8 text-center text-sm text-gray-500"
                 >
                   {pins.length === 0
@@ -829,8 +1011,27 @@ function PinTable({
                     </span>
                   )}
                 </td>
+                <td className="px-4 py-3 text-sm">
+                  <span
+                    className={`inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_BADGE[pin.status]}`}
+                  >
+                    {STATUS_LABEL[pin.status]}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-sm text-gray-700">
+                  {formatDateDe(pin.geplante_veroeffentlichung)}
+                </td>
                 <td className="max-w-xs px-4 py-3 text-sm text-gray-700">
                   {pin.board?.name ?? <span className="text-gray-400">—</span>}
+                </td>
+                <td className="px-4 py-3 text-sm text-gray-700" style={{ minWidth: '200px' }}>
+                  <KeywordChips
+                    keywords={pin.keywords}
+                    signalById={keywordSignalById}
+                    titel={pin.titel}
+                    beschreibung={pin.beschreibung}
+                    boardName={pin.board?.name ?? null}
+                  />
                 </td>
                 <td className="max-w-xs px-4 py-3 text-sm text-gray-700">
                   {pin.content?.titel ?? (
@@ -841,26 +1042,7 @@ function PinTable({
                   {pin.hook ?? <span className="text-gray-400">—</span>}
                 </td>
                 <td className="max-w-xs px-4 py-3 text-sm text-gray-700">
-                  {pin.beschreibung ? (
-                    <span
-                      className="line-clamp-2 break-words"
-                      title={pin.beschreibung}
-                    >
-                      {pin.beschreibung}
-                    </span>
-                  ) : (
-                    <span className="text-gray-400">—</span>
-                  )}
-                </td>
-                <td className="px-4 py-3 text-sm">
-                  <span
-                    className={`inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_BADGE[pin.status]}`}
-                  >
-                    {STATUS_LABEL[pin.status]}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-sm text-gray-700">
-                  {formatDateDe(pin.geplante_veroeffentlichung)}
+                  <DescriptionCell text={pin.beschreibung} />
                 </td>
                 <td className="px-4 py-3 text-sm">
                   {pin.strategie_typ ? (
@@ -1122,6 +1304,134 @@ function FilterSearch({
           </button>
         )}
       </div>
+    </div>
+  )
+}
+
+function FilterKeyword({
+  value,
+  onChange,
+  keywords,
+}: {
+  value: string
+  onChange: (v: string) => void
+  keywords: KeywordOption[]
+}) {
+  const id = 'filter_keyword'
+  const [open, setOpen] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const wrapperRef = useRef<HTMLDivElement>(null)
+
+  // Click-outside zum Schließen der Vorschlagsliste.
+  useEffect(() => {
+    function onDocClick(e: MouseEvent) {
+      if (!wrapperRef.current) return
+      if (!wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [])
+
+  const suggestions = useMemo(() => {
+    const q = value.trim().toLowerCase()
+    if (!q) return keywords.slice(0, 8)
+    return keywords
+      .filter((k) => k.keyword.toLowerCase().includes(q))
+      .slice(0, 8)
+  }, [value, keywords])
+
+  async function copyValue() {
+    if (!value.trim()) return
+    try {
+      await navigator.clipboard.writeText(value.trim())
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch {
+      // Clipboard nicht verfügbar — leise scheitern.
+    }
+  }
+
+  const showCopy = value.trim() !== ''
+
+  return (
+    <div ref={wrapperRef} className="relative min-w-[200px]">
+      <label htmlFor={id} className="block text-xs font-medium text-gray-600">
+        Keyword
+      </label>
+      <div className="relative mt-1">
+        <input
+          id={id}
+          type="text"
+          value={value}
+          onChange={(e) => {
+            onChange(e.target.value)
+            setOpen(true)
+          }}
+          onFocus={() => setOpen(true)}
+          placeholder="Keyword filtern …"
+          className="block w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 pr-16 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+        />
+        <div className="absolute inset-y-0 right-0 flex items-center gap-1 pr-1.5">
+          {showCopy && (
+            <button
+              type="button"
+              onClick={copyValue}
+              className={`rounded px-1 text-sm ${copied ? 'text-green-600' : 'text-gray-400 hover:text-gray-700'}`}
+              aria-label={copied ? 'Kopiert' : 'Keyword kopieren'}
+              title={copied ? 'Kopiert' : 'Keyword kopieren'}
+            >
+              {copied ? '✓' : '📋'}
+            </button>
+          )}
+          {value && (
+            <button
+              type="button"
+              onClick={() => {
+                onChange('')
+                setOpen(false)
+              }}
+              className="text-gray-400 hover:text-gray-600"
+              aria-label="Keyword-Filter zurücksetzen"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                className="h-4 w-4"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </button>
+          )}
+        </div>
+      </div>
+      {open && suggestions.length > 0 && (
+        <ul className="absolute left-0 right-0 top-full z-20 mt-1 max-h-60 overflow-auto rounded-md border border-gray-200 bg-white py-1 text-sm shadow-lg">
+          {suggestions.map((k) => (
+            <li key={k.id}>
+              <button
+                type="button"
+                onMouseDown={(e) => {
+                  // mousedown statt click → Click-outside-Handler feuert nicht
+                  // bevor wir den Wert setzen können.
+                  e.preventDefault()
+                  onChange(k.keyword)
+                  setOpen(false)
+                }}
+                className="block w-full truncate px-3 py-1.5 text-left hover:bg-gray-50"
+              >
+                {k.keyword}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }
