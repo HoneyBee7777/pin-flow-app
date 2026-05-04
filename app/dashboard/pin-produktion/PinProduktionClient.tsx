@@ -1550,6 +1550,9 @@ function PinForm({
   const [geplanteVeroeffentlichung, setGeplanteVeroeffentlichung] = useState(
     editing?.geplante_veroeffentlichung ?? ''
   )
+  const [pinterestPinUrl, setPinterestPinUrl] = useState(
+    editing?.pinterest_pin_url ?? ''
+  )
 
   const [formError, setFormError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -2032,6 +2035,25 @@ function PinForm({
                 onChange={(e) => setGeplanteVeroeffentlichung(e.target.value)}
                 className={inputCls}
               />
+            </Field>
+
+            <Field
+              label="Pinterest Pin-URL (für CSV-Import)"
+              htmlFor="pinterest_pin_url"
+            >
+              <input
+                id="pinterest_pin_url"
+                name="pinterest_pin_url"
+                type="url"
+                placeholder="https://www.pinterest.com/pin/1091700765947216952/"
+                value={pinterestPinUrl}
+                onChange={(e) => setPinterestPinUrl(e.target.value)}
+                className={inputCls}
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                Direktlink zu diesem Pin auf Pinterest. Wird beim
+                Analytics-CSV-Import automatisch zum Matching verwendet.
+              </p>
             </Field>
           </div>
 

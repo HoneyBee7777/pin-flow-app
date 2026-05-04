@@ -3,166 +3,145 @@
 import Link from 'next/link'
 import {
   Fragment,
-  useEffect,
   useMemo,
   useState,
   useTransition,
-  type FormEvent,
 } from 'react'
-import { deletePinAnalytics, savePinAnalytics } from './actions'
-import SharedSortableTh from '@/components/SortableTh'
-import InfoTooltip from '@/components/InfoTooltip'
-import CopyStartDateButton from './CopyStartDateButton'
-import NextZeitraumHint from './NextZeitraumHint'
 import {
-  addDays,
+  deletePinAnalytics,
+  type UnmatchedPin,
+} from './actions'
+import SharedSortableTh from '@/components/SortableTh'
+import UnmatchedPinsSection from './UnmatchedPinsSection'
+import {
   calcCtr,
   diffDays,
   effectiveZeitraum,
-  formatDateDe,
   formatNumber,
   formatPercent,
   formatZahl,
   formatZeitraumKurz,
   PIN_DIAGNOSE_BADGE,
   PIN_DIAGNOSE_LABEL,
-  PIN_STATUS_BADGE,
-  PIN_STATUS_LABEL,
-  todayIso,
+  PIN_HANDLUNG,
   type PinAnalyticsRow,
   type PinAnalyticsThresholds,
+  type PinDiagnose,
   type PinOption,
 } from './utils'
 
-const inputCls =
-  'mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500'
+// Aggregate-Diagnose über alle Perioden eines Pins. Anders als die
+// row-basierte diagnosePin() schaut diese Funktion auf die kumulierten
+// Werte und die Anzahl der erfassten Perioden — so bekommen junge Pins
+// mit nur einer Periode nicht voreilig „Kein Signal" verpasst.
+function aggregateDiagnose(opts: {
+  perioden: number
+  cumKlicks: number
+  cumImpressionen: number
+  avgCtr: number | null
+  pinAlterTage: number
+  hatDatum: boolean
+  fallback: PinDiagnose
+  thresholds: PinAnalyticsThresholds
+}): PinDiagnose {
+  if (!opts.hatDatum) return 'evergreen'
 
-function PencilIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 20 20"
-      fill="currentColor"
-      className="h-4 w-4"
-      aria-hidden
-    >
-      <path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" />
-      <path
-        fillRule="evenodd"
-        d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
-        clipRule="evenodd"
-      />
-    </svg>
-  )
+  const ctr = opts.avgCtr ?? 0
+
+  // Starkes positives Signal — schlägt alles andere.
+  if (ctr > 3 && opts.cumKlicks > 10) return 'aktiver_top_performer'
+
+  // Hidden Gem: gute CTR bei niedrigen Impressionen.
+  if (ctr > 2 && opts.cumImpressionen < opts.thresholds.mindestImpressionen)
+    return 'hidden_gem'
+
+  // „Kein Signal → Thema prüfen" nur wenn echte Datengrundlage vorhanden:
+  // mindestens 2 Perioden UND in keiner gab es Klicks.
+  if (opts.perioden >= 2 && opts.cumKlicks === 0)
+    return 'kein_signal_thema_pruefen'
+
+  // Frühe Phase — nur 1 Periode UND Pin jünger als 60 Tage. Daten sind
+  // zu dünn für ein finales Urteil → erstmal beobachten.
+  if (opts.perioden <= 1 && opts.pinAlterTage < 60) return 'beobachten'
+
+  // Sonst: bisherige row-basierte Diagnose des neuesten Eintrags.
+  return opts.fallback
 }
 
 export default function PinsTab({
-  pins,
   pinAnalytics,
+  pins,
   thresholds,
-  latestZeitraumBis,
+  unmatchedPins,
+  unmatchedZeitraumVon,
+  unmatchedZeitraumBis,
+  onUnmatchedPinResolved,
 }: {
-  pins: PinOption[]
   pinAnalytics: PinAnalyticsRow[]
+  // Wird nur an UnmatchedPinsSection durchgereicht (Pin-Auswahl beim
+  // Zuordnen) — die Pin-Tabelle selbst nutzt pinAnalytics.pin.
+  pins: PinOption[]
   thresholds: PinAnalyticsThresholds
-  // Einheitliche Datumsquelle aus AnalyticsClient (MAX über profil_analytics
-  // + pins_analytics) — Pins-Tab und Profil-Tab zeigen denselben „nächster
-  // Zeitraum"-Vorschlag.
-  latestZeitraumBis: string | null
+  unmatchedPins: UnmatchedPin[]
+  unmatchedZeitraumVon: string
+  unmatchedZeitraumBis: string
+  onUnmatchedPinResolved: (pinterestPinId: string) => void
 }) {
-  const [pinId, setPinId] = useState('')
-  const [selectedPin, setSelectedPin] = useState<PinOption | null>(null)
-  const [pinSearch, setPinSearch] = useState('')
-  const [zeitraumVon, setZeitraumVon] = useState('')
-  const [zeitraumBis, setZeitraumBis] = useState('')
-  const [impressionen, setImpressionen] = useState('')
-  const [klicks, setKlicks] = useState('')
-  const [saves, setSaves] = useState('')
   const [isPending, startTransition] = useTransition()
-  const [feedback, setFeedback] = useState<{
-    saved?: boolean
-    error?: string
-  }>({})
 
-  const filteredPins = useMemo(() => {
-    if (selectedPin) return [] as PinOption[]
-    const q = pinSearch.trim().toLowerCase()
-    if (!q) return [] as PinOption[]
-    return pins
-      .filter((p) => (p.titel ?? '').toLowerCase().includes(q))
-      .slice(0, 12)
-  }, [pinSearch, pins, selectedPin])
-
-  // pinAnalytics ist DESC nach datum sortiert. Daraus zwei Strukturen:
-  //  - dedupedAnalytics: jeweils neueste Zeile pro pin_id (Übersichtstabelle)
-  //  - historyByPin:     ALLE Zeilen pro pin_id (für aufklappbare Zeitreihe)
-  const { dedupedAnalytics, historyByPin } = useMemo(() => {
+  // pinAnalytics ist DESC nach datum sortiert. Pro pin_id alle Zeiträume
+  // sammeln und kumulierte Kennzahlen berechnen — die Hauptzeile zeigt
+  // Summen, die aufgeklappte Zeitreihe die einzelnen Einträge.
+  const aggregatedPins = useMemo<AggregatedPin[]>(() => {
     const seen = new Set<string>()
-    const dedup: PinAnalyticsRow[] = []
-    const history = new Map<string, PinAnalyticsRow[]>()
+    const order: string[] = []
+    const historyMap = new Map<string, PinAnalyticsRow[]>()
     for (const row of pinAnalytics) {
       if (!seen.has(row.pin_id)) {
         seen.add(row.pin_id)
-        dedup.push(row)
+        order.push(row.pin_id)
       }
-      const arr = history.get(row.pin_id) ?? []
+      const arr = historyMap.get(row.pin_id) ?? []
       arr.push(row)
-      history.set(row.pin_id, arr)
+      historyMap.set(row.pin_id, arr)
     }
-    return { dedupedAnalytics: dedup, historyByPin: history }
-  }, [pinAnalytics])
-
-  useEffect(() => {
-    // zeitraum_von = letztes zeitraum_bis + 1 Tag (sonst Überlappung).
-    // latestZeitraumBis kommt aus AnalyticsClient und vereint Profil- +
-    // Pin-Analytics, damit beide Tabs konsistent denselben Vorschlag zeigen.
-    const yesterday = addDays(todayIso(), -1)
-    setZeitraumBis((prev) => prev || yesterday)
-    setZeitraumVon(
-      (prev) =>
-        prev || (latestZeitraumBis ? addDays(latestZeitraumBis, 1) : '')
-    )
-  }, [latestZeitraumBis])
-
-  function selectPin(pin: PinOption) {
-    setSelectedPin(pin)
-    setPinId(pin.id)
-    setPinSearch('')
-  }
-
-  function clearPin() {
-    setSelectedPin(null)
-    setPinId('')
-    setPinSearch('')
-  }
-
-  function onSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    setFeedback({})
-    const formData = new FormData(e.currentTarget)
-    startTransition(async () => {
-      const result = await savePinAnalytics(formData)
-      if (result.error) setFeedback({ error: result.error })
-      else setFeedback({ saved: true })
+    return order.map((pinId) => {
+      const rows = historyMap.get(pinId) ?? []
+      let cumKlicks = 0
+      let cumImpressionen = 0
+      let cumSaves = 0
+      for (const r of rows) {
+        cumKlicks += r.klicks
+        cumImpressionen += r.impressionen
+        cumSaves += r.saves
+      }
+      const latest = rows[0]
+      const avgCtr = calcCtr(cumKlicks, cumImpressionen)
+      const perioden = rows.length
+      const diagnose = aggregateDiagnose({
+        perioden,
+        cumKlicks,
+        cumImpressionen,
+        avgCtr,
+        pinAlterTage: latest.alter_tage,
+        hatDatum: !!latest.pin?.geplante_veroeffentlichung,
+        fallback: latest.diagnose,
+        thresholds,
+      })
+      return {
+        pinId,
+        latest,
+        history: rows,
+        cumKlicks,
+        cumImpressionen,
+        cumSaves,
+        avgCtr,
+        perioden,
+        diagnose,
+        handlung: PIN_HANDLUNG[diagnose],
+      }
     })
-  }
-
-  function startEdit(row: PinAnalyticsRow) {
-    const eff = effectiveZeitraum(row)
-    setPinId(row.pin_id)
-    setSelectedPin(row.pin)
-    setPinSearch('')
-    setZeitraumVon(eff.von)
-    setZeitraumBis(eff.bis)
-    setImpressionen(String(row.impressionen))
-    setKlicks(String(row.klicks))
-    setSaves(String(row.saves))
-    setFeedback({})
-    if (typeof window !== 'undefined') {
-      const el = document.getElementById('pin-analytics-form')
-      el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }
-  }
+  }, [pinAnalytics, thresholds])
 
   function onDelete(id: string) {
     startTransition(async () => {
@@ -175,188 +154,21 @@ export default function PinsTab({
   return (
     <div className="space-y-6">
       <p style={{ color: '#111827', fontWeight: '600', fontSize: '14px' }}>
-        Tracke deine wichtigsten Pins einzeln — nicht alle, nur die
-        strategisch relevanten Top 15–20. So siehst du welche Pins wirklich
-        performen und welche optimiert werden sollten.
+        Tracke deine wichtigsten Pins einzeln — nicht alle, nur die strategisch
+        relevanten Top 15–20.
       </p>
 
-      <details className="rounded-md border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
-        <summary className="cursor-pointer font-medium text-gray-900">
-          So findest du deine Zahlen
-        </summary>
-        <ol className="mt-2 list-decimal space-y-1 pl-5 text-gray-600">
-          <li>Pinterest öffnen → Analytics → Übersicht</li>
-          <li>
-            Zeitraum: „Benutzerdefiniert" → Startdatum 180 Tage zurück eingeben
-            (Datums-Helper oben nutzen)
-          </li>
-          <li>Zur Sektion „Top Pins" nach unten scrollen</li>
-          <li>
-            Nach <strong>Ausgehende Klicks</strong> sortieren → deine Top
-            15–20 Pins eintragen
-          </li>
-          <li>
-            Dann nach <strong>Impressionen</strong> sortieren → weitere
-            relevante Pins eintragen
-          </li>
-          <li>
-            Dann nach <strong>Saves</strong> sortieren → weitere relevante
-            Pins eintragen
-          </li>
-        </ol>
-        <p className="mt-2 text-xs text-gray-500">
-          Pins die in mehreren Listen auftauchen einfach mit aktualisierten
-          Werten eintragen — die App erkennt und aktualisiert sie
-          automatisch.
-        </p>
-      </details>
-
-      <div className="flex flex-wrap items-start gap-3">
-        <div className="min-w-0 flex-1">
-          <NextZeitraumHint
-            von={zeitraumVon || null}
-            bis={zeitraumBis || null}
-          />
-        </div>
-        <div className="shrink-0 pt-0.5">
-          <CopyStartDateButton />
-        </div>
-      </div>
-
-      <form
-        id="pin-analytics-form"
-        onSubmit={onSubmit}
-        className="space-y-4 rounded-lg border border-gray-200 bg-white p-6 shadow-sm scroll-mt-6"
-      >
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900">
-            Pin-Analytics eintragen
-          </h2>
-          <p className="mt-1 text-sm text-gray-600">
-            Wähle einen Pin und den Zeitraum, dann trage Impressionen, Klicks
-            und Saves aus Pinterest Analytics ein.
-          </p>
-        </div>
-
-        {pins.length === 0 ? (
-          <p className="text-sm text-gray-500">
-            Du hast noch keine Pins angelegt. Lege zuerst einen Pin in der
-            Pin-Produktion an.
-          </p>
-        ) : (
-          <>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-              <div className="md:col-span-2 lg:col-span-3">
-                <PinSearchField
-                  selectedPin={selectedPin}
-                  search={pinSearch}
-                  onSearchChange={setPinSearch}
-                  filteredPins={filteredPins}
-                  onSelect={selectPin}
-                  onClear={clearPin}
-                />
-                <input type="hidden" name="pin_id" value={pinId} />
-              </div>
-
-              <Field label="Von" htmlFor="zeitraum_von">
-                <input
-                  id="zeitraum_von"
-                  name="zeitraum_von"
-                  type="date"
-                  required
-                  value={zeitraumVon}
-                  onChange={(e) => setZeitraumVon(e.target.value)}
-                  className={inputCls}
-                />
-              </Field>
-
-              <Field label="Bis" htmlFor="zeitraum_bis">
-                <input
-                  id="zeitraum_bis"
-                  name="zeitraum_bis"
-                  type="date"
-                  required
-                  value={zeitraumBis}
-                  onChange={(e) => setZeitraumBis(e.target.value)}
-                  className={inputCls}
-                />
-              </Field>
-
-              <div className="md:col-span-2 lg:col-span-1 md:flex md:items-end">
-                <p className="text-xs text-gray-500">
-                  Zeitraum wird automatisch berechnet: vom letzten Update bis
-                  gestern. Passe die Daten in Pinterest Analytics entsprechend
-                  an.
-                </p>
-              </div>
-
-              <Field label="Impressionen" htmlFor="impressionen">
-                <input
-                  id="impressionen"
-                  name="impressionen"
-                  type="number"
-                  min={0}
-                  step={1}
-                  required
-                  value={impressionen}
-                  onChange={(e) => setImpressionen(e.target.value)}
-                  className={inputCls}
-                />
-              </Field>
-
-              <Field label="Klicks" htmlFor="klicks">
-                <input
-                  id="klicks"
-                  name="klicks"
-                  type="number"
-                  min={0}
-                  step={1}
-                  required
-                  value={klicks}
-                  onChange={(e) => setKlicks(e.target.value)}
-                  className={inputCls}
-                />
-              </Field>
-
-              <Field label="Saves" htmlFor="saves">
-                <input
-                  id="saves"
-                  name="saves"
-                  type="number"
-                  min={0}
-                  step={1}
-                  required
-                  value={saves}
-                  onChange={(e) => setSaves(e.target.value)}
-                  className={inputCls}
-                />
-              </Field>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <button
-                type="submit"
-                disabled={isPending || !pinId}
-                className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
-                title={!pinId ? 'Bitte zuerst einen Pin auswählen' : ''}
-              >
-                {isPending ? 'Speichert…' : 'Speichern'}
-              </button>
-              {feedback.saved && (
-                <span className="text-sm text-green-700">✓ Gespeichert</span>
-              )}
-              {feedback.error && (
-                <span className="text-sm text-red-700">{feedback.error}</span>
-              )}
-            </div>
-          </>
-        )}
-      </form>
+      <UnmatchedPinsSection
+        unmatchedPins={unmatchedPins}
+        pins={pins}
+        zeitraumVon={unmatchedZeitraumVon}
+        zeitraumBis={unmatchedZeitraumBis}
+        onAssigned={onUnmatchedPinResolved}
+        onSkipped={onUnmatchedPinResolved}
+      />
 
       <PinAnalyticsTable
-        rows={dedupedAnalytics}
-        historyByPin={historyByPin}
-        onEdit={startEdit}
+        rows={aggregatedPins}
         onDelete={onDelete}
         deleteDisabled={isPending}
       />
@@ -367,144 +179,35 @@ export default function PinsTab({
 }
 
 // ===========================================================
-// Pin-Suche
-// ===========================================================
-function PinSearchField({
-  selectedPin,
-  search,
-  onSearchChange,
-  filteredPins,
-  onSelect,
-  onClear,
-}: {
-  selectedPin: PinOption | null
-  search: string
-  onSearchChange: (v: string) => void
-  filteredPins: PinOption[]
-  onSelect: (pin: PinOption) => void
-  onClear: () => void
-}) {
-  return (
-    <div>
-      <label
-        htmlFor="pin_search"
-        className="block text-sm font-medium text-gray-700"
-      >
-        Pin auswählen <span className="text-red-600">*</span>
-      </label>
-
-      {selectedPin ? (
-        <div className="mt-1 rounded-md border border-gray-300 bg-gray-50 p-3">
-          <div className="flex items-start justify-between gap-3">
-            <div className="space-y-1">
-              <div className="font-medium text-gray-900">
-                {selectedPin.titel ?? (
-                  <span className="text-gray-500">(ohne Titel)</span>
-                )}
-              </div>
-              <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
-                <span
-                  className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                    PIN_STATUS_BADGE[selectedPin.status] ??
-                    'bg-gray-100 text-gray-700'
-                  }`}
-                >
-                  {PIN_STATUS_LABEL[selectedPin.status] ?? selectedPin.status}
-                </span>
-                <span>{formatPinDate(selectedPin)}</span>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={onClear}
-              className="text-sm font-medium text-gray-500 hover:text-gray-900"
-            >
-              × ändern
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div>
-          <input
-            id="pin_search"
-            type="text"
-            value={search}
-            onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Pin-Titel suchen…"
-            autoComplete="off"
-            className={inputCls}
-          />
-          {search.trim() && (
-            <div className="mt-2 max-h-72 overflow-y-auto rounded-md border border-gray-200 bg-white">
-              {filteredPins.length === 0 ? (
-                <p className="p-3 text-sm text-gray-500">
-                  Keine passenden Pins gefunden.
-                </p>
-              ) : (
-                <ul className="divide-y divide-gray-100">
-                  {filteredPins.map((p) => (
-                    <li key={p.id}>
-                      <button
-                        type="button"
-                        onClick={() => onSelect(p)}
-                        className="block w-full p-3 text-left hover:bg-gray-50"
-                      >
-                        <div className="font-medium text-gray-900">
-                          {p.titel ?? (
-                            <span className="text-gray-500">
-                              (ohne Titel)
-                            </span>
-                          )}
-                        </div>
-                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-600">
-                          <span
-                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                              PIN_STATUS_BADGE[p.status] ??
-                              'bg-gray-100 text-gray-700'
-                            }`}
-                          >
-                            {PIN_STATUS_LABEL[p.status] ?? p.status}
-                          </span>
-                          <span>{formatPinDate(p)}</span>
-                        </div>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function formatPinDate(pin: PinOption): string {
-  if (pin.geplante_veroeffentlichung) {
-    return `📅 Veröffentlichung: ${formatDateDe(pin.geplante_veroeffentlichung)}`
-  }
-  return `Erstellt: ${formatDateDe(pin.created_at.slice(0, 10))}`
-}
-
-// ===========================================================
 // Tabelle
 // ===========================================================
+type AggregatedPin = {
+  pinId: string
+  latest: PinAnalyticsRow
+  history: PinAnalyticsRow[]
+  cumKlicks: number
+  cumImpressionen: number
+  cumSaves: number
+  avgCtr: number | null
+  perioden: number
+  diagnose: PinDiagnose
+  handlung: string
+}
+
 type SortKey =
   | 'titel'
-  | 'impressionen'
-  | 'klicks'
-  | 'saves'
-  | 'ctr'
+  | 'cumKlicks'
+  | 'cumImpressionen'
+  | 'cumSaves'
+  | 'avgCtr'
   | 'diagnose'
   | 'handlung'
-  | 'alter'
-  | 'zuletzt'
+  | 'perioden'
 type SortDir = 'asc' | 'desc'
 
-function compareRows(
-  a: PinAnalyticsRow,
-  b: PinAnalyticsRow,
+function compareAggregated(
+  a: AggregatedPin,
+  b: AggregatedPin,
   key: SortKey,
   dir: SortDir
 ): number {
@@ -512,19 +215,22 @@ function compareRows(
   let res = 0
   switch (key) {
     case 'titel':
-      res = (a.pin?.titel ?? '').localeCompare(b.pin?.titel ?? '', 'de')
+      res = (a.latest.pin?.titel ?? '').localeCompare(
+        b.latest.pin?.titel ?? '',
+        'de'
+      )
       break
-    case 'impressionen':
-      res = a.impressionen - b.impressionen
+    case 'cumKlicks':
+      res = a.cumKlicks - b.cumKlicks
       break
-    case 'klicks':
-      res = a.klicks - b.klicks
+    case 'cumImpressionen':
+      res = a.cumImpressionen - b.cumImpressionen
       break
-    case 'saves':
-      res = a.saves - b.saves
+    case 'cumSaves':
+      res = a.cumSaves - b.cumSaves
       break
-    case 'ctr':
-      res = (a.ctr ?? -Infinity) - (b.ctr ?? -Infinity)
+    case 'avgCtr':
+      res = (a.avgCtr ?? -Infinity) - (b.avgCtr ?? -Infinity)
       break
     case 'diagnose':
       res = PIN_DIAGNOSE_LABEL[a.diagnose].localeCompare(
@@ -535,11 +241,8 @@ function compareRows(
     case 'handlung':
       res = a.handlung.localeCompare(b.handlung, 'de')
       break
-    case 'alter':
-      res = a.alter_tage - b.alter_tage
-      break
-    case 'zuletzt':
-      res = a.datum.localeCompare(b.datum)
+    case 'perioden':
+      res = a.perioden - b.perioden
       break
   }
   return res * sign
@@ -547,24 +250,19 @@ function compareRows(
 
 function PinAnalyticsTable({
   rows,
-  historyByPin,
-  onEdit,
   onDelete,
   deleteDisabled,
 }: {
-  rows: PinAnalyticsRow[]
-  historyByPin: Map<string, PinAnalyticsRow[]>
-  onEdit: (row: PinAnalyticsRow) => void
+  rows: AggregatedPin[]
   onDelete: (id: string) => void
   deleteDisabled: boolean
 }) {
-  const [sortKey, setSortKey] = useState<SortKey>('klicks')
+  const [sortKey, setSortKey] = useState<SortKey>('cumKlicks')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
-  const today = useMemo(() => todayIso(), [])
 
   const sortedRows = useMemo(
-    () => [...rows].sort((a, b) => compareRows(a, b, sortKey, sortDir)),
+    () => [...rows].sort((a, b) => compareAggregated(a, b, sortKey, sortDir)),
     [rows, sortKey, sortDir]
   )
 
@@ -589,8 +287,8 @@ function PinAnalyticsTable({
   if (rows.length === 0) {
     return (
       <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">
-        Noch keine Pin-Analytics gespeichert. Trage oben deinen ersten Pin
-        ein.
+        Noch keine Pin-Analytics gespeichert. Lade deine ersten CSVs im
+        Eingabe-Tab hoch.
       </div>
     )
   }
@@ -600,45 +298,48 @@ function PinAnalyticsTable({
       <table className="min-w-full divide-y divide-gray-200">
         <thead className="sticky top-0 z-10 bg-gray-50">
           <tr>
+            <Th>
+              <span className="sr-only">Aufklappen</span>
+            </Th>
             <SortableTh
               sortKey="titel"
               current={sortKey}
               dir={sortDir}
               onSort={toggleSort}
             >
-              Pin
+              Pin-Titel
             </SortableTh>
             <SortableTh
-              sortKey="impressionen"
+              sortKey="cumKlicks"
               current={sortKey}
               dir={sortDir}
               onSort={toggleSort}
             >
-              Impressionen
+              Klicks ∑
             </SortableTh>
             <SortableTh
-              sortKey="klicks"
+              sortKey="cumImpressionen"
               current={sortKey}
               dir={sortDir}
               onSort={toggleSort}
             >
-              Klicks
+              Imp ∑
             </SortableTh>
             <SortableTh
-              sortKey="saves"
+              sortKey="cumSaves"
               current={sortKey}
               dir={sortDir}
               onSort={toggleSort}
             >
-              Saves
+              Saves ∑
             </SortableTh>
             <SortableTh
-              sortKey="ctr"
+              sortKey="avgCtr"
               current={sortKey}
               dir={sortDir}
               onSort={toggleSort}
             >
-              CTR
+              Ø CTR
             </SortableTh>
             <SortableTh
               sortKey="diagnose"
@@ -657,114 +358,99 @@ function PinAnalyticsTable({
               Handlung
             </SortableTh>
             <SortableTh
-              sortKey="alter"
+              sortKey="perioden"
               current={sortKey}
               dir={sortDir}
               onSort={toggleSort}
             >
-              Alter
-            </SortableTh>
-            <SortableTh
-              sortKey="zuletzt"
-              current={sortKey}
-              dir={sortDir}
-              onSort={toggleSort}
-            >
-              Zuletzt aktualisiert
+              Perioden
             </SortableTh>
             <Th align="right">Aktion</Th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
-          {sortedRows.map((row) => {
-            const history = historyByPin.get(row.pin_id) ?? [row]
-            const hasHistory = history.length > 1
-            const prev = hasHistory ? history[1] : null
-            const isOpen = expanded.has(row.pin_id)
+          {sortedRows.map((agg) => {
+            const row = agg.latest
+            const isOpen = expanded.has(agg.pinId)
+            const hasPeriods = agg.perioden > 0
             return (
-              <Fragment key={row.id}>
+              <Fragment key={agg.pinId}>
                 <tr className="align-top hover:bg-gray-50">
+                  <td className="whitespace-nowrap px-2 py-3 text-sm">
+                    {hasPeriods ? (
+                      <button
+                        type="button"
+                        onClick={() => toggleExpand(agg.pinId)}
+                        className="inline-flex h-5 w-5 items-center justify-center text-xs text-gray-500 hover:text-gray-900"
+                        aria-label={
+                          isOpen
+                            ? 'Zeitreihe einklappen'
+                            : 'Zeitreihe ausklappen'
+                        }
+                        title={isOpen ? 'Einklappen' : 'Zeitreihe anzeigen'}
+                      >
+                        {isOpen ? '▼' : '▶'}
+                      </button>
+                    ) : null}
+                  </td>
                   <td className="max-w-xs px-4 py-3 text-sm font-medium text-gray-900">
-                    <div className="flex items-start gap-2">
-                      {hasHistory ? (
-                        <button
-                          type="button"
-                          onClick={() => toggleExpand(row.pin_id)}
-                          className="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center text-xs text-gray-500 hover:text-gray-900"
-                          aria-label={isOpen ? 'Zeitreihe einklappen' : 'Zeitreihe ausklappen'}
-                          title={isOpen ? 'Einklappen' : 'Zeitreihe anzeigen'}
-                        >
-                          {isOpen ? '▼' : '▶'}
-                        </button>
-                      ) : (
-                        <span
-                          className="mt-0.5 inline-block h-4 w-4 shrink-0"
-                          aria-hidden
-                        />
-                      )}
-                      <span>
-                        {row.pin ? (
-                          row.pin.titel ?? (
-                            <span className="text-gray-500">(ohne Titel)</span>
-                          )
-                        ) : (
-                          <span className="text-gray-400">— gelöschter Pin —</span>
-                        )}
-                      </span>
-                    </div>
-                  </td>
-                  <MetricWithDelta
-                    value={row.impressionen}
-                    prev={prev?.impressionen}
-                  />
-                  <MetricWithDelta value={row.klicks} prev={prev?.klicks} />
-                  <MetricWithDelta value={row.saves} prev={prev?.saves} />
-                  <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">
-                    {formatPercent(row.ctr)}
-                  </td>
-                  <td className="px-4 py-3 text-sm">
-                    <span
-                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${PIN_DIAGNOSE_BADGE[row.diagnose]}`}
-                    >
-                      {PIN_DIAGNOSE_LABEL[row.diagnose]}
-                    </span>
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-800">
-                    {row.handlung}
+                    {row.pin ? (
+                      row.pin.titel ?? (
+                        <span className="text-gray-500">(ohne Titel)</span>
+                      )
+                    ) : (
+                      <span className="text-gray-400">— gelöschter Pin —</span>
+                    )}
                   </td>
                   <td
                     className="whitespace-nowrap px-4 py-3 text-sm text-gray-700"
-                    title={`Datum: ${formatDateDe(row.datum)}`}
+                    title={formatNumber(agg.cumKlicks)}
                   >
-                    {row.alter_tage} {row.alter_tage === 1 ? 'Tag' : 'Tage'}
+                    {hasPeriods ? formatZahl(agg.cumKlicks) : '—'}
                   </td>
-                  <ZuletztAktualisiertCell datum={row.datum} today={today} />
+                  <td
+                    className="whitespace-nowrap px-4 py-3 text-sm text-gray-700"
+                    title={formatNumber(agg.cumImpressionen)}
+                  >
+                    {hasPeriods ? formatZahl(agg.cumImpressionen) : '—'}
+                  </td>
+                  <td
+                    className="whitespace-nowrap px-4 py-3 text-sm text-gray-700"
+                    title={formatNumber(agg.cumSaves)}
+                  >
+                    {hasPeriods ? formatZahl(agg.cumSaves) : '—'}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">
+                    {hasPeriods ? formatPercent(agg.avgCtr) : '—'}
+                  </td>
+                  <td className="px-4 py-3 text-sm">
+                    <span
+                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${PIN_DIAGNOSE_BADGE[agg.diagnose]}`}
+                    >
+                      {PIN_DIAGNOSE_LABEL[agg.diagnose]}
+                    </span>
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-800">
+                    {agg.handlung}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">
+                    {hasPeriods ? agg.perioden : '—'}
+                  </td>
                   <td className="whitespace-nowrap px-4 py-3 text-right text-sm">
-                    <div className="flex items-center justify-end gap-3">
-                      <button
-                        type="button"
-                        onClick={() => onEdit(row)}
-                        className="text-gray-500 hover:text-gray-900"
-                        aria-label="Bearbeiten"
-                        title="Bearbeiten"
-                      >
-                        <PencilIcon />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onDelete(row.id)}
-                        disabled={deleteDisabled}
-                        className="text-sm font-medium text-red-600 hover:text-red-700 disabled:opacity-50"
-                      >
-                        Löschen
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onDelete(row.id)}
+                      disabled={deleteDisabled}
+                      className="text-sm font-medium text-red-600 hover:text-red-700 disabled:opacity-50"
+                    >
+                      Löschen
+                    </button>
                   </td>
                 </tr>
-                {hasHistory && isOpen && (
+                {hasPeriods && isOpen && (
                   <tr className="bg-gray-50">
                     <td colSpan={10} className="px-4 py-3">
-                      <PinTimeline history={history} />
+                      <PinTimeline history={agg.history} pin={row.pin} />
                     </td>
                   </tr>
                 )}
@@ -777,9 +463,26 @@ function PinAnalyticsTable({
   )
 }
 
-// Kompakte Zeitreihe pro Pin — alle Einträge DESC, Vergleich zur jeweils
-// älteren Periode in derselben Zeile.
-function PinTimeline({ history }: { history: PinAnalyticsRow[] }) {
+// Aufklappbare Zeitreihe pro Pin — neueste Periode oben. Pro Spalte ein
+// inline-Delta vs. der älteren Periode in derselben Zeile (außer älteste
+// Zeile, die hat keinen Vergleichspunkt).
+function PinTimeline({
+  history,
+  pin,
+}: {
+  history: PinAnalyticsRow[]
+  pin: PinOption | null
+}) {
+  if (history.length === 0) {
+    return (
+      <div className="ml-6 rounded-md border border-gray-200 bg-white px-3 py-2 text-xs text-gray-500">
+        Noch keine Daten — füge beim nächsten Update neue Werte hinzu.
+      </div>
+    )
+  }
+  const refDate =
+    pin?.geplante_veroeffentlichung ??
+    (pin?.created_at ? pin.created_at.slice(0, 10) : null)
   return (
     <div className="ml-6 overflow-x-auto rounded-md border border-gray-200 bg-white">
       <table className="min-w-full divide-y divide-gray-200 text-xs">
@@ -801,7 +504,7 @@ function PinTimeline({ history }: { history: PinAnalyticsRow[] }) {
               CTR
             </th>
             <th className="px-3 py-2 text-left font-semibold uppercase tracking-wide text-gray-500">
-              Vs. vorher
+              Alter
             </th>
           </tr>
         </thead>
@@ -809,41 +512,44 @@ function PinTimeline({ history }: { history: PinAnalyticsRow[] }) {
           {history.map((row, i) => {
             const eff = effectiveZeitraum(row)
             const prev = history[i + 1]
-            const isCurrent = i === 0
+            const ctr = calcCtr(row.klicks, row.impressionen)
+            const prevCtr = prev ? calcCtr(prev.klicks, prev.impressionen) : null
+            const alterAmEnde = refDate
+              ? Math.max(0, diffDays(refDate, eff.bis))
+              : null
             return (
               <tr key={row.id} className="text-gray-700">
                 <td className="whitespace-nowrap px-3 py-2 font-medium text-gray-900">
                   {formatZeitraumKurz(eff.von, eff.bis)}
                 </td>
-                <td
-                  className="whitespace-nowrap px-3 py-2"
-                  title={formatNumber(row.impressionen)}
-                >
-                  {formatZahl(row.impressionen)}
-                </td>
-                <td
-                  className="whitespace-nowrap px-3 py-2"
-                  title={formatNumber(row.klicks)}
-                >
-                  {formatZahl(row.klicks)}
-                </td>
-                <td
-                  className="whitespace-nowrap px-3 py-2"
-                  title={formatNumber(row.saves)}
-                >
-                  {formatZahl(row.saves)}
+                <td className="whitespace-nowrap px-3 py-2">
+                  <InlineMetricDelta
+                    value={row.impressionen}
+                    prev={prev?.impressionen}
+                    format="zahl"
+                  />
                 </td>
                 <td className="whitespace-nowrap px-3 py-2">
-                  {formatPercent(calcCtr(row.klicks, row.impressionen))}
+                  <InlineMetricDelta
+                    value={row.klicks}
+                    prev={prev?.klicks}
+                    format="zahl"
+                  />
                 </td>
                 <td className="whitespace-nowrap px-3 py-2">
-                  {!prev ? (
-                    <span className="text-gray-400">— erster Eintrag</span>
-                  ) : isCurrent ? (
-                    <BestDelta row={row} prev={prev} />
-                  ) : (
-                    <BestDelta row={row} prev={prev} />
-                  )}
+                  <InlineMetricDelta
+                    value={row.saves}
+                    prev={prev?.saves}
+                    format="zahl"
+                  />
+                </td>
+                <td className="whitespace-nowrap px-3 py-2">
+                  <InlineMetricDelta value={ctr} prev={prevCtr} format="percent" />
+                </td>
+                <td className="whitespace-nowrap px-3 py-2">
+                  {alterAmEnde !== null
+                    ? `${alterAmEnde} ${alterAmEnde === 1 ? 'Tag' : 'Tage'}`
+                    : '—'}
                 </td>
               </tr>
             )
@@ -854,152 +560,76 @@ function PinTimeline({ history }: { history: PinAnalyticsRow[] }) {
   )
 }
 
-// Zelle mit Wert + kleinem ↑/↓ Indikator wenn ein Vorperioden-Wert existiert.
-function MetricWithDelta({
+function InlineMetricDelta({
   value,
   prev,
+  format,
 }: {
-  value: number
-  prev: number | undefined
+  value: number | null
+  prev: number | null | undefined
+  format: 'zahl' | 'percent'
 }) {
-  const delta =
-    prev === undefined ? null : value > prev ? 'up' : value < prev ? 'down' : 'flat'
+  const formatted =
+    format === 'percent'
+      ? formatPercent(value)
+      : value === null
+        ? '—'
+        : formatZahl(value)
+  const title = format === 'zahl' && value !== null ? formatNumber(value) : undefined
+  let growth: number | null = null
+  if (value !== null && prev !== null && prev !== undefined) {
+    if (prev === 0) {
+      growth = value > 0 ? Number.POSITIVE_INFINITY : 0
+    } else {
+      growth = ((value - prev) / prev) * 100
+    }
+  }
   return (
-    <td
-      className="whitespace-nowrap px-4 py-3 text-sm text-gray-700"
-      title={formatNumber(value)}
-    >
-      <span className="inline-flex items-center gap-1">
-        {formatZahl(value)}
-        {delta === 'up' && (
-          <span
-            className="text-xs font-medium text-green-700"
-            aria-hidden
-            title={`Vorher: ${formatNumber(prev ?? 0)}`}
-          >
-            ↑
-          </span>
-        )}
-        {delta === 'down' && (
-          <span
-            className="text-xs font-medium text-red-700"
-            aria-hidden
-            title={`Vorher: ${formatNumber(prev ?? 0)}`}
-          >
-            ↓
-          </span>
-        )}
+    <span className="inline-flex items-baseline gap-1.5">
+      <span className="font-medium text-gray-900" title={title}>
+        {formatted}
       </span>
-    </td>
-  )
-}
-
-// Berechnet die größte relative Veränderung zwischen row und prev und
-// zeigt sie als „↑ +20% Klicks". Tooltip listet alle Veränderungen.
-function BestDelta({
-  row,
-  prev,
-}: {
-  row: PinAnalyticsRow
-  prev: PinAnalyticsRow
-}) {
-  type Item = { label: string; current: number; previous: number }
-  const items: Item[] = [
-    { label: 'Klicks', current: row.klicks, previous: prev.klicks },
-    { label: 'Impressionen', current: row.impressionen, previous: prev.impressionen },
-    { label: 'Saves', current: row.saves, previous: prev.saves },
-  ]
-  const withGrowth = items.map((it) => {
-    const g =
-      it.previous === 0
-        ? it.current === 0
-          ? 0
-          : it.current > 0
-            ? Number.POSITIVE_INFINITY
-            : Number.NEGATIVE_INFINITY
-        : ((it.current - it.previous) / it.previous) * 100
-    return { ...it, growth: g }
-  })
-
-  function magnitude(g: number): number {
-    if (!Number.isFinite(g)) return 9999
-    return Math.abs(g)
-  }
-  const sorted = [...withGrowth].sort((a, b) => magnitude(b.growth) - magnitude(a.growth))
-  const top = sorted[0]
-  if (!top) return <span className="text-gray-400">—</span>
-
-  const tooltip = withGrowth
-    .map((it) => {
-      if (it.growth === Number.POSITIVE_INFINITY) return `${it.label}: ↑ neu`
-      if (it.growth === Number.NEGATIVE_INFINITY) return `${it.label}: ↓ —`
-      const sign = it.growth > 0 ? '+' : ''
-      return `${it.label}: ${sign}${it.growth.toFixed(1)}%`
-    })
-    .join('\n')
-
-  if (top.growth === Number.POSITIVE_INFINITY) {
-    return (
-      <span
-        className="inline-flex items-center gap-0.5 font-medium text-green-700"
-        title={tooltip}
-      >
-        ↑ neu {top.label}
-      </span>
-    )
-  }
-  if (top.growth === Number.NEGATIVE_INFINITY) {
-    return (
-      <span
-        className="inline-flex items-center gap-0.5 font-medium text-red-700"
-        title={tooltip}
-      >
-        ↓ {top.label}
-      </span>
-    )
-  }
-  if (top.growth === 0) {
-    return (
-      <span className="text-gray-500" title={tooltip}>
-        ± 0% {top.label}
-      </span>
-    )
-  }
-  const positive = top.growth > 0
-  const sign = positive ? '+' : ''
-  return (
-    <span
-      className={`inline-flex items-center gap-0.5 font-medium ${positive ? 'text-green-700' : 'text-red-700'}`}
-      title={tooltip}
-    >
-      {positive ? '↑' : '↓'} {sign}
-      {top.growth.toFixed(1)}% {top.label}
+      {growth !== null && <DeltaInline value={growth} />}
     </span>
   )
 }
 
-function ZuletztAktualisiertCell({
-  datum,
-  today,
-}: {
-  datum: string
-  today: string
-}) {
-  const daysSince = Math.max(0, diffDays(datum, today))
-  const isStale = daysSince >= 90
+function DeltaInline({ value }: { value: number }) {
+  if (value === Number.POSITIVE_INFINITY) {
+    return (
+      <span
+        className="text-[11px] font-medium text-green-600"
+        title="Aus Null heraus gestiegen"
+      >
+        ↑ neu
+      </span>
+    )
+  }
+  if (value === Number.NEGATIVE_INFINITY) {
+    return (
+      <span className="text-[11px] font-medium text-red-600" title="Rückgang">
+        ↓
+      </span>
+    )
+  }
+  if (!Number.isFinite(value)) return null
+  const rounded = Math.round(value * 10) / 10
+  if (rounded === 0) {
+    return <span className="text-[11px] font-medium text-gray-500">± 0%</span>
+  }
+  const positive = rounded > 0
+  const sign = positive ? '+' : ''
+  const display = rounded.toLocaleString('de-DE', {
+    maximumFractionDigits: 1,
+  })
   return (
-    <td
-      className={`whitespace-nowrap px-4 py-3 text-sm ${
-        isStale ? 'font-medium text-orange-600' : 'text-gray-700'
-      }`}
-      title={
-        isStale
-          ? `Letzter Eintrag vor ${daysSince} Tagen — Zeit, diesen Pin neu zu checken.`
-          : `Letzter Eintrag vor ${daysSince} Tagen`
-      }
+    <span
+      className={`text-[11px] font-medium ${positive ? 'text-green-600' : 'text-red-600'}`}
     >
-      {formatDateDe(datum)}
-    </td>
+      {positive ? '↑' : '↓'}
+      {sign}
+      {display}%
+    </span>
   )
 }
 
@@ -1072,34 +702,6 @@ function ThresholdInfo({
         .
       </p>
     </details>
-  )
-}
-
-// ===========================================================
-// Hilfs-Komponenten
-// ===========================================================
-function Field({
-  label,
-  htmlFor,
-  tooltip,
-  children,
-}: {
-  label: string
-  htmlFor: string
-  tooltip?: string
-  children: React.ReactNode
-}) {
-  return (
-    <div>
-      <label
-        htmlFor={htmlFor}
-        className="block text-sm font-medium text-gray-700"
-      >
-        {label} <span className="text-red-600">*</span>
-        {tooltip && <InfoTooltip text={tooltip} />}
-      </label>
-      {children}
-    </div>
   )
 }
 

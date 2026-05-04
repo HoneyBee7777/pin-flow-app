@@ -166,12 +166,19 @@ type BoardDashHealth = {
   klicks: number
   hasAnalytics: boolean
   anzahlPins: number | null
+  // Quelle der Wahrheit für „Pins auf diesem Board" — kommt aus der pins-
+  // Tabelle (alle Status-Stufen). anzahlPins oben ist der CSV-Wert von
+  // Pinterest und kann 0 sein, wenn Pinterest die Zahl nicht liefert.
+  pinsInDb: number
   lastPinDate: string | null
   lastPinAlterTage: number | null
   lastPinId: string | null
 }
 
-type BoardCat = BoardScore | 'schlafende_top' | 'inaktive'
+// Board-Gesundheit klassifiziert jetzt nach Pin-Aktivität (Datum des
+// letzten veröffentlichten Pins), nicht mehr nach ER-Score. ER bleibt als
+// Anzeigewert, ist aber für die Bucket-Zuweisung irrelevant.
+type BoardCat = 'inaktiv' | 'wenig_aktiv' | 'ohne_aktivitaet' | 'aktiv'
 
 type BoardMetricKind = 'er' | 'erChange' | 'impressionen' | 'klicks'
 
@@ -197,44 +204,19 @@ type BoardCatConfig = {
 
 const BOARD_CATEGORIES: BoardCatConfig[] = [
   {
-    key: 'schlafende_top',
-    group: 'A',
-    emoji: '💤',
-    label: 'Top-Boards ohne neue Pins',
-    subtitle:
-      'Deine stärksten Boards bekommen keine neuen Pins – dabei würde Pinterest neue Pins hier sofort bevorzugt ausspielen.',
-    tooltip:
-      'Boards mit überdurchschnittlicher Engagement Rate, die aktuell keine neuen Pins erhalten. Pinterest würde diese Boards sofort belohnen, sobald wieder Aktivität entsteht.',
-    iconBg: 'bg-orange-100 text-orange-700',
-    counterBg: 'bg-orange-100 text-orange-700',
-    hint: 'Diese Boards haben ihre Performance schon bewiesen – Pinterest pusht sie sofort wieder, sobald frische Pins kommen.',
-    nextStep:
-      'Mindestens 3 neue Pins pro Woche für 4 Wochen einplanen, dann Reichweite kontrollieren.',
-    hintTone: 'orange',
-    primary: {
-      label: 'Pins planen',
-      href: (b) => `/dashboard/pin-produktion?new=1&board=${b.id}`,
-    },
-    primaryButtonClass: 'bg-red-600 text-white hover:bg-red-700',
-    metrics: ['er', 'impressionen', 'klicks'],
-    emptyMessage:
-      'Aktuell keine Top-Boards ohne neue Pins – deine starken Boards werden aktiv bepinnt. Sehr gut!',
-    prominentLastPin: true,
-  },
-  {
-    key: 'inaktive',
+    key: 'inaktiv',
     group: 'A',
     emoji: '⏸️',
-    label: 'Inaktive Boards',
+    label: 'Inaktive Boards (>60 Tage)',
     subtitle:
-      'Boards ohne neue Pins in den letzten 30 Tagen – 2-3 neue Pins pro Woche reichen um Pinterest zu signalisieren: dieses Thema ist aktiv.',
+      'Boards ohne neue Pins seit über 60 Tagen — Pinterest spielt inaktive Boards immer seltener aus.',
     tooltip:
-      'Boards mit mittlerer Engagement Rate, die seit über 30 Tagen keine neuen Pins erhalten haben. Auch ohne Top-Performance profitieren Boards von regelmäßigem Bepinnen – sonst spielt Pinterest das Board seltener aus.',
-    iconBg: 'bg-orange-50 text-orange-700',
-    counterBg: 'bg-orange-50 text-orange-700',
-    hint: 'Inaktive Boards mit mittlerer Performance können wieder hochgefahren werden – Pinterest belohnt regelmäßige Aktivität, auch bei stabilen Werten.',
+      'Boards, auf denen seit mehr als 60 Tagen kein Pin veröffentlicht wurde. Frequenz wieder hochfahren — Pinterest belohnt regelmäßige Aktivität.',
+    iconBg: 'bg-orange-100 text-orange-700',
+    counterBg: 'bg-orange-100 text-orange-700',
+    hint: 'Inaktive Boards verlieren Reichweite — Pinterest spielt sie immer seltener aus, je länger keine neuen Pins kommen.',
     nextStep:
-      'Mit 2-3 neuen Pins pro Woche reaktivieren – das hält die Sichtbarkeit aufrecht und kann zur Performance-Verbesserung führen.',
+      'Mit 2-3 neuen Pins pro Woche reaktivieren — das hält die Sichtbarkeit aufrecht.',
     hintTone: 'orange',
     primary: {
       label: 'Pins planen',
@@ -243,103 +225,79 @@ const BOARD_CATEGORIES: BoardCatConfig[] = [
     primaryButtonClass: 'bg-red-600 text-white hover:bg-red-700',
     metrics: ['er', 'impressionen', 'klicks'],
     emptyMessage:
-      'Aktuell keine inaktiven solide Boards – deine soliden Boards werden alle aktiv bepinnt.',
+      'Aktuell keine Boards über 60 Tage ohne neuen Pin — sehr gut!',
     prominentLastPin: true,
   },
   {
-    key: 'top',
-    group: 'B',
-    emoji: '🏆',
-    label: 'Aktive Top Boards',
+    key: 'wenig_aktiv',
+    group: 'A',
+    emoji: '⚠️',
+    label: 'Wenig aktive Boards (15-60 Tage)',
     subtitle:
-      'Deine stärksten Boards – Pinterest vertraut diesen Themen und spielt neue Pins darauf bevorzugt aus.',
+      'Boards ohne neue Pins seit über 14 Tagen — Frequenz wieder hochfahren bevor Pinterest die Sichtbarkeit reduziert.',
     tooltip:
-      'Ein Board ist ein Top Board, wenn seine Engagement Rate ≥ 3% beträgt UND es zu den besten 30% deines Profils gehört. Das sind deine bewiesenen Stärken.',
+      'Boards, auf denen seit 15-60 Tagen kein Pin veröffentlicht wurde. Frühe Warnstufe — jetzt ist der richtige Zeitpunkt zum Reaktivieren.',
+    iconBg: 'bg-amber-100 text-amber-700',
+    counterBg: 'bg-amber-100 text-amber-700',
+    hint: 'Wenn die Aktivität jetzt zurückkommt, lässt sich der Sichtbarkeitsverlust noch leicht verhindern.',
+    nextStep: '2-3 neue Pins in den nächsten 7 Tagen einplanen.',
+    hintTone: 'orange',
+    primary: {
+      label: 'Pins planen',
+      href: (b) => `/dashboard/pin-produktion?new=1&board=${b.id}`,
+    },
+    primaryButtonClass: 'bg-red-600 text-white hover:bg-red-700',
+    metrics: ['er', 'impressionen', 'klicks'],
+    emptyMessage:
+      'Aktuell keine wenig aktiven Boards — alle bekommen entweder regelmäßig Pins oder sind länger inaktiv.',
+    prominentLastPin: true,
+  },
+  {
+    key: 'ohne_aktivitaet',
+    group: 'A',
+    emoji: '📥',
+    label: 'Boards mit vorbereiteten Pins ohne Veröffentlichung',
+    subtitle:
+      'Pins liegen in der Datenbank, aber noch keiner ist veröffentlicht — auf Pinterest sichtbar machen.',
+    tooltip:
+      'Boards mit Entwürfen oder geplanten Pins, aber noch keinem veröffentlichten Pin. Solange nichts live ist, sieht Pinterest dieses Board nicht.',
+    iconBg: 'bg-orange-50 text-orange-700',
+    counterBg: 'bg-orange-50 text-orange-700',
+    hint: 'Vorbereitete Pins helfen erst, wenn sie veröffentlicht sind — Pinterest beurteilt nur was live ist.',
+    nextStep: 'Vorhandene Entwürfe oder geplante Pins veröffentlichen.',
+    hintTone: 'orange',
+    primary: {
+      label: 'Pins veröffentlichen',
+      href: (b) => `/dashboard/pin-produktion?board=${b.id}`,
+    },
+    primaryButtonClass: 'bg-red-600 text-white hover:bg-red-700',
+    metrics: ['er', 'impressionen', 'klicks'],
+    emptyMessage:
+      'Keine Boards mit vorbereiteten aber unveröffentlichten Pins.',
+  },
+  {
+    key: 'aktiv',
+    group: 'B',
+    emoji: '✅',
+    label: 'Aktive Boards',
+    subtitle:
+      'Boards mit neuem Pin in den letzten 14 Tagen — Pinterest sieht regelmäßige Aktivität.',
+    tooltip:
+      'Boards mit veröffentlichtem Pin innerhalb der letzten 14 Tage. Genau das Aktivitäts-Niveau, das Pinterest belohnt.',
     iconBg: 'bg-emerald-100 text-emerald-700',
     counterBg: 'bg-emerald-100 text-emerald-700',
-    hint: 'Pinterest belohnt thematische Cluster – wenn mehrere Boards verwandte Keywords abdecken, überträgt sich die Autorität auf alle.',
+    hint: 'Aktive Boards bauen thematische Autorität auf — dranbleiben.',
     nextStep:
-      'Wähle ein Top Board, identifiziere 2–3 verwandte Keyword-Themen und lege dafür neue Boards an.',
+      'Frequenz halten — mindestens 2-3 neue Pins pro Woche pro Board.',
     hintTone: 'green',
     primary: {
-      label: 'Verwandtes Board anlegen',
-      href: () => '/dashboard/boards?new=1',
-    },
-    primaryButtonClass: 'bg-red-600 text-white hover:bg-red-700',
-    metrics: ['er', 'impressionen', 'klicks'],
-    emptyMessage:
-      'Aktuell kein Top Board mit aktivem Bepinnen. Top Boards entstehen, wenn ein Board überdurchschnittliche Engagement Rate erreicht UND regelmäßig neue Pins bekommt.',
-  },
-  {
-    key: 'wachstum',
-    group: 'B',
-    emoji: '📈',
-    label: 'Wachstums-Boards',
-    subtitle:
-      'Diese Boards gewinnen gerade an Sichtbarkeit – jetzt dranbleiben und Frequenz halten damit der Schwung nicht verloren geht.',
-    tooltip:
-      'Ein Board gilt als Wachstums-Board, wenn seine Engagement Rate sich zum Vormonat um mindestens 20% verbessert hat — unabhängig vom absoluten Wert.',
-    iconBg: 'bg-blue-100 text-blue-700',
-    counterBg: 'bg-blue-100 text-blue-700',
-    hint: 'Algorithmus belohnt Konsistenz – wer dranbleibt, bekommt stabiles Wachstum statt Strohfeuer.',
-    nextStep:
-      'Pin-Frequenz halten – mindestens 3–5 neue Pins pro Woche für die nächsten 30 Tage.',
-    hintTone: 'blue',
-    primary: {
       label: 'Pins planen',
       href: (b) => `/dashboard/pin-produktion?new=1&board=${b.id}`,
     },
     primaryButtonClass: 'bg-red-600 text-white hover:bg-red-700',
     metrics: ['er', 'impressionen', 'klicks'],
     emptyMessage:
-      'Aktuell kein Wachstums-Board – aus deinen Solide Boards können welche werden, wenn die Engagement Rate konstant steigt.',
-  },
-  {
-    key: 'solide',
-    group: 'B',
-    emoji: '⚖️',
-    label: 'Solide Boards',
-    subtitle:
-      'Diese Boards laufen stabil – mit mehr Pins oder besseren Keywords können sie zu Top-Boards aufsteigen.',
-    tooltip:
-      'Solide Boards machen ihren Job, ohne aufzufallen. Sie erfüllen nicht die Top-Kriterien, sind aber auch nicht schwach. Mit mehr Pins könnten sie zu Top Boards werden.',
-    iconBg: 'bg-slate-100 text-slate-700',
-    counterBg: 'bg-slate-100 text-slate-700',
-    hint: 'Solide Boards werden zu Top Boards, wenn Pinterest mehr Material bekommt – aktive Boards werden mit mehr Reichweite belohnt.',
-    nextStep:
-      'Pin-Volumen pro Board in den nächsten 4 Wochen verdoppeln. Ziel: Engagement Rate über 5%.',
-    hintTone: 'gray',
-    primary: {
-      label: 'Pins planen',
-      href: (b) => `/dashboard/pin-produktion?new=1&board=${b.id}`,
-    },
-    primaryButtonClass: 'bg-red-600 text-white hover:bg-red-700',
-    metrics: ['er', 'impressionen', 'klicks'],
-    emptyMessage: 'Aktuell keine Boards in dieser Kategorie.',
-  },
-  {
-    key: 'schwach',
-    group: 'A',
-    emoji: '📉',
-    label: 'Schwache Boards',
-    subtitle:
-      'Nutzer speichern oder klicken diese Pins kaum – entweder stimmt das Design nicht oder die Keywords treffen keine Suchen.',
-    tooltip:
-      'Schwache Boards haben eine Engagement Rate unter 1,5% ODER sind deutlich rückläufig zum Vormonat. Hier lohnt sich SEO-Optimierung oder mehr Pins.',
-    iconBg: 'bg-gray-200 text-gray-700',
-    counterBg: 'bg-gray-200 text-gray-700',
-    hint: 'Schwache Boards können das ganze Profil runterziehen – entweder optimieren oder archivieren, kein Mittelweg.',
-    nextStep:
-      'Erst Daten prüfen – bei niedriger Reichweite Keywords in Titel und Beschreibung optimieren, bei niedriger Engagement Rate Pin-Designs überarbeiten.',
-    hintTone: 'gray',
-    primary: {
-      label: 'Keywords optimieren',
-      href: (b) => `/dashboard/boards?edit=${b.id}`,
-    },
-    primaryButtonClass: 'bg-red-600 text-white hover:bg-red-700',
-    metrics: ['er', 'impressionen', 'klicks'],
-    emptyMessage:
-      'Aktuell keine schwachen Boards – alle deine Boards performen mindestens solide. Stark!',
+      'Aktuell keine aktiv bepinnten Boards. Pinterest belohnt Frequenz — mit 2-3 neuen Pins pro Woche pro Board kommen die Boards in Bewegung.',
   },
 ]
 
@@ -1105,6 +1063,17 @@ export default async function DashboardPage() {
   // Hilfs-Map nur mit dem Datum (für bestehende Aufrufer wie Aktivitätsrate)
   const lastPinDateByBoard = new Map<string, string>()
   lastPinByBoard.forEach((v, k) => lastPinDateByBoard.set(k, v.date))
+
+  // Pin-Anzahl pro Board aus der pins-Tabelle (alle Status-Stufen).
+  // Quelle der Wahrheit für „Hat das Board Pins?" — der CSV-Wert
+  // anzahl_pins aus board_analytics ist oft 0, wenn Pinterest die Zahl
+  // nicht liefert, und darf nicht für die Klassifizierung benutzt werden.
+  const pinsInDbByBoard = new Map<string, number>()
+  for (const p of allPinsRows) {
+    if (!p.board_id) continue
+    pinsInDbByBoard.set(p.board_id, (pinsInDbByBoard.get(p.board_id) ?? 0) + 1)
+  }
+
   // Latest + previous analytics per board (rows are DESC by datum)
   const latestBaByBoard = new Map<string, BoardAnalyticsRaw>()
   const prevBaByBoard = new Map<string, BoardAnalyticsRaw>()
@@ -1181,6 +1150,7 @@ export default async function DashboardPage() {
       klicks: ba?.ausgehende_klicks ?? 0,
       hasAnalytics: !!ba,
       anzahlPins: ba ? (ba.anzahl_pins ?? 0) : null,
+      pinsInDb: pinsInDbByBoard.get(board.id) ?? 0,
       lastPinDate: lastPin,
       lastPinAlterTage: lastPinAlter,
       lastPinId: lastPinEntry?.id ?? null,
@@ -1223,69 +1193,57 @@ export default async function DashboardPage() {
     else p.boardScoreLabel = 'Schwach'
   }
 
-  type BoardAssignment = BoardCat | 'ohne_analytics' | 'leeres_board'
-  // Routing-Reihenfolge:
-  //   1. Inaktiv + (Top|Wachstum) → schlafende_top
-  //   2. Inaktiv + Solide          → inaktive
-  //   3. Schwach (egal welcher Status) → schwach
-  //   4. Sonst (aktiv|wenig_aktiv) → score (top|wachstum|solide)
-  // „inaktive" enthält nur solide Boards ohne Aktivität — schwache inaktive
-  // Boards landen weiterhin in der Schwach-Kategorie (Performance-Issue
-  // dominiert über Aktivitäts-Issue).
+  type BoardAssignment = BoardCat | 'leeres_board'
+  // Klassifizierung rein nach Pin-Aktivität (Datum des letzten
+  // veröffentlichten Pins). Bewusst entkoppelt von ER/Score: Boards
+  // ohne board_analytics-Eintrag erscheinen genauso in den Buckets,
+  // nur ER zeigt '—'.
+  //   - 0 Pins in der DB         → leeres_board (Footnote)
+  //   - Pins, aber kein veröff.  → ohne_aktivitaet
+  //   - >60 Tage ohne Pin        → inaktiv
+  //   - >14 Tage ohne Pin        → wenig_aktiv
+  //   - sonst (≤14 Tage)         → aktiv
+  // Hinweis: anzahl_pins aus board_analytics (CSV) wird hier NICHT mehr
+  // benutzt — Pinterest liefert die Zahl oft als 0.
   function assignCategory(b: BoardDashHealth): BoardAssignment {
-    if (!b.hasAnalytics) return 'ohne_analytics'
-    if ((b.anzahlPins ?? 0) <= 0) return 'leeres_board'
-    if (b.status === 'inaktiv') {
-      if (b.score === 'top' || b.score === 'wachstum') return 'schlafende_top'
-      if (b.score === 'solide') return 'inaktive'
-      // schwach + inaktiv → Schwach-Kategorie (Performance dominiert)
-    }
-    return b.score
+    if (b.pinsInDb === 0) return 'leeres_board'
+    if (!b.lastPinDate) return 'ohne_aktivitaet'
+    const tageOhnePins = diffDays(b.lastPinDate, today)
+    if (tageOhnePins > 60) return 'inaktiv'
+    if (tageOhnePins > 14) return 'wenig_aktiv'
+    return 'aktiv'
   }
 
   const boardsByCategory: Record<BoardCat, BoardDashHealth[]> = {
-    schlafende_top: [],
-    inaktive: [],
-    top: [],
-    wachstum: [],
-    solide: [],
-    schwach: [],
+    inaktiv: [],
+    wenig_aktiv: [],
+    ohne_aktivitaet: [],
+    aktiv: [],
   }
-  const boardsOhneAnalytics: BoardDashHealth[] = []
   const boardsLeer: BoardDashHealth[] = []
 
   for (const b of boardsHealth) {
     const assignment = assignCategory(b)
-    if (assignment === 'ohne_analytics') {
-      boardsOhneAnalytics.push(b)
-    } else if (assignment === 'leeres_board') {
+    if (assignment === 'leeres_board') {
       boardsLeer.push(b)
     } else {
       boardsByCategory[assignment].push(b)
     }
   }
-  // Innerhalb jeder Kategorie nach ER DESC sortieren. Solide enthält jetzt
-  // nur noch aktive/wenig_aktive Boards (inaktive solide → eigene Kategorie),
-  // daher reicht reine ER-Sortierung überall.
-  for (const key of Object.keys(boardsByCategory) as BoardCat[]) {
-    boardsByCategory[key].sort(
-      (a, b) => (b.engagementRate ?? 0) - (a.engagementRate ?? 0)
-    )
-  }
-
-  // [BOARD-DEBUG] Prüfung der Status- und Kategorie-Logik pro Board.
-  // Zeigt: letzter Pin, Alter in Tagen, Status, Score, Kategorie + die
-  // tatsächlich verwendeten Schwellwerte (kommen aus einstellungen, fallen
-  // bei NULL auf die Defaults wenigAktiv=14 / inaktiv=30 zurück).
-  console.log(
-    `[BOARD-DEBUG] Schwellwerte aktiv: wenigAktiv=${boardThresholds.wenigAktiv} Tage, inaktiv=${boardThresholds.inaktiv} Tage (Defaults: 14/30)`
+  // Sortierung pro Kategorie:
+  //   - Aktivitäts-Buckets (inaktiv, wenig_aktiv, aktiv): nach Alter des
+  //     letzten Pins DESC — die dringendsten Fälle oben.
+  //   - ohne_aktivitaet: nach pinsInDb DESC (mehr vorbereitete Pins → wichtiger).
+  boardsByCategory.inaktiv.sort(
+    (a, b) => (b.lastPinAlterTage ?? 0) - (a.lastPinAlterTage ?? 0)
   )
-  for (const b of boardsHealth) {
-    const cat = assignCategory(b)
-    console.log(
-      `[BOARD-DEBUG] „${b.name}": letzter Pin=${b.lastPinDate ?? 'kein Pin'} | Alter=${b.lastPinAlterTage ?? '—'} Tage | Status=${b.status} | Score=${b.score} | Kategorie=${cat}`
-    )
-  }
+  boardsByCategory.wenig_aktiv.sort(
+    (a, b) => (b.lastPinAlterTage ?? 0) - (a.lastPinAlterTage ?? 0)
+  )
+  boardsByCategory.aktiv.sort(
+    (a, b) => (a.lastPinAlterTage ?? 0) - (b.lastPinAlterTage ?? 0)
+  )
+  boardsByCategory.ohne_aktivitaet.sort((a, b) => b.pinsInDb - a.pinsInDb)
 
   // Aktivitätsrate = Anteil der Boards, die in den letzten 14 Tagen
   // einen neuen Pin bekommen haben (Basis: alle angelegten Boards).
@@ -1320,7 +1278,11 @@ export default async function DashboardPage() {
     profilEr,
   }
   const hasAnyBoardAnalytics = boardsHealth.some((b) => b.hasAnalytics)
-  const boardsOhneAnalyticsCount = boardsOhneAnalytics.length
+  // Boards ohne Analytics-Einträge erscheinen in den Aktivitäts-Buckets
+  // (mit ER='—'). Der Counter dient nur als Hinweis-Footnote.
+  const boardsOhneAnalyticsCount = boardsHealth.filter(
+    (b) => !b.hasAnalytics
+  ).length
   const boardsLeerCount = boardsLeer.length
 
   // ===== Aufgaben (Priorität → Datum → erledigt unten) =====
@@ -1364,9 +1326,12 @@ export default async function DashboardPage() {
         : saisonMinDaysToPinStart,
     saisonEventNames: saisonKanban.jetztProduzieren.map((e) => e.event_name),
     hasAnyBoardAnalytics,
-    schlafendeTopCount: boardsByCategory.schlafende_top.length,
+    // Score-basierte Buckets („schlafende Top", „schwache") existieren nicht
+    // mehr — Klassifizierung läuft jetzt rein über Pin-Aktivität. Briefing-
+    // Items, die auf diese Konzepte abzielten, triggern entsprechend nicht.
+    schlafendeTopCount: 0,
     aktivitaetsratePct: boardKpis.aktivitaetsratePct,
-    schwacheCount: boardsByCategory.schwach.length,
+    schwacheCount: 0,
     strategieOnboardingDone: strategieCheckResult.onboardingAbgeschlossen,
     strategieSchwelleRot: strategieCheckResult.schwelleRot,
     strategieTopCoaching: strategieCheckResult.coachingTop3[0]
@@ -1416,8 +1381,9 @@ export default async function DashboardPage() {
       remainingPushDays: remaining,
     }
   })()
-  const nextStepBoardName =
-    boardsByCategory.schlafende_top[0]?.name ?? null
+  // schlafende_top-Konzept gibt es nicht mehr — kein Score-basiertes Bucket
+  // mehr. „Boards reaktivieren"-Hinweis triggert deshalb nicht.
+  const nextStepBoardName: string | null = null
   const nextStepsItems = buildNextStepsItems({
     nextEvent: nextStepEvent,
     topPerformerPin: nextStepTopPerformer,
@@ -3617,23 +3583,10 @@ function BoardGesundheitDashboardSection({
     </>
   )
 
-  if (!hasAnyBoardAnalytics) {
-    return (
-      <section id="board-gesundheit" className="scroll-mt-4">
-        {heading}
-        <div className="achtung-box mt-3">
-          ⚠️ Noch keine Board-Analytics eingetragen. Trage deine ersten Board-Daten
-          ein um die Board-Gesundheit zu sehen.{' '}
-          <Link
-            href="/dashboard/analytics?tab=boards"
-            className="font-medium underline hover:opacity-80"
-          >
-            → Zum Boards-Tab
-          </Link>
-        </div>
-      </section>
-    )
-  }
+  // Boards werden jetzt nach Pin-Aktivität klassifiziert — auch ohne
+  // board_analytics-Eintrag erscheinen sie in den Aktivitäts-Buckets,
+  // nur ER zeigt '—'. Die alte Hard-Gate-Bedingung „kein Analytics → ganze
+  // Sektion ausblenden" entfällt deshalb.
 
   return (
     <section id="board-gesundheit" className="scroll-mt-4">
@@ -4188,38 +4141,35 @@ function buildWasFehltText(b: BoardDashHealth): string | null {
   return null
 }
 
-// Hinweis „vorbereitete Pins in der Datenbank" — nur in Kategorien mit
-// ungenutztem Reaktivierungs-Potenzial: Schlafende Top, Solide, Schwach.
-// Top/Wachstum sind bereits aktiv → kein Hinweis (gibt nur Rauschen).
+// Hinweis „vorbereitete Pins in der Datenbank" — nur dort, wo
+// Reaktivierungs-Potenzial besteht. Für aktive Boards uninteressant.
 // Die Box wird nur gezeigt, wenn mindestens einer der beiden Counts > 0 ist.
 function buildPinsInDbLine(
   cat: BoardCat,
   prepared: { entwurf: number; geplant: number }
 ): { entwurf: number; geplant: number } | null {
-  if (cat === 'top' || cat === 'wachstum') return null
+  if (cat === 'aktiv') return null
   if (prepared.entwurf === 0 && prepared.geplant === 0) return null
   return prepared
 }
 
 // Warum-Hinweis als Achtung-Box. Nur Kategorien mit Handlungsbedarf
-// (schwach, schlafende_top, inaktive) zeigen einen Hinweis. Top/Wachstum/Solide
-// performen wie erwartet → kein Achtungssignal nötig.
+// (Gruppe A) zeigen einen Hinweis. Aktive Boards laufen wie gewünscht.
 function buildWarumText(cat: BoardCat, b: BoardDashHealth): string | null {
-  const er = fmtErDe(b.engagementRate)
   switch (cat) {
-    case 'top':
-    case 'wachstum':
-    case 'solide':
+    case 'aktiv':
       return null
-    case 'schwach':
-      return `⚠️ Engagement Rate niedrig (${er}) – Pins werden kaum gespeichert oder angeklickt.`
-    case 'schlafende_top': {
+    case 'inaktiv': {
       const tage = b.lastPinAlterTage !== null ? `${b.lastPinAlterTage}` : '—'
-      return `⚠️ Starkes Board (${er} Engagement Rate) – aber seit ${tage} Tagen kein neuer Pin. Pinterest spielt inaktive Boards seltener aus – du verschenkst Reichweite.`
+      return `⚠️ Seit ${tage} Tagen kein neuer Pin. Pinterest spielt inaktive Boards seltener aus — du verschenkst Reichweite.`
     }
-    case 'inaktive': {
+    case 'wenig_aktiv': {
       const tage = b.lastPinAlterTage !== null ? `${b.lastPinAlterTage}` : '—'
-      return `⚠️ Solides Board (${er} Engagement Rate) – aber seit ${tage} Tagen kein neuer Pin. Pinterest spielt inaktive Boards seltener aus – regelmäßige Pins halten die Sichtbarkeit aufrecht.`
+      return `⚠️ Seit ${tage} Tagen kein neuer Pin. Frühe Warnstufe — jetzt reaktivieren bevor die Sichtbarkeit fällt.`
+    }
+    case 'ohne_aktivitaet': {
+      const pins = b.pinsInDb
+      return `⚠️ ${pins} ${pins === 1 ? 'Pin liegt' : 'Pins liegen'} in der Datenbank, aber noch nichts ist veröffentlicht. Solange nichts live ist, sieht Pinterest dieses Board nicht.`
     }
   }
 }

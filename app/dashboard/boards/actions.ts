@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase-server'
+import { extractPinterestBoardSlug } from '../analytics/csvImport'
 
 const ALLOWED_KATEGORIEN = [
   'Essen & Trinken',
@@ -79,6 +80,9 @@ type BoardInput = {
   beschreibung: string | null
   kategorie: Kategorie | null
   pinterest_url: string | null
+  // Beim Speichern aus pinterest_url extrahiert. Wird für das Matching beim
+  // Analytics-CSV-Import verwendet.
+  pinterest_board_slug: string | null
   geheim: boolean
   strategie_fokus: StrategieFokus | null
 }
@@ -113,12 +117,21 @@ function parseBoardInput(
     strategie_fokus = fokusRaw
   }
 
+  // Slug aus URL ableiten — null wenn URL leer oder Format unerwartet.
+  // Eine ungültige URL erzeugt KEINEN Hard-Error: das URL-Feld bleibt
+  // optional und wir wollen das Speichern eines Boards nicht blockieren,
+  // wenn die URL aus anderen Gründen vorhanden ist.
+  const pinterest_board_slug = pinterest_url
+    ? extractPinterestBoardSlug(pinterest_url)
+    : null
+
   return {
     input: {
       name,
       beschreibung,
       kategorie,
       pinterest_url,
+      pinterest_board_slug,
       geheim,
       strategie_fokus,
     },

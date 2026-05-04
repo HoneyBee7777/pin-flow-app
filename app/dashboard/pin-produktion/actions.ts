@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase-server'
+import { extractPinterestPinId } from '../analytics/csvImport'
 import {
   CONVERSION_ZIELE,
   HOOK_ARTEN,
@@ -74,6 +75,11 @@ type Input = {
   status: Status
   geplante_veroeffentlichung: string | null
   keyword_ids: string[]
+  // Für CSV-Import: Pinterest-URL des veröffentlichten Pins. Beim Speichern
+  // wird die numerische Pin-ID daraus extrahiert (pinterest_pin_id) und beim
+  // späteren Analytics-CSV-Import zum Matching verwendet.
+  pinterest_pin_url: string | null
+  pinterest_pin_id: string | null
 }
 
 function readIds(formData: FormData, name: string): string[] {
@@ -136,6 +142,22 @@ function parseInput(
       error: 'Ziel-URL muss mit http:// oder https:// beginnen.',
     }
 
+  const pinterest_pin_url = nullable(formData, 'pinterest_pin_url')
+  if (pinterest_pin_url && !/^https?:\/\/\S+/i.test(pinterest_pin_url))
+    return {
+      error: 'Pinterest-URL muss mit http:// oder https:// beginnen.',
+    }
+  // Wenn eine URL angegeben ist, muss daraus eine Pin-ID extrahierbar sein —
+  // sonst hilft sie beim CSV-Import nicht und ist vermutlich vertippt.
+  const pinterest_pin_id = pinterest_pin_url
+    ? extractPinterestPinId(pinterest_pin_url)
+    : null
+  if (pinterest_pin_url && !pinterest_pin_id)
+    return {
+      error:
+        'Pinterest-URL muss das Format https://www.pinterest.com/pin/<ID>/ haben.',
+    }
+
   return {
     input: {
       content_id,
@@ -155,6 +177,8 @@ function parseInput(
       status: computeStatus(datumRaw),
       geplante_veroeffentlichung: datumRaw,
       keyword_ids: readIds(formData, 'keyword_ids'),
+      pinterest_pin_url,
+      pinterest_pin_id,
     },
   }
 }

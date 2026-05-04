@@ -53,6 +53,7 @@ export default async function AnalyticsPage() {
     boardsRes,
     boardAnalyticsRes,
     pinsForBoardRes,
+    pendingRes,
   ] = await Promise.all([
     supabase
       .from('profil_analytics')
@@ -98,6 +99,15 @@ export default async function AnalyticsPage() {
       .from('pins')
       .select('board_id, geplante_veroeffentlichung, created_at')
       .not('board_id', 'is', null),
+    // Persistente „Nicht zugeordnet"-Liste aus dem letzten CSV-Import.
+    // DESC nach created_at — der initiale Pending-State wird daraus gebaut.
+    supabase
+      .from('csv_import_pending')
+      .select(
+        'id, type, pinterest_url, pinterest_id, klicks, impressionen, saves, engagement, klicks_auf_pins, ausgehende_klicks, zeitraum_von, zeitraum_bis, created_at'
+      )
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false }),
   ])
 
   const rows = (profilRes.data ?? []) as ProfilAnalytics[]
@@ -178,15 +188,20 @@ export default async function AnalyticsPage() {
   }
 
   // Dedup board_analytics — neueste + zweitneueste Datum pro Board
-  // (Rohdaten sind DESC sortiert; zweiter Treffer = Vormonat).
+  // (Rohdaten sind DESC sortiert; zweiter Treffer = Vormonat). Außerdem
+  // die komplette Zeitreihe pro Board für die aufklappbare Detailansicht.
   const latestByBoard = new Map<string, BoardAnalyticsEntry>()
   const prevByBoard = new Map<string, BoardAnalyticsEntry>()
+  const historyByBoard = new Map<string, BoardAnalyticsEntry[]>()
   for (const row of boardAnalyticsRaw) {
     if (!latestByBoard.has(row.board_id)) {
       latestByBoard.set(row.board_id, row)
     } else if (!prevByBoard.has(row.board_id)) {
       prevByBoard.set(row.board_id, row)
     }
+    const arr = historyByBoard.get(row.board_id) ?? []
+    arr.push(row)
+    historyByBoard.set(row.board_id, arr)
   }
 
   const boardById = new Map(boards.map((b) => [b.id, b]))
@@ -271,6 +286,66 @@ export default async function AnalyticsPage() {
     .filter((b) => b.geheim === false && !boardsWithAnalyticsIds.has(b.id))
     .map((b) => ({ id: b.id, name: b.name }))
 
+  // ===== Persistente „Nicht zugeordnet"-Liste in das von AnalyticsClient
+  // erwartete Format übersetzen =====
+  type PendingRow = {
+    id: string
+    type: string
+    pinterest_url: string
+    pinterest_id: string | null
+    klicks: number | null
+    impressionen: number | null
+    saves: number | null
+    engagement: number | null
+    klicks_auf_pins: number | null
+    ausgehende_klicks: number | null
+    zeitraum_von: string | null
+    zeitraum_bis: string | null
+    created_at: string
+  }
+  const pendingRows = (pendingRes.data ?? []) as PendingRow[]
+  const pendingPins = pendingRows
+    .filter(
+      (r): r is PendingRow & { pinterest_id: string } =>
+        r.type === 'pin' && !!r.pinterest_id
+    )
+    .map((r) => ({
+      pinterestPinId: r.pinterest_id,
+      impressionen: r.impressionen,
+      klicks: r.klicks,
+      saves: r.saves,
+    }))
+  // Boards: alle 5 Metriken aus dedizierten Spalten; Fallback auf die
+  // generische klicks-Spalte für ältere Zeilen, die noch mit dem
+  // 3-Spalten-Schema geschrieben wurden (ausgehende_klicks war damals
+  // in `klicks` gemerged).
+  const pendingBoards = pendingRows
+    .filter(
+      (r): r is PendingRow & { pinterest_id: string } =>
+        r.type === 'board' && !!r.pinterest_id
+    )
+    .map((r) => ({
+      boardSlug: r.pinterest_id,
+      impressionen: r.impressionen ?? 0,
+      saves: r.saves ?? 0,
+      ausgehende_klicks: r.ausgehende_klicks ?? r.klicks ?? 0,
+      engagement: r.engagement ?? 0,
+      klicks_auf_pins: r.klicks_auf_pins ?? 0,
+    }))
+  // Anzeige-Zeitraum: jüngster Eintrag (rows sind DESC by created_at, also
+  // ist [0] der jüngste). Bei mehreren Zeiträumen in der Tabelle wird also
+  // der zuletzt importierte als Header verwendet — der „Du hast noch X
+  // nicht zugeordnete …"-Hinweis ist damit auf den letzten Import bezogen.
+  const initialPending =
+    pendingRows.length > 0
+      ? {
+          zeitraum_von: pendingRows[0].zeitraum_von ?? '',
+          zeitraum_bis: pendingRows[0].zeitraum_bis ?? '',
+          unmatchedPins: pendingPins,
+          unmatchedBoards: pendingBoards,
+        }
+      : null
+
   const loadError =
     profilRes.error?.message ??
     settingsRes.error?.message ??
@@ -279,23 +354,31 @@ export default async function AnalyticsPage() {
     boardsRes.error?.message ??
     boardAnalyticsRes.error?.message ??
     pinsForBoardRes.error?.message ??
+    pendingRes.error?.message ??
     null
 
   return (
     <div className="p-8">
-      <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <div>
+      <header className="mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <h1 className="text-3xl font-bold text-gray-900">Analytics</h1>
-          <p className="mt-1 text-sm text-gray-600">
-            Trage deine Pinterest-Zahlen monatlich ein und beobachte die
-            Entwicklung deines Profils, deiner Pins und Boards.
-          </p>
+          <UpdateStatusBanner
+            analyticsUpdateDatum={
+              settingsRes.data?.analytics_update_datum ?? null
+            }
+          />
         </div>
-        <UpdateStatusBanner
-          analyticsUpdateDatum={
-            settingsRes.data?.analytics_update_datum ?? null
-          }
-        />
+        <p className="mt-2 w-full text-[13px] text-gray-600">
+          Übertrage deine Pinterest-Statistiken für dein gesamtes Profil,
+          deine Top Pins und deine Boards — und beobachte die Entwicklung
+          deiner Pinterest-Tätigkeit. Nach ca. 3 Monaten konstantem,
+          qualitativem Pinnen wirst du hier signifikantes Wachstum erkennen.
+        </p>
+        <div className="mt-3 w-full border-l-4 border-amber-400 bg-amber-50 px-3 py-2 text-[13px] text-amber-800">
+          ⚠️ Pinterest speichert Analytics nur max. 6 Monate. Dieses System
+          speichert deine historischen Daten so lange du sie pflegst — für
+          optimale Strategie, Handlungsoptimierung und Saisonvergleich.
+        </div>
       </header>
 
       {loadError && (
@@ -306,16 +389,18 @@ export default async function AnalyticsPage() {
 
       <AnalyticsClient
         profilAnalytics={profilAnalytics}
-        pinterestAnalyticsUrl={
-          settingsRes.data?.pinterest_analytics_url ?? null
-        }
         pins={pins}
         pinAnalytics={pinAnalytics}
         thresholds={thresholds}
         boards={boards}
         boardAnalytics={boardAnalytics}
+        boardHistory={Object.fromEntries(historyByBoard)}
         boardThresholds={boardThresholds}
         publicBoardsWithoutAnalytics={publicBoardsWithoutAnalytics}
+        pinterestAnalyticsUrl={
+          settingsRes.data?.pinterest_analytics_url ?? null
+        }
+        initialPending={initialPending}
       />
     </div>
   )

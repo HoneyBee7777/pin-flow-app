@@ -415,19 +415,20 @@ export default function BoardsClient({
               htmlFor="pinterest_url"
               className="block text-sm font-medium text-gray-700"
             >
-              Pinterest Board-URL
+              Pinterest Board-URL (für CSV-Import)
             </label>
             <input
               id="pinterest_url"
               name="pinterest_url"
               type="url"
-              placeholder="https://pinterest.com/deinname/boardname"
+              placeholder="https://www.pinterest.com/soulfulspaceyoga/yoga-zuhause-yogaraum/"
               defaultValue={editing?.pinterest_url ?? ''}
               className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
             />
             <p className="mt-1 text-xs text-gray-500">
-              Direktlink zu diesem Board auf Pinterest — z.B.
-              https://pinterest.com/deinname/boardname
+              Direktlink zu diesem Board auf Pinterest. Der Board-Slug wird
+              beim Speichern automatisch ausgelesen und für das Matching
+              beim Analytics-CSV-Import verwendet.
             </p>
           </div>
 
