@@ -180,6 +180,7 @@ export default async function PinProduktionPage() {
       supabase
         .from('pins_analytics')
         .select('pin_id, datum, impressionen, klicks')
+        .is('deleted_at', null)
         .order('datum', { ascending: false })
     ).catch((err: unknown) => {
       console.error('[PinProduktion] pins_analytics query failed:', err)

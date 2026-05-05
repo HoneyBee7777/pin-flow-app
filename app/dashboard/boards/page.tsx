@@ -84,6 +84,7 @@ export default async function BoardsPage() {
     supabase
       .from('pins_analytics')
       .select('pin_id, datum, impressionen, klicks')
+      .is('deleted_at', null)
       .order('datum', { ascending: false }),
     supabase.from('content_keywords').select('content_id, keyword_id'),
   ])

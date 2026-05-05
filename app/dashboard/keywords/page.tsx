@@ -65,6 +65,7 @@ export default async function KeywordsPage() {
         ? supabase
             .from('pins_analytics')
             .select('pin_id, datum, impressionen, klicks')
+            .is('deleted_at', null)
             .order('datum', { ascending: false })
         : Promise.resolve({ data: [] as PinAnalyticsRow[], error: null }),
     ])

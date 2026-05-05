@@ -17,6 +17,7 @@ export type BoardsCsvParseResult =
   | {
       rows: Array<{
         boardSlug: string
+        boardUrl: string
         impressionen: number
         engagement: number
         klicks_auf_pins: number
@@ -175,6 +176,7 @@ export function parseBoardsCsv(text: string): BoardsCsvParseResult {
 
   const rows: Array<{
     boardSlug: string
+    boardUrl: string
     impressionen: number
     engagement: number
     klicks_auf_pins: number
@@ -191,6 +193,7 @@ export function parseBoardsCsv(text: string): BoardsCsvParseResult {
     if (!slug) continue
     rows.push({
       boardSlug: slug,
+      boardUrl: url,
       impressionen: parseInteger(cols[1]),
       engagement: parseInteger(cols[2]),
       klicks_auf_pins: parseInteger(cols[3]),

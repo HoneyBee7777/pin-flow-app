@@ -100,16 +100,33 @@ export default function EingabeTab({
 }) {
   return (
     <div className="space-y-8">
-      <ZeitraumHeader
-        von={expectedZeitraumVon}
-        bis={expectedZeitraumBis}
-        pinterestAnalyticsUrl={pinterestAnalyticsUrl}
-      />
+      <div>
+        <a
+          href={pinterestAnalyticsUrl ?? 'https://analytics.pinterest.com'}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700"
+        >
+          Pinterest Analytics öffnen ↗
+        </a>
+        <div className="mt-3">
+          <ZeitraumHeader
+            von={expectedZeitraumVon}
+            bis={expectedZeitraumBis}
+          />
+        </div>
+        <p className="mt-2 text-[13px] text-gray-500">
+          💡 Du trägst deine Daten immer für einen einzelnen Zeitraum ein.
+          Auf dem Dashboard, im Tab Profil-Entwicklung sowie in Top Pins und
+          Boards werden alle Perioden kumuliert ausgewertet — so siehst du
+          deine All-Time-Werte und die Entwicklung über die Zeit.
+        </p>
+      </div>
 
       {pendingNotice && (
-        <div className="rounded-md border border-teal-200 border-l-[3px] border-l-teal-400 bg-teal-50 p-3 text-sm leading-relaxed text-teal-900">
+        <div className="rounded-md border-l-4 border-amber-400 bg-amber-50 p-3 text-sm leading-relaxed text-amber-800">
           <span className="mr-1" aria-hidden>
-            📋
+            ⚠️
           </span>
           Du hast noch <strong>{pendingNotice.count}</strong> nicht
           zugeordnete{' '}
@@ -121,7 +138,24 @@ export default function EingabeTab({
               {formatDateDe(pendingNotice.zeitraum_bis)})
             </>
           )}
-          . Bitte Zuordnung abschließen oder überspringen.
+          . Bitte Zuordnung abschließen oder überspringen — die Zuordnung
+          erfolgt in den Tabs →{' '}
+          <button
+            type="button"
+            onClick={onJumpToUnmatchedPins}
+            className="font-medium text-amber-900 underline underline-offset-2 hover:text-amber-950"
+          >
+            Top Pins
+          </button>{' '}
+          und →{' '}
+          <button
+            type="button"
+            onClick={onJumpToUnmatchedBoards}
+            className="font-medium text-amber-900 underline underline-offset-2 hover:text-amber-950"
+          >
+            Boards
+          </button>
+          .
         </div>
       )}
 
@@ -153,16 +187,14 @@ export default function EingabeTab({
 }
 
 // ===========================================================
-// Türkise Zeitraum-Box + Pinterest Analytics Button
+// Türkise Zeitraum-Box
 // ===========================================================
 function ZeitraumHeader({
   von,
   bis,
-  pinterestAnalyticsUrl,
 }: {
   von: string | null
   bis: string | null
-  pinterestAnalyticsUrl: string | null
 }) {
   const hasPrevious = !!von
   return (
@@ -177,7 +209,7 @@ function ZeitraumHeader({
             {bis ? formatDateDe(bis) : '—'}
             <br />
             Stelle in Pinterest Analytics unter „Benutzerdefiniert" genau
-            diesen Zeitraum ein bevor du die Zahlen abliest.
+            diesen Zeitraum ein.
           </>
         ) : (
           <>
@@ -186,14 +218,6 @@ function ZeitraumHeader({
           </>
         )}
       </p>
-      <a
-        href={pinterestAnalyticsUrl ?? 'https://analytics.pinterest.com'}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex shrink-0 items-center gap-1 rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700"
-      >
-        Pinterest Analytics öffnen ↗
-      </a>
     </div>
   )
 }
@@ -256,6 +280,11 @@ function CombinedHowToToggle({
             Werden automatisch aus denselben CSVs importiert — kein separater
             Export nötig.
           </p>
+        </div>
+        <div className="border-l-4 border-amber-400 bg-amber-50 px-3 py-2 text-[13px] text-amber-800">
+          ⚠️ Pinterest speichert Analytics nur max. 6 Monate. Dieses System
+          speichert deine historischen Daten dauerhaft — trage monatlich ein
+          damit keine Daten verloren gehen.
         </div>
       </div>
     </details>
@@ -329,7 +358,7 @@ function Schritt1ProfilForm({
     <section className="space-y-3">
       <div>
         <h2 className="text-lg font-semibold text-gray-900">
-          1 — Profil-Performance eintragen
+          1) Profil-Performance eintragen
         </h2>
         <p className="mt-0.5 text-sm text-gray-600">
           Muss monatlich manuell eingetragen werden — Pinterest bietet hier
@@ -372,14 +401,9 @@ function Schritt1ProfilForm({
               </p>
             )}
           </Field>
+        </div>
 
-          <div className="md:col-span-2 lg:col-span-1 md:flex md:items-end">
-            <p className="text-xs text-gray-500">
-              Vom letzten Update bis gestern. In Pinterest Analytics
-              entsprechend einstellen.
-            </p>
-          </div>
-
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           <Field label="Impressionen (Tsd.)" htmlFor="profil_impressionen">
             <input
               id="profil_impressionen"
@@ -427,7 +451,9 @@ function Schritt1ProfilForm({
               className={inputCls}
             />
           </Field>
+        </div>
 
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           <Field
             label="Gesamte Zielgruppe (Tsd.)"
             htmlFor="profil_gesamte_zielgruppe"
@@ -717,7 +743,7 @@ function Schritt2CsvUpload({
     <section className="space-y-3">
       <div>
         <h2 className="text-lg font-semibold text-gray-900">
-          2 — Top Pins & Boards importieren
+          2) Top Pins & Boards importieren
         </h2>
         <p className="mt-0.5 text-sm text-gray-600">
           Empfohlen: CSV-Import. Optional: manuelle Eingabe weiter unten.
@@ -1397,7 +1423,7 @@ function BoardManualForm({ boards }: { boards: BoardOption[] }) {
         </p>
       ) : (
         <>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
             <Field label="Board" htmlFor="board_manual_board_id">
               <select
                 id="board_manual_board_id"

@@ -22,7 +22,9 @@
       "Bash(xargs ls *)",
       "Bash(echo \"EXIT=$?\")",
       "Bash(xargs grep *)",
-      "Bash(echo \"exit code: $?\")"
+      "Bash(echo \"exit code: $?\")",
+      "Bash(echo \"Exit: $?\")",
+      "Bash(echo \"Final-Exit: $?\")"
     ]
   }
 }

@@ -960,6 +960,7 @@ function PinTable({
               </SortableTh>
               <Th>Vorlage</Th>
               <Th>URL</Th>
+              <Th>Pinterest URL</Th>
               <Th align="right">Aktion</Th>
             </tr>
           </thead>
@@ -967,7 +968,7 @@ function PinTable({
             {sortedPins.length === 0 ? (
               <tr>
                 <td
-                  colSpan={14}
+                  colSpan={15}
                   className="px-4 py-8 text-center text-sm text-gray-500"
                 >
                   {pins.length === 0
@@ -1084,6 +1085,18 @@ function PinTable({
                   {pin.url ? (
                     <span className="block [word-break:break-all]" title={pin.url.titel}>
                       {pin.url.url}
+                    </span>
+                  ) : (
+                    <span className="text-gray-400">—</span>
+                  )}
+                </td>
+                <td className="whitespace-nowrap px-4 py-3 text-sm">
+                  {pin.pinterest_pin_url ? (
+                    <span
+                      className="font-medium text-green-700"
+                      title={pin.pinterest_pin_url}
+                    >
+                      ✓ Verknüpft
                     </span>
                   ) : (
                     <span className="text-gray-400">—</span>

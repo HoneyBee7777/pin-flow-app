@@ -7,9 +7,7 @@ import {
   calcBoardEngagementRate,
   calcCtr,
   diagnoseBoard,
-  diagnosePin,
   diffDays,
-  PIN_HANDLUNG,
   scoreBoardHybrid,
   topPercentCutoff,
   thresholdsFromSettings,
@@ -54,6 +52,7 @@ export default async function AnalyticsPage() {
     boardAnalyticsRes,
     pinsForBoardRes,
     pendingRes,
+    deletedPinAnalyticsRes,
   ] = await Promise.all([
     supabase
       .from('profil_analytics')
@@ -67,7 +66,6 @@ export default async function AnalyticsPage() {
         `pinterest_analytics_url, analytics_update_datum,
          schwellwert_beobachtung, schwellwert_min_klicks,
          schwellwert_alter_recycling, schwellwert_ctr, schwellwert_impressionen,
-         schwellwert_top_performer_bonus_impressionen,
          schwellwert_board_wenig_aktiv, schwellwert_board_inaktiv,
          schwellwert_board_top_er, schwellwert_board_top_prozent,
          schwellwert_board_schwach_er, schwellwert_board_wachstum_trend`
@@ -76,14 +74,17 @@ export default async function AnalyticsPage() {
       .maybeSingle(),
     supabase
       .from('pins')
-      .select('id, titel, status, created_at, geplante_veroeffentlichung')
+      .select(
+        'id, titel, status, created_at, geplante_veroeffentlichung, pinterest_pin_url, pinterest_pin_id'
+      )
       .order('created_at', { ascending: false }),
     supabase
       .from('pins_analytics')
       .select(
         `id, pin_id, datum, zeitraum_von, zeitraum_bis, impressionen, klicks, saves, created_at,
-         pins ( id, titel, status, created_at, geplante_veroeffentlichung )`
+         pins ( id, titel, status, created_at, geplante_veroeffentlichung, pinterest_pin_url, pinterest_pin_id )`
       )
+      .is('deleted_at', null)
       .order('datum', { ascending: false }),
     supabase
       .from('boards')
@@ -108,6 +109,18 @@ export default async function AnalyticsPage() {
       )
       .eq('user_id', user.id)
       .order('created_at', { ascending: false }),
+    // Soft-deleted pins_analytics-Einträge — DESC nach deleted_at, max. 10
+    // für den „Zuletzt gelöscht"-Toggle im Pins-Tab.
+    supabase
+      .from('pins_analytics')
+      .select(
+        `id, pin_id, datum, zeitraum_von, zeitraum_bis, deleted_at,
+         pins ( id, titel )`
+      )
+      .eq('user_id', user.id)
+      .not('deleted_at', 'is', null)
+      .order('deleted_at', { ascending: false })
+      .limit(10),
   ])
 
   const rows = (profilRes.data ?? []) as ProfilAnalytics[]
@@ -123,21 +136,12 @@ export default async function AnalyticsPage() {
     (pinAnalyticsRes.data ?? []) as unknown as RawPinAnalyticsRow[]
   const pinAnalytics: PinAnalyticsRow[] = rawPinAnalytics.map((row) => {
     const pin = row.pins
-    const hatDatum = !!pin?.geplante_veroeffentlichung
     const refDate =
       pin?.geplante_veroeffentlichung ??
       pin?.created_at?.slice(0, 10) ??
       row.datum
     const alterTage = Math.max(0, diffDays(refDate, today))
     const ctr = calcCtr(row.klicks, row.impressionen)
-    const diagnose = diagnosePin({
-      alterTage,
-      klicks: row.klicks,
-      impressionen: row.impressionen,
-      ctr,
-      hatDatum,
-      thresholds,
-    })
     return {
       id: row.id,
       pin_id: row.pin_id,
@@ -151,8 +155,6 @@ export default async function AnalyticsPage() {
       pin,
       ctr,
       alter_tage: alterTage,
-      diagnose,
-      handlung: PIN_HANDLUNG[diagnose],
     }
   })
 
@@ -326,6 +328,10 @@ export default async function AnalyticsPage() {
     )
     .map((r) => ({
       boardSlug: r.pinterest_id,
+      // Legacy-Zeilen (vor URL-Persistenz) speicherten den Slug auch in
+      // pinterest_url. Nur als echten URL durchreichen, wenn http(s)://
+      // — sonst leerer String, dann fällt die UI auf den Slug-Fallback zurück.
+      boardUrl: /^https?:\/\//i.test(r.pinterest_url) ? r.pinterest_url : '',
       impressionen: r.impressionen ?? 0,
       saves: r.saves ?? 0,
       ausgehende_klicks: r.ausgehende_klicks ?? r.klicks ?? 0,
@@ -355,7 +361,29 @@ export default async function AnalyticsPage() {
     boardAnalyticsRes.error?.message ??
     pinsForBoardRes.error?.message ??
     pendingRes.error?.message ??
+    deletedPinAnalyticsRes.error?.message ??
     null
+
+  // Soft-deleted pins_analytics → flaches Format für den UI-Toggle.
+  type DeletedRawRow = {
+    id: string
+    pin_id: string
+    datum: string
+    zeitraum_von: string | null
+    zeitraum_bis: string | null
+    deleted_at: string
+    pins: { id: string; titel: string | null } | null
+  }
+  const deletedPinAnalytics = (
+    (deletedPinAnalyticsRes.data ?? []) as unknown as DeletedRawRow[]
+  ).map((r) => ({
+    id: r.id,
+    pin_id: r.pin_id,
+    pinTitel: r.pins?.titel ?? null,
+    zeitraum_von: r.zeitraum_von ?? r.datum,
+    zeitraum_bis: r.zeitraum_bis ?? r.datum,
+    deleted_at: r.deleted_at,
+  }))
 
   return (
     <div className="p-8">
@@ -367,17 +395,6 @@ export default async function AnalyticsPage() {
               settingsRes.data?.analytics_update_datum ?? null
             }
           />
-        </div>
-        <p className="mt-2 w-full text-[13px] text-gray-600">
-          Übertrage deine Pinterest-Statistiken für dein gesamtes Profil,
-          deine Top Pins und deine Boards — und beobachte die Entwicklung
-          deiner Pinterest-Tätigkeit. Nach ca. 3 Monaten konstantem,
-          qualitativem Pinnen wirst du hier signifikantes Wachstum erkennen.
-        </p>
-        <div className="mt-3 w-full border-l-4 border-amber-400 bg-amber-50 px-3 py-2 text-[13px] text-amber-800">
-          ⚠️ Pinterest speichert Analytics nur max. 6 Monate. Dieses System
-          speichert deine historischen Daten so lange du sie pflegst — für
-          optimale Strategie, Handlungsoptimierung und Saisonvergleich.
         </div>
       </header>
 
@@ -391,6 +408,7 @@ export default async function AnalyticsPage() {
         profilAnalytics={profilAnalytics}
         pins={pins}
         pinAnalytics={pinAnalytics}
+        deletedPinAnalytics={deletedPinAnalytics}
         thresholds={thresholds}
         boards={boards}
         boardAnalytics={boardAnalytics}

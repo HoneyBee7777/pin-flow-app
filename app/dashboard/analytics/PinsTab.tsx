@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import {
   Fragment,
   useMemo,
@@ -9,67 +10,38 @@ import {
 } from 'react'
 import {
   deletePinAnalytics,
+  hardDeleteAllDeletedPinAnalytics,
+  restorePinAnalytics,
   type UnmatchedPin,
 } from './actions'
 import SharedSortableTh from '@/components/SortableTh'
 import UnmatchedPinsSection from './UnmatchedPinsSection'
+import PinAnalyticsEditModal from './PinAnalyticsEditModal'
+import type { DeletedPinEntry } from './AnalyticsClient'
 import {
   calcCtr,
-  diffDays,
   effectiveZeitraum,
+  formatDateDe,
   formatNumber,
   formatPercent,
   formatZahl,
   formatZeitraumKurz,
   PIN_DIAGNOSE_BADGE,
   PIN_DIAGNOSE_LABEL,
-  PIN_HANDLUNG,
   type PinAnalyticsRow,
   type PinAnalyticsThresholds,
-  type PinDiagnose,
   type PinOption,
 } from './utils'
-
-// Aggregate-Diagnose über alle Perioden eines Pins. Anders als die
-// row-basierte diagnosePin() schaut diese Funktion auf die kumulierten
-// Werte und die Anzahl der erfassten Perioden — so bekommen junge Pins
-// mit nur einer Periode nicht voreilig „Kein Signal" verpasst.
-function aggregateDiagnose(opts: {
-  perioden: number
-  cumKlicks: number
-  cumImpressionen: number
-  avgCtr: number | null
-  pinAlterTage: number
-  hatDatum: boolean
-  fallback: PinDiagnose
-  thresholds: PinAnalyticsThresholds
-}): PinDiagnose {
-  if (!opts.hatDatum) return 'evergreen'
-
-  const ctr = opts.avgCtr ?? 0
-
-  // Starkes positives Signal — schlägt alles andere.
-  if (ctr > 3 && opts.cumKlicks > 10) return 'aktiver_top_performer'
-
-  // Hidden Gem: gute CTR bei niedrigen Impressionen.
-  if (ctr > 2 && opts.cumImpressionen < opts.thresholds.mindestImpressionen)
-    return 'hidden_gem'
-
-  // „Kein Signal → Thema prüfen" nur wenn echte Datengrundlage vorhanden:
-  // mindestens 2 Perioden UND in keiner gab es Klicks.
-  if (opts.perioden >= 2 && opts.cumKlicks === 0)
-    return 'kein_signal_thema_pruefen'
-
-  // Frühe Phase — nur 1 Periode UND Pin jünger als 60 Tage. Daten sind
-  // zu dünn für ein finales Urteil → erstmal beobachten.
-  if (opts.perioden <= 1 && opts.pinAlterTage < 60) return 'beobachten'
-
-  // Sonst: bisherige row-basierte Diagnose des neuesten Eintrags.
-  return opts.fallback
-}
+import {
+  diagnosePinAggregated,
+  formatPinAge,
+  PIN_DIAGNOSE_META,
+  type PinDiagnose,
+} from './diagnosePinAggregated'
 
 export default function PinsTab({
   pinAnalytics,
+  deletedPinAnalytics,
   pins,
   thresholds,
   unmatchedPins,
@@ -78,6 +50,7 @@ export default function PinsTab({
   onUnmatchedPinResolved,
 }: {
   pinAnalytics: PinAnalyticsRow[]
+  deletedPinAnalytics: DeletedPinEntry[]
   // Wird nur an UnmatchedPinsSection durchgereicht (Pin-Auswahl beim
   // Zuordnen) — die Pin-Tabelle selbst nutzt pinAnalytics.pin.
   pins: PinOption[]
@@ -118,14 +91,14 @@ export default function PinsTab({
       const latest = rows[0]
       const avgCtr = calcCtr(cumKlicks, cumImpressionen)
       const perioden = rows.length
-      const diagnose = aggregateDiagnose({
-        perioden,
+      const hatDatum = !!latest.pin?.geplante_veroeffentlichung
+      const result = diagnosePinAggregated({
         cumKlicks,
         cumImpressionen,
-        avgCtr,
-        pinAlterTage: latest.alter_tage,
-        hatDatum: !!latest.pin?.geplante_veroeffentlichung,
-        fallback: latest.diagnose,
+        cumSaves,
+        perioden,
+        pinAlter: hatDatum ? latest.alter_tage : null,
+        hatDatum,
         thresholds,
       })
       return {
@@ -137,25 +110,77 @@ export default function PinsTab({
         cumSaves,
         avgCtr,
         perioden,
-        diagnose,
-        handlung: PIN_HANDLUNG[diagnose],
+        pinAlter: hatDatum ? latest.alter_tage : null,
+        diagnose: result.diagnose,
+        handlung: result.handlung,
       }
     })
   }, [pinAnalytics, thresholds])
+
+  const router = useRouter()
 
   function onDelete(id: string) {
     startTransition(async () => {
       const fd = new FormData()
       fd.set('id', id)
       await deletePinAnalytics(fd)
+      router.refresh()
+    })
+  }
+
+  // Bearbeiten-Modal: hält den aktuell editierten Eintrag (latest-Periode
+  // des aufgeklappten Pins). Null = geschlossen.
+  type EditEntry = {
+    id: string
+    pin_id: string
+    pinTitel: string | null
+    zeitraum_von: string
+    zeitraum_bis: string
+    impressionen: number
+    klicks: number
+    saves: number
+    pinterestPinUrl: string | null
+  }
+  const [editEntry, setEditEntry] = useState<EditEntry | null>(null)
+
+  function onEdit(agg: AggregatedPin) {
+    const r = agg.latest
+    // pinterest_pin_url aus dem dedizierten pins-Array nachschlagen. Falls
+    // bestehende Zuordnungen nur pinterest_pin_id gespeichert haben (Altdaten
+    // vor dem URL-Persistenz-Fix), URL daraus rekonstruieren.
+    const pinFromArray = pins.find((p) => p.id === r.pin_id) ?? null
+    const storedUrl = pinFromArray?.pinterest_pin_url ?? null
+    const storedId = pinFromArray?.pinterest_pin_id ?? null
+    const derivedUrl =
+      storedUrl ||
+      (storedId ? `https://www.pinterest.com/pin/${storedId}/` : null)
+    setEditEntry({
+      id: r.id,
+      pin_id: r.pin_id,
+      pinTitel: r.pin?.titel ?? pinFromArray?.titel ?? null,
+      // Falls zeitraum_von/bis fehlen (Altdaten), auf datum zurückfallen.
+      zeitraum_von: r.zeitraum_von ?? r.datum,
+      zeitraum_bis: r.zeitraum_bis ?? r.datum,
+      impressionen: r.impressionen,
+      klicks: r.klicks,
+      saves: r.saves,
+      pinterestPinUrl: derivedUrl,
     })
   }
 
   return (
     <div className="space-y-6">
-      <p style={{ color: '#111827', fontWeight: '600', fontSize: '14px' }}>
-        Tracke deine wichtigsten Pins einzeln — nicht alle, nur die strategisch
-        relevanten Top 15–20.
+      <p className="text-sm text-gray-700">
+        Hier siehst du die Performance deiner Top Pins über alle erfassten
+        Zeiträume.
+        <br />
+        <Link
+          href="/dashboard/strategie?tab=analytics"
+          className="font-medium text-red-600 hover:underline"
+        >
+          → Mehr zur Analyse und was die Kategorien bedeuten in Strategie
+          &amp; Ausrichtung
+        </Link>
       </p>
 
       <UnmatchedPinsSection
@@ -170,10 +195,21 @@ export default function PinsTab({
       <PinAnalyticsTable
         rows={aggregatedPins}
         onDelete={onDelete}
+        onEdit={onEdit}
         deleteDisabled={isPending}
       />
 
+      <DeletedPinsSection deletedEntries={deletedPinAnalytics} />
+
       <ThresholdInfo thresholds={thresholds} />
+
+      <PinAnalyticsEditModal
+        open={editEntry !== null}
+        onClose={() => setEditEntry(null)}
+        onSaved={() => router.refresh()}
+        entry={editEntry}
+        pins={pins}
+      />
     </div>
   )
 }
@@ -190,6 +226,7 @@ type AggregatedPin = {
   cumSaves: number
   avgCtr: number | null
   perioden: number
+  pinAlter: number | null
   diagnose: PinDiagnose
   handlung: string
 }
@@ -203,6 +240,7 @@ type SortKey =
   | 'diagnose'
   | 'handlung'
   | 'perioden'
+  | 'pinAlter'
 type SortDir = 'asc' | 'desc'
 
 function compareAggregated(
@@ -244,6 +282,9 @@ function compareAggregated(
     case 'perioden':
       res = a.perioden - b.perioden
       break
+    case 'pinAlter':
+      res = (a.pinAlter ?? Infinity) - (b.pinAlter ?? Infinity)
+      break
   }
   return res * sign
 }
@@ -251,10 +292,12 @@ function compareAggregated(
 function PinAnalyticsTable({
   rows,
   onDelete,
+  onEdit,
   deleteDisabled,
 }: {
   rows: AggregatedPin[]
   onDelete: (id: string) => void
+  onEdit: (agg: AggregatedPin) => void
   deleteDisabled: boolean
 }) {
   const [sortKey, setSortKey] = useState<SortKey>('cumKlicks')
@@ -365,6 +408,14 @@ function PinAnalyticsTable({
             >
               Perioden
             </SortableTh>
+            <SortableTh
+              sortKey="pinAlter"
+              current={sortKey}
+              dir={sortDir}
+              onSort={toggleSort}
+            >
+              Alter
+            </SortableTh>
             <Th align="right">Aktion</Th>
           </tr>
         </thead>
@@ -427,29 +478,53 @@ function PinAnalyticsTable({
                     <span
                       className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${PIN_DIAGNOSE_BADGE[agg.diagnose]}`}
                     >
+                      {PIN_DIAGNOSE_META[agg.diagnose].emoji}{' '}
                       {PIN_DIAGNOSE_LABEL[agg.diagnose]}
                     </span>
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-800">
-                    {agg.handlung}
+                    {agg.diagnose === 'kein_datum' ? (
+                      <Link
+                        href={`/dashboard/pin-produktion?edit=${row.pin_id}`}
+                        className="font-medium text-red-600 hover:underline"
+                      >
+                        → Pin bearbeiten
+                      </Link>
+                    ) : (
+                      agg.handlung
+                    )}
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">
                     {hasPeriods ? agg.perioden : '—'}
                   </td>
+                  <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">
+                    {formatPinAge(agg.pinAlter)}
+                  </td>
                   <td className="whitespace-nowrap px-4 py-3 text-right text-sm">
-                    <button
-                      type="button"
-                      onClick={() => onDelete(row.id)}
-                      disabled={deleteDisabled}
-                      className="text-sm font-medium text-red-600 hover:text-red-700 disabled:opacity-50"
-                    >
-                      Löschen
-                    </button>
+                    <div className="flex items-center justify-end gap-3">
+                      <button
+                        type="button"
+                        onClick={() => onEdit(agg)}
+                        className="text-gray-500 hover:text-gray-900"
+                        aria-label="Bearbeiten"
+                        title="Bearbeiten"
+                      >
+                        <PencilIcon />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onDelete(row.id)}
+                        disabled={deleteDisabled}
+                        className="text-sm font-medium text-red-600 hover:text-red-700 disabled:opacity-50"
+                      >
+                        Löschen
+                      </button>
+                    </div>
                   </td>
                 </tr>
                 {hasPeriods && isOpen && (
                   <tr className="bg-gray-50">
-                    <td colSpan={10} className="px-4 py-3">
+                    <td colSpan={11} className="px-4 py-3">
                       <PinTimeline history={agg.history} pin={row.pin} />
                     </td>
                   </tr>
@@ -468,7 +543,6 @@ function PinAnalyticsTable({
 // Zeile, die hat keinen Vergleichspunkt).
 function PinTimeline({
   history,
-  pin,
 }: {
   history: PinAnalyticsRow[]
   pin: PinOption | null
@@ -480,9 +554,6 @@ function PinTimeline({
       </div>
     )
   }
-  const refDate =
-    pin?.geplante_veroeffentlichung ??
-    (pin?.created_at ? pin.created_at.slice(0, 10) : null)
   return (
     <div className="ml-6 overflow-x-auto rounded-md border border-gray-200 bg-white">
       <table className="min-w-full divide-y divide-gray-200 text-xs">
@@ -503,9 +574,6 @@ function PinTimeline({
             <th className="px-3 py-2 text-left font-semibold uppercase tracking-wide text-gray-500">
               CTR
             </th>
-            <th className="px-3 py-2 text-left font-semibold uppercase tracking-wide text-gray-500">
-              Alter
-            </th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
@@ -514,9 +582,6 @@ function PinTimeline({
             const prev = history[i + 1]
             const ctr = calcCtr(row.klicks, row.impressionen)
             const prevCtr = prev ? calcCtr(prev.klicks, prev.impressionen) : null
-            const alterAmEnde = refDate
-              ? Math.max(0, diffDays(refDate, eff.bis))
-              : null
             return (
               <tr key={row.id} className="text-gray-700">
                 <td className="whitespace-nowrap px-3 py-2 font-medium text-gray-900">
@@ -545,11 +610,6 @@ function PinTimeline({
                 </td>
                 <td className="whitespace-nowrap px-3 py-2">
                   <InlineMetricDelta value={ctr} prev={prevCtr} format="percent" />
-                </td>
-                <td className="whitespace-nowrap px-3 py-2">
-                  {alterAmEnde !== null
-                    ? `${alterAmEnde} ${alterAmEnde === 1 ? 'Tag' : 'Tage'}`
-                    : '—'}
                 </td>
               </tr>
             )
@@ -655,7 +715,8 @@ function SortableTh({
 }
 
 // ===========================================================
-// Schwellwert-Info
+// Schwellwert-Info — beschreibt jede Diagnose-Kategorie mit den
+// aktuellen Schwellwerten aus den Einstellungen.
 // ===========================================================
 function ThresholdInfo({
   thresholds,
@@ -669,40 +730,159 @@ function ThresholdInfo({
       </summary>
       <ul className="mt-2 space-y-1">
         <li>
-          Beobachtungszeitraum:{' '}
-          <strong>{thresholds.beobachtungszeitraum} Tage</strong> — Pins jünger
-          als das gelten als „Noch zu früh"
+          ⭐ <strong>Aktiver Top Performer:</strong> ≥{' '}
+          {thresholds.mindestKlicks} Klicks + CTR ≥ {thresholds.mindestCtr}% +
+          Alter &lt; {thresholds.mindestAlter} Tage
         </li>
         <li>
-          Mindest-Klicks: <strong>{thresholds.mindestKlicks}</strong> —
-          Top-Performer ab dieser Schwelle
+          ♻️ <strong>Eingeschlafener Gewinner:</strong> ≥{' '}
+          {thresholds.mindestKlicks} Klicks + Alter ≥ {thresholds.mindestAlter}{' '}
+          Tage
         </li>
         <li>
-          Mindest-Alter: <strong>{thresholds.mindestAlter} Tage</strong> — ab
-          hier zählt ein Pin als „eingeschlafener Gewinner" oder „kein Signal"
+          💎 <strong>Hidden Gem:</strong> CTR ≥ {thresholds.mindestCtr}% +
+          Impressionen &lt; {thresholds.mindestImpressionen}
         </li>
         <li>
-          Mindest-CTR: <strong>{thresholds.mindestCtr}%</strong> — über dem
-          Wert gilt die CTR als gut
+          🔧 <strong>Optimierungspotenzial:</strong> Impressionen ≥{' '}
+          {thresholds.mindestImpressionen} + CTR &lt; {thresholds.mindestCtr}%
         </li>
         <li>
-          Mindest-Impressionen:{' '}
-          <strong>{thresholds.mindestImpressionen}</strong> — ab hier zählt
-          ein Pin als „groß genug" für Hook-Optimierung
+          ⏳ <strong>Noch zu früh:</strong> Alter &lt;{' '}
+          {thresholds.beobachtungszeitraum} Tage — zu wenig Daten für Bewertung
+        </li>
+        <li>
+          💤 <strong>Stiller Pin:</strong> Alter ≥{' '}
+          {thresholds.beobachtungszeitraum} Tage ohne klares Signal
+        </li>
+        <li>
+          ⚠️ <strong>Kein Datum:</strong> Veröffentlichungsdatum fehlt in der
+          Pin-Datenbank
         </li>
       </ul>
       <p className="mt-2 text-xs text-gray-500">
-        Werte anpassen in den{' '}
+        Schwellwerte anpassen in den{' '}
         <Link
           href="/dashboard/einstellungen"
           className="font-medium text-red-600 hover:underline"
         >
-          Einstellungen
+          → Einstellungen
         </Link>
-        .
       </p>
     </details>
   )
+}
+
+function PencilIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 20 20"
+      fill="currentColor"
+      className="h-4 w-4"
+      aria-hidden
+    >
+      <path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" />
+      <path
+        fillRule="evenodd"
+        d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
+        clipRule="evenodd"
+      />
+    </svg>
+  )
+}
+
+// ===========================================================
+// „Zuletzt gelöscht" — Soft-Delete-Toggle
+// ===========================================================
+function DeletedPinsSection({
+  deletedEntries,
+}: {
+  deletedEntries: DeletedPinEntry[]
+}) {
+  const router = useRouter()
+  const [isPending, startTransition] = useTransition()
+
+  if (deletedEntries.length === 0) return null
+
+  function onRestore(id: string) {
+    startTransition(async () => {
+      const fd = new FormData()
+      fd.set('id', id)
+      await restorePinAnalytics(fd)
+      router.refresh()
+    })
+  }
+
+  function onHardDeleteAll() {
+    const ok = window.confirm(
+      `Wirklich alle ${deletedEntries.length} gelöschten Einträge endgültig entfernen? Das kann nicht rückgängig gemacht werden.`
+    )
+    if (!ok) return
+    startTransition(async () => {
+      await hardDeleteAllDeletedPinAnalytics()
+      router.refresh()
+    })
+  }
+
+  return (
+    <details className="rounded-md border border-gray-200 bg-gray-50 p-3 text-sm">
+      <summary className="cursor-pointer font-medium text-gray-900">
+        🗑️ Zuletzt gelöscht ({deletedEntries.length} Eintr
+        {deletedEntries.length === 1 ? 'ag' : 'äge'})
+      </summary>
+      <ul className="mt-3 divide-y divide-gray-200 rounded-md border border-gray-200 bg-white">
+        {deletedEntries.map((d) => (
+          <li
+            key={d.id}
+            className="flex flex-wrap items-center justify-between gap-3 px-3 py-2 text-xs"
+          >
+            <div className="min-w-0 flex-1 space-y-0.5">
+              <p className="truncate font-medium text-gray-900">
+                {d.pinTitel ?? <span className="text-gray-400">— ohne Titel —</span>}
+              </p>
+              <p className="text-gray-500">
+                Zeitraum {formatDateDe(d.zeitraum_von)} –{' '}
+                {formatDateDe(d.zeitraum_bis)}
+                {' · '}
+                Gelöscht: {formatDateTimeDe(d.deleted_at)}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => onRestore(d.id)}
+              disabled={isPending}
+              className="shrink-0 rounded-md border border-green-600 bg-white px-3 py-1 text-xs font-medium text-green-700 hover:bg-green-50 disabled:opacity-50"
+            >
+              Wiederherstellen
+            </button>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-3 text-right">
+        <button
+          type="button"
+          onClick={onHardDeleteAll}
+          disabled={isPending}
+          className="text-xs text-gray-500 underline hover:text-gray-700 disabled:opacity-50"
+        >
+          Alle endgültig löschen
+        </button>
+      </div>
+    </details>
+  )
+}
+
+// Datum + Uhrzeit auf Deutsch — z.B. "05.05.2026, 14:32".
+function formatDateTimeDe(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  const dd = String(d.getDate()).padStart(2, '0')
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const yyyy = d.getFullYear()
+  const hh = String(d.getHours()).padStart(2, '0')
+  const min = String(d.getMinutes()).padStart(2, '0')
+  return `${dd}.${mm}.${yyyy}, ${hh}:${min}`
 }
 
 function Th({

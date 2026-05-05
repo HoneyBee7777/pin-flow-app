@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import {
   Fragment,
   useEffect,
@@ -14,6 +15,7 @@ import {
   type UnmatchedBoard,
 } from './actions'
 import UnmatchedBoardsSection from './UnmatchedBoardsSection'
+import BoardAnalyticsEditModal from './BoardAnalyticsEditModal'
 import {
   BOARD_SCORE_BADGE,
   BOARD_SCORE_LABEL,
@@ -62,12 +64,46 @@ export default function BoardsTab({
   onUnmatchedBoardResolved: (boardSlug: string) => void
 }) {
   const [deletePending, startDeleteTransition] = useTransition()
+  const router = useRouter()
 
   function onDelete(id: string) {
     startDeleteTransition(async () => {
       const fd = new FormData()
       fd.set('id', id)
       await deleteBoardAnalytics(fd)
+      router.refresh()
+    })
+  }
+
+  // Bearbeiten-Modal: hält den aktuell editierten Eintrag (latest-Periode
+  // des Boards). Null = geschlossen.
+  type EditEntry = {
+    id: string
+    board_id: string
+    boardName: string | null
+    datum: string
+    impressionen: number
+    engagement: number
+    klicks_auf_pins: number
+    ausgehende_klicks: number
+    saves: number
+    pinterestUrl: string | null
+  }
+  const [editEntry, setEditEntry] = useState<EditEntry | null>(null)
+
+  function onEdit(row: BoardAnalyticsRow) {
+    const r = row.latest
+    setEditEntry({
+      id: r.id,
+      board_id: r.board_id,
+      boardName: row.board.name,
+      datum: r.datum,
+      impressionen: r.impressionen,
+      engagement: r.engagement,
+      klicks_auf_pins: r.klicks_auf_pins,
+      ausgehende_klicks: r.ausgehende_klicks,
+      saves: r.saves,
+      pinterestUrl: row.board.pinterest_url ?? null,
     })
   }
 
@@ -118,10 +154,19 @@ export default function BoardsTab({
         boardHistory={boardHistory}
         thresholds={thresholds}
         onDelete={onDelete}
+        onEdit={onEdit}
         deleteDisabled={deletePending}
       />
 
       <ThresholdInfo thresholds={thresholds} />
+
+      <BoardAnalyticsEditModal
+        open={editEntry !== null}
+        onClose={() => setEditEntry(null)}
+        onSaved={() => router.refresh()}
+        entry={editEntry}
+        boards={boards}
+      />
     </div>
   )
 }
@@ -200,12 +245,14 @@ function BoardAnalyticsTable({
   boardHistory,
   thresholds,
   onDelete,
+  onEdit,
   deleteDisabled,
 }: {
   rows: BoardAnalyticsRow[]
   boardHistory: Record<string, BoardAnalyticsEntry[]>
   thresholds: BoardThresholds
   onDelete: (id: string) => void
+  onEdit: (row: BoardAnalyticsRow) => void
   deleteDisabled: boolean
 }) {
   const [sortKey, setSortKey] = useState<SortKey>('impressionen')
@@ -525,14 +572,25 @@ function BoardAnalyticsTable({
                       {formatDateDe(row.latest.datum)}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-right text-sm">
-                      <button
-                        type="button"
-                        onClick={() => onDelete(row.latest.id)}
-                        disabled={deleteDisabled}
-                        className="text-sm font-medium text-red-600 hover:text-red-700 disabled:opacity-50"
-                      >
-                        Löschen
-                      </button>
+                      <div className="flex items-center justify-end gap-3">
+                        <button
+                          type="button"
+                          onClick={() => onEdit(row)}
+                          className="text-gray-500 hover:text-gray-900"
+                          aria-label="Bearbeiten"
+                          title="Bearbeiten"
+                        >
+                          <PencilIcon />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onDelete(row.latest.id)}
+                          disabled={deleteDisabled}
+                          className="text-sm font-medium text-red-600 hover:text-red-700 disabled:opacity-50"
+                        >
+                          Löschen
+                        </button>
+                      </div>
                     </td>
                   </tr>
                   {hasHistory && isOpen && (
@@ -812,5 +870,24 @@ function Th({
     >
       {children}
     </th>
+  )
+}
+
+function PencilIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 20 20"
+      fill="currentColor"
+      className="h-4 w-4"
+      aria-hidden
+    >
+      <path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" />
+      <path
+        fillRule="evenodd"
+        d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
+        clipRule="evenodd"
+      />
+    </svg>
   )
 }

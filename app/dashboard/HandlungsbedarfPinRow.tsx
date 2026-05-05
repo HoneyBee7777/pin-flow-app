@@ -50,13 +50,11 @@ export default function HandlungsbedarfPinRow({
   kategorie,
   metrics,
   primaryAction,
-  bonusImpressionenSchwelle,
 }: {
   pin: HandlungsbedarfPin
   kategorie: string
   metrics: Metric[]
   primaryAction: ActionButton
-  bonusImpressionenSchwelle: number
 }) {
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
@@ -93,7 +91,6 @@ export default function HandlungsbedarfPinRow({
   const coachingText = coachingHint({
     kategorie,
     pin,
-    bonusSchwelle: bonusImpressionenSchwelle,
   })
 
   // Algorithmus-Push (nur Top-Performer-Kategorie) steht ganz vorne in der
@@ -253,7 +250,7 @@ function BoardLine({ pin }: { pin: HandlungsbedarfPin }) {
 type CoachingKategorie =
   | 'aktiver_top_performer'
   | 'hidden_gem'
-  | 'hohe_impressionen_niedrige_ctr'
+  | 'optimierungspotenzial'
   | 'eingeschlafener_gewinner'
 
 type BoardKey =
@@ -297,7 +294,7 @@ const COACHING_MATRIX: Record<
       'Schwaches Board limitiert den Pin – überlege, ob ein stärkeres Board zur Pin-Thematik passen könnte.',
     kein: 'Hidden Gem ohne Board-Zuordnung – einem thematisch passenden Board zuordnen, dann können Keywords und Board gemeinsam wirken.',
   },
-  hohe_impressionen_niedrige_ctr: {
+  optimierungspotenzial: {
     top: 'Top-Board liefert Reichweite, aber Hook und Design konvertieren nicht – erstelle einen neuen Pin mit gleichem Titel und gleicher Beschreibung, aber anderem Hook und Design.',
     wachstum:
       'Wachstums-Board liefert Sichtbarkeit, aber Klicks fehlen – erstelle einen neuen Pin mit gleichem Titel und gleicher Beschreibung, aber anderem Hook und Design.',
@@ -327,9 +324,6 @@ const COACHING_MATRIX: Record<
   },
 }
 
-const BONUS_REICHWEITE_HINWEIS =
-  'Zusatz-Hebel: Impressionen sind noch niedrig – mit stärkeren Keywords in der Variante kann die Reichweite deutlich gehoben werden.'
-
 function boardKeyFor(pin: HandlungsbedarfPin): BoardKey {
   if (!pin.boardName || !pin.boardHasAnalytics || !pin.boardScoreLabel)
     return 'kein'
@@ -355,7 +349,7 @@ function isCoachingKategorie(k: string): k is CoachingKategorie {
   return (
     k === 'aktiver_top_performer' ||
     k === 'hidden_gem' ||
-    k === 'hohe_impressionen_niedrige_ctr' ||
+    k === 'optimierungspotenzial' ||
     k === 'eingeschlafener_gewinner'
   )
 }
@@ -363,20 +357,11 @@ function isCoachingKategorie(k: string): k is CoachingKategorie {
 function coachingHint({
   kategorie,
   pin,
-  bonusSchwelle,
 }: {
   kategorie: string
   pin: HandlungsbedarfPin
-  bonusSchwelle: number
 }): string | null {
   if (!isCoachingKategorie(kategorie)) return null
-  const baseText = COACHING_MATRIX[kategorie][boardKeyFor(pin)]
-  if (
-    kategorie === 'aktiver_top_performer' &&
-    pin.impressionen < bonusSchwelle
-  ) {
-    return `${baseText} ${BONUS_REICHWEITE_HINWEIS}`
-  }
-  return baseText
+  return COACHING_MATRIX[kategorie][boardKeyFor(pin)]
 }
 

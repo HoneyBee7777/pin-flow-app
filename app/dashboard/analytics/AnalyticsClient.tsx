@@ -49,10 +49,20 @@ function isTab(v: string | null | undefined): v is Tab {
   return v === 'eingabe' || v === 'profil' || v === 'pins' || v === 'boards'
 }
 
+export type DeletedPinEntry = {
+  id: string
+  pin_id: string
+  pinTitel: string | null
+  zeitraum_von: string
+  zeitraum_bis: string
+  deleted_at: string
+}
+
 export default function AnalyticsClient({
   profilAnalytics,
   pins,
   pinAnalytics,
+  deletedPinAnalytics,
   thresholds,
   boards,
   boardAnalytics,
@@ -65,6 +75,7 @@ export default function AnalyticsClient({
   profilAnalytics: ProfilAnalyticsWithGrowth[]
   pins: PinOption[]
   pinAnalytics: PinAnalyticsRow[]
+  deletedPinAnalytics: DeletedPinEntry[]
   thresholds: PinAnalyticsThresholds
   boards: BoardOption[]
   boardAnalytics: BoardAnalyticsRow[]
@@ -248,6 +259,7 @@ export default function AnalyticsClient({
       {tab === 'pins' && (
         <PinsTab
           pinAnalytics={pinAnalytics}
+          deletedPinAnalytics={deletedPinAnalytics}
           pins={pins}
           thresholds={thresholds}
           unmatchedPins={pinsPending}

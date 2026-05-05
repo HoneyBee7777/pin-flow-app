@@ -3,6 +3,8 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase-server'
 import {
+  extractPinterestBoardSlug,
+  extractPinterestPinId,
   parseBoardsCsv,
   parseFilenamePeriod,
   parsePinsCsv,
@@ -160,15 +162,163 @@ export async function savePinAnalytics(
   return {}
 }
 
+// Soft-Delete: setzt deleted_at = NOW(), die Zeile bleibt physisch erhalten
+// und kann via restorePinAnalytics wiederhergestellt werden. Alle normalen
+// Listen-Queries filtern auf deleted_at IS NULL.
 export async function deletePinAnalytics(
   formData: FormData
 ): Promise<void> {
   const supabase = createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return
   const id = String(formData.get('id') ?? '')
   if (!id) return
-  await supabase.from('pins_analytics').delete().eq('id', id)
+  await supabase
+    .from('pins_analytics')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', id)
+    .eq('user_id', user.id)
   revalidatePath('/dashboard/analytics')
   revalidatePath('/dashboard')
+}
+
+// Wiederherstellen: setzt deleted_at zurück auf NULL — Eintrag taucht wieder
+// in der normalen Liste auf.
+export async function restorePinAnalytics(
+  formData: FormData
+): Promise<void> {
+  const supabase = createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return
+  const id = String(formData.get('id') ?? '')
+  if (!id) return
+  await supabase
+    .from('pins_analytics')
+    .update({ deleted_at: null })
+    .eq('id', id)
+    .eq('user_id', user.id)
+  revalidatePath('/dashboard/analytics')
+  revalidatePath('/dashboard')
+}
+
+// Endgültiges Löschen aller soft-deleted pins_analytics-Zeilen des Users.
+// Wird vom „Alle endgültig löschen"-Link im Zuletzt-gelöscht-Toggle aufgerufen.
+export async function hardDeleteAllDeletedPinAnalytics(): Promise<void> {
+  const supabase = createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return
+  await supabase
+    .from('pins_analytics')
+    .delete()
+    .eq('user_id', user.id)
+    .not('deleted_at', 'is', null)
+  revalidatePath('/dashboard/analytics')
+  revalidatePath('/dashboard')
+}
+
+// Update einer einzelnen pins_analytics-Zeile (per id) inkl. optionalem
+// Schreiben von pinterest_pin_url + pinterest_pin_id auf der pins-Tabelle.
+// Wird vom „Bearbeiten"-Modal in der Pins-Analytics-Tabelle aufgerufen.
+export async function updatePinAnalyticsEntry(
+  formData: FormData
+): Promise<{ error?: string }> {
+  const supabase = createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: 'Nicht angemeldet.' }
+
+  const id = String(formData.get('id') ?? '').trim()
+  const pin_id = String(formData.get('pin_id') ?? '').trim()
+  if (!id) return { error: 'Analytics-Eintrag fehlt.' }
+  if (!pin_id) return { error: 'Pin fehlt.' }
+
+  const zeitraum_von = String(formData.get('zeitraum_von') ?? '').trim()
+  const zeitraum_bis = String(formData.get('zeitraum_bis') ?? '').trim()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(zeitraum_von))
+    return { error: 'Bitte ein gültiges „Von"-Datum wählen.' }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(zeitraum_bis))
+    return { error: 'Bitte ein gültiges „Bis"-Datum wählen.' }
+  if (zeitraum_von > zeitraum_bis)
+    return { error: '„Von"-Datum darf nicht nach „Bis"-Datum liegen.' }
+
+  const datum = zeitraum_bis
+
+  const fields = {
+    impressionen: parseInt0(formData.get('impressionen')),
+    klicks: parseInt0(formData.get('klicks')),
+    saves: parseInt0(formData.get('saves')),
+  }
+  for (const [name, val] of Object.entries(fields)) {
+    if (!Number.isInteger(val) || val < 0)
+      return {
+        error: `Feld „${name}" muss eine nicht-negative ganze Zahl sein.`,
+      }
+  }
+
+  // Optional: Pinterest-URL auf der pins-Tabelle setzen oder entfernen.
+  //   - leerer Wert + remove-Flag = Felder auf NULL setzen
+  //   - leerer Wert ohne Flag    = unverändert lassen
+  //   - expliziter Wert           = setzen (inkl. ID-Extraktion)
+  const pinterest_pin_url_raw = String(
+    formData.get('pinterest_pin_url') ?? ''
+  ).trim()
+  const pinterest_pin_url_remove =
+    String(formData.get('pinterest_pin_url_remove') ?? '') === '1'
+  if (pinterest_pin_url_raw) {
+    if (!/^https?:\/\/\S+/i.test(pinterest_pin_url_raw))
+      return {
+        error: 'Pinterest-URL muss mit http:// oder https:// beginnen.',
+      }
+    const pinterest_pin_id = extractPinterestPinId(pinterest_pin_url_raw)
+    if (!pinterest_pin_id)
+      return {
+        error:
+          'Pinterest-URL erkannt, aber keine Pin-ID extrahierbar. Erwartet: …/pin/<numerische-id>/',
+      }
+    const { error: pErr } = await supabase
+      .from('pins')
+      .update({
+        pinterest_pin_url: pinterest_pin_url_raw,
+        pinterest_pin_id,
+      })
+      .eq('id', pin_id)
+      .eq('user_id', user.id)
+    if (pErr) return { error: pErr.message }
+  } else if (pinterest_pin_url_remove) {
+    const { error: pErr } = await supabase
+      .from('pins')
+      .update({
+        pinterest_pin_url: null,
+        pinterest_pin_id: null,
+      })
+      .eq('id', pin_id)
+      .eq('user_id', user.id)
+    if (pErr) return { error: pErr.message }
+  }
+
+  const { error } = await supabase
+    .from('pins_analytics')
+    .update({
+      pin_id,
+      datum,
+      zeitraum_von,
+      zeitraum_bis,
+      ...fields,
+    })
+    .eq('id', id)
+    .eq('user_id', user.id)
+  if (error) return { error: error.message }
+
+  revalidatePath('/dashboard/analytics')
+  revalidatePath('/dashboard')
+  return {}
 }
 
 // ===========================================================
@@ -326,6 +476,91 @@ export async function deleteBoardAnalytics(
   revalidatePath('/dashboard/analytics')
 }
 
+// Update einer board_analytics-Zeile (per id) inkl. optionalem Schreiben
+// von pinterest_url + pinterest_board_slug auf der boards-Tabelle.
+export async function updateBoardAnalyticsEntry(
+  formData: FormData
+): Promise<{ error?: string }> {
+  const supabase = createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: 'Nicht angemeldet.' }
+
+  const id = String(formData.get('id') ?? '').trim()
+  const board_id = String(formData.get('board_id') ?? '').trim()
+  if (!id) return { error: 'Analytics-Eintrag fehlt.' }
+  if (!board_id) return { error: 'Board fehlt.' }
+
+  const datum = String(formData.get('datum') ?? '').trim()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(datum))
+    return { error: 'Bitte ein gültiges Datum wählen.' }
+
+  // anzahl_pins bleibt unverändert (wird automatisch aus den Pins abgeleitet).
+  // Daher nur die fünf editierbaren Metriken aus dem Form-Data lesen.
+  const editableFields = {
+    impressionen: parseInt0(formData.get('impressionen')),
+    klicks_auf_pins: parseInt0(formData.get('klicks_auf_pins')),
+    ausgehende_klicks: parseInt0(formData.get('ausgehende_klicks')),
+    saves: parseInt0(formData.get('saves')),
+    engagement: parseInt0(formData.get('engagement')),
+  }
+  for (const [name, val] of Object.entries(editableFields)) {
+    if (!Number.isInteger(val) || val < 0)
+      return {
+        error: `Feld „${name}" muss eine nicht-negative ganze Zahl sein.`,
+      }
+  }
+
+  // Optional: Pinterest-URL auf der boards-Tabelle setzen oder entfernen
+  // (analoge Semantik zum Pin-Pendant).
+  const pinterest_url_raw = String(formData.get('pinterest_url') ?? '').trim()
+  const pinterest_url_remove =
+    String(formData.get('pinterest_url_remove') ?? '') === '1'
+  if (pinterest_url_raw) {
+    if (!/^https?:\/\/\S+/i.test(pinterest_url_raw))
+      return {
+        error: 'Pinterest-URL muss mit http:// oder https:// beginnen.',
+      }
+    const slug = extractPinterestBoardSlug(pinterest_url_raw)
+    if (!slug)
+      return {
+        error:
+          'Board-URL erkannt, aber Slug nicht extrahierbar. Erwartet: …/<username>/<board-slug>/',
+      }
+    const { error: bErr } = await supabase
+      .from('boards')
+      .update({
+        pinterest_url: pinterest_url_raw,
+        pinterest_board_slug: slug,
+      })
+      .eq('id', board_id)
+      .eq('user_id', user.id)
+    if (bErr) return { error: bErr.message }
+  } else if (pinterest_url_remove) {
+    const { error: bErr } = await supabase
+      .from('boards')
+      .update({
+        pinterest_url: null,
+        pinterest_board_slug: null,
+      })
+      .eq('id', board_id)
+      .eq('user_id', user.id)
+    if (bErr) return { error: bErr.message }
+  }
+
+  const { error } = await supabase
+    .from('board_analytics')
+    .update({ board_id, datum, ...editableFields })
+    .eq('id', id)
+    .eq('user_id', user.id)
+  if (error) return { error: error.message }
+
+  revalidatePath('/dashboard/analytics')
+  revalidatePath('/dashboard')
+  return {}
+}
+
 // ===========================================================
 // Pinterest Analytics CSV-Import
 // ===========================================================
@@ -341,6 +576,7 @@ export type UnmatchedPin = {
 
 export type UnmatchedBoard = {
   boardSlug: string
+  boardUrl: string
   impressionen: number
   engagement: number
   klicks_auf_pins: number
@@ -488,6 +724,7 @@ export async function importPinterestCsv(
         .eq('user_id', user.id)
         .in('pin_id', matchedIds)
         .eq('datum', datum)
+        .is('deleted_at', null)
       if (exErr) return { error: exErr.message }
       const existingByPinId = new Map<
         string,
@@ -545,31 +782,90 @@ export async function importPinterestCsv(
   const boardsUnmatched: UnmatchedBoard[] = []
 
   if (boardsParsed && !('error' in boardsParsed) && boardsParsed.rows.length > 0) {
-    const slugs = boardsParsed.rows.map((r) => r.boardSlug)
-    const { data: boardsRows, error: bErr } = await supabase
+    // ===== Stufe 1 — Match über pinterest_url =====
+    // Alle Boards des Users mit gesetzter pinterest_url laden. Vergleich
+    // erfolgt zweifach: exakte URL und über extrahierten Slug — so matchen
+    // auch Varianten wie http vs https oder mit/ohne trailing slash.
+    const { data: urlBoardsRows, error: urlErr } = await supabase
       .from('boards')
-      .select('id, pinterest_board_slug')
+      .select('id, pinterest_url, pinterest_board_slug')
       .eq('user_id', user.id)
-      .in('pinterest_board_slug', slugs)
-    if (bErr) return { error: bErr.message }
-    const idBySlug = new Map<string, string>()
-    for (const b of (boardsRows ?? []) as Array<{
+      .not('pinterest_url', 'is', null)
+    if (urlErr) return { error: urlErr.message }
+
+    type UrlBoardRow = {
       id: string
-      pinterest_board_slug: string
-    }>) {
-      idBySlug.set(b.pinterest_board_slug, b.id)
+      pinterest_url: string
+      pinterest_board_slug: string | null
+    }
+    const urlBoards = (urlBoardsRows ?? []) as UrlBoardRow[]
+    const idByUrl = new Map<string, UrlBoardRow>()
+    const idBySlugFromUrl = new Map<string, UrlBoardRow>()
+    for (const b of urlBoards) {
+      idByUrl.set(b.pinterest_url, b)
+      const slugFromUrl = extractPinterestBoardSlug(b.pinterest_url)
+      if (slugFromUrl) idBySlugFromUrl.set(slugFromUrl, b)
     }
 
-    const matched: typeof boardsParsed.rows = []
+    type ParsedBoardRow = (typeof boardsParsed.rows)[number]
+    const stage1Matched: Array<{ row: ParsedBoardRow; board: UrlBoardRow }> = []
+    const remainingForStage2: ParsedBoardRow[] = []
     for (const row of boardsParsed.rows) {
-      if (idBySlug.has(row.boardSlug)) matched.push(row)
+      const byUrl = idByUrl.get(row.boardUrl)
+      const board = byUrl ?? idBySlugFromUrl.get(row.boardSlug)
+      if (board) stage1Matched.push({ row, board })
+      else remainingForStage2.push(row)
+    }
+
+    // Backfill: Stufe-1-Match ohne pinterest_board_slug → Slug nachtragen.
+    const slugBackfills = stage1Matched
+      .filter((m) => !m.board.pinterest_board_slug)
+      .map((m) => ({ id: m.board.id, slug: m.row.boardSlug }))
+    if (slugBackfills.length > 0) {
+      // Sequenziell — Supabase-Bulk-Update mit unterschiedlichen Werten pro
+      // Zeile geht nur via RPC; bei wenigen Boards pro Import vertretbar.
+      for (const u of slugBackfills) {
+        await supabase
+          .from('boards')
+          .update({ pinterest_board_slug: u.slug })
+          .eq('id', u.id)
+          .eq('user_id', user.id)
+      }
+    }
+
+    // ===== Stufe 2 — Match über pinterest_board_slug (wie bisher) =====
+    const idBySlug = new Map<string, string>()
+    if (remainingForStage2.length > 0) {
+      const slugs = remainingForStage2.map((r) => r.boardSlug)
+      const { data: boardsRows, error: bErr } = await supabase
+        .from('boards')
+        .select('id, pinterest_board_slug')
+        .eq('user_id', user.id)
+        .in('pinterest_board_slug', slugs)
+      if (bErr) return { error: bErr.message }
+      for (const b of (boardsRows ?? []) as Array<{
+        id: string
+        pinterest_board_slug: string
+      }>) {
+        idBySlug.set(b.pinterest_board_slug, b.id)
+      }
+    }
+
+    const stage2Matched: Array<{ row: ParsedBoardRow; boardId: string }> = []
+    for (const row of remainingForStage2) {
+      const boardId = idBySlug.get(row.boardSlug)
+      if (boardId) stage2Matched.push({ row, boardId })
       else boardsUnmatched.push(row)
     }
 
-    if (matched.length > 0) {
-      const matchedBoardIds = matched.map(
-        (r) => idBySlug.get(r.boardSlug) as string
-      )
+    // ===== Upsert für alle Stufe-1- und Stufe-2-Treffer =====
+    const allMatched: Array<{ row: ParsedBoardRow; boardId: string }> = [
+      ...stage1Matched.map((m) => ({ row: m.row, boardId: m.board.id })),
+      ...stage2Matched,
+    ]
+
+    if (allMatched.length > 0) {
+      const matchedBoardIds = allMatched.map((m) => m.boardId)
       const { data: existingRows, error: exErr } = await supabase
         .from('board_analytics')
         .select('board_id, anzahl_pins')
@@ -585,27 +881,24 @@ export async function importPinterestCsv(
         anzahlByBoardId.set(r.board_id, r.anzahl_pins ?? 0)
       }
 
-      const upserts = matched.map((r) => {
-        const board_id = idBySlug.get(r.boardSlug) as string
-        return {
-          user_id: user.id,
-          board_id,
-          datum: periodOk.bis,
-          impressionen: r.impressionen,
-          engagement: r.engagement,
-          klicks_auf_pins: r.klicks_auf_pins,
-          ausgehende_klicks: r.ausgehende_klicks,
-          saves: r.saves,
-          anzahl_pins: anzahlByBoardId.get(board_id) ?? 0,
-        }
-      })
+      const upserts = allMatched.map((m) => ({
+        user_id: user.id,
+        board_id: m.boardId,
+        datum: periodOk.bis,
+        impressionen: m.row.impressionen,
+        engagement: m.row.engagement,
+        klicks_auf_pins: m.row.klicks_auf_pins,
+        ausgehende_klicks: m.row.ausgehende_klicks,
+        saves: m.row.saves,
+        anzahl_pins: anzahlByBoardId.get(m.boardId) ?? 0,
+      }))
 
       const { error: upErr } = await supabase
         .from('board_analytics')
         .upsert(upserts, { onConflict: 'board_id,datum' })
       if (upErr) return { error: upErr.message }
 
-      boardsImported = matched.length
+      boardsImported = allMatched.length
     }
   }
 
@@ -671,7 +964,7 @@ export async function importPinterestCsv(
     pendingRows.push({
       user_id: user.id,
       type: 'board',
-      pinterest_url: u.boardSlug,
+      pinterest_url: u.boardUrl,
       pinterest_id: u.boardSlug,
       // Generische klicks-Spalte bleibt für Boards leer — Traffic-Metrik
       // lebt jetzt sauber in ausgehende_klicks.
@@ -727,6 +1020,13 @@ export async function assignPinAndImportMetrics(
   if (!/^\d+$/.test(pinterest_pin_id))
     return { error: 'Pinterest-Pin-ID muss numerisch sein.' }
 
+  // Optional: volle Pinterest-URL — wird zusätzlich zu pinterest_pin_id auf
+  // der pins-Tabelle gespeichert, damit das Bearbeiten-Modal die URL anzeigen
+  // kann und beim nächsten CSV-Import URL-Matching greift.
+  const pinterest_pin_url = String(
+    formData.get('pinterest_pin_url') ?? ''
+  ).trim()
+
   const zeitraum_von = String(formData.get('zeitraum_von') ?? '').trim()
   const zeitraum_bis = String(formData.get('zeitraum_bis') ?? '').trim()
   if (!/^\d{4}-\d{2}-\d{2}$/.test(zeitraum_von))
@@ -744,10 +1044,18 @@ export async function assignPinAndImportMetrics(
   const klicks = num('klicks')
   const saves = num('saves')
 
-  // Pin-Zuordnung speichern.
+  // Pin-Zuordnung speichern. URL nur schreiben, wenn echter http(s)-Wert
+  // mitkommt — Legacy-Caller ohne URL bleiben unverändert.
+  const pinUpdate: {
+    pinterest_pin_id: string
+    pinterest_pin_url?: string
+  } = { pinterest_pin_id }
+  if (pinterest_pin_url && /^https?:\/\//i.test(pinterest_pin_url)) {
+    pinUpdate.pinterest_pin_url = pinterest_pin_url
+  }
   const { error: pinErr } = await supabase
     .from('pins')
-    .update({ pinterest_pin_id })
+    .update(pinUpdate)
     .eq('id', pin_id)
     .eq('user_id', user.id)
   if (pinErr) return { error: pinErr.message }
@@ -760,6 +1068,7 @@ export async function assignPinAndImportMetrics(
     .eq('user_id', user.id)
     .eq('pin_id', pin_id)
     .eq('datum', zeitraum_bis)
+    .is('deleted_at', null)
     .maybeSingle()
   if (exErr) return { error: exErr.message }
   const existing = existingRows ?? { impressionen: 0, klicks: 0, saves: 0 }
@@ -814,6 +1123,10 @@ export async function assignBoardAndImportMetrics(
   const pinterest_board_slug = String(
     formData.get('pinterest_board_slug') ?? ''
   ).trim()
+  // Volle Pinterest-URL aus dem Pending-Eintrag — wird zusätzlich zum Slug
+  // in boards persistiert, damit beim nächsten CSV-Import Stufe-1-Matching
+  // (URL-basiert) sofort greift.
+  const pinterest_url = String(formData.get('pinterest_url') ?? '').trim()
   if (!board_id) return { error: 'Bitte ein Board auswählen.' }
   if (!pinterest_board_slug)
     return { error: 'Pinterest-Board-Slug fehlt.' }
@@ -836,9 +1149,19 @@ export async function assignBoardAndImportMetrics(
     saves: num('saves'),
   }
 
+  // pinterest_url nur schreiben, wenn ein echter URL-Wert mitkommt — nicht
+  // jeder Caller hat die URL parat (z.B. Legacy-Pending-Zeilen, in denen das
+  // Feld nur den Slug enthielt).
+  const boardUpdate: {
+    pinterest_board_slug: string
+    pinterest_url?: string
+  } = { pinterest_board_slug }
+  if (pinterest_url && /^https?:\/\//i.test(pinterest_url)) {
+    boardUpdate.pinterest_url = pinterest_url
+  }
   const { error: bErr } = await supabase
     .from('boards')
-    .update({ pinterest_board_slug })
+    .update(boardUpdate)
     .eq('id', board_id)
     .eq('user_id', user.id)
   if (bErr) return { error: bErr.message }

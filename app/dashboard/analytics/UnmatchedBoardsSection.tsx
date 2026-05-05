@@ -121,6 +121,10 @@ function UnmatchedBoardRow({
     const fd = new FormData()
     fd.set('board_id', selectedId)
     fd.set('pinterest_board_slug', unmatched.boardSlug)
+    // Volle Pinterest-URL mitschicken, damit der Server pinterest_url in der
+    // boards-Tabelle setzt — Voraussetzung für URL-basiertes Matching beim
+    // nächsten Import.
+    fd.set('pinterest_url', unmatched.boardUrl)
     fd.set('datum', datum)
     fd.set('impressionen', String(unmatched.impressionen))
     fd.set('engagement', String(unmatched.engagement))
@@ -150,12 +154,14 @@ function UnmatchedBoardRow({
     })
   }
 
-  // Wenn wir den Pinterest-Username kennen (aus einem anderen Board des
-  // Nutzers extrahiert), Slug als klickbaren Direktlink rendern. Sonst
-  // Fallback auf reinen Text — Nutzer kann den Slug dann manuell suchen.
-  const boardUrl = pinterestUsername
-    ? `https://www.pinterest.com/${pinterestUsername}/${unmatched.boardSlug}/`
-    : null
+  // Bevorzugt die echte URL aus dem CSV-Import. Fallback: aus Username +
+  // Slug konstruieren (für Legacy-Pending-Zeilen ohne URL). Letzter Fallback:
+  // reiner Slug-Text — Nutzer kann den Slug dann manuell suchen.
+  const boardUrl =
+    unmatched.boardUrl ||
+    (pinterestUsername
+      ? `https://www.pinterest.com/${pinterestUsername}/${unmatched.boardSlug}/`
+      : null)
 
   return (
     <li className="rounded-md border border-gray-200 bg-white p-3">

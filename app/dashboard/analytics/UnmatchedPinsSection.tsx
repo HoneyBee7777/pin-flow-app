@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { useEffect, useMemo, useState, useTransition } from 'react'
 import {
   assignPinAndImportMetrics,
   skipPendingImport,
@@ -25,12 +25,24 @@ const DEFAULT_KLICKS = '2'
 const DEFAULT_IMPRESSIONEN = '100'
 const DEFAULT_SAVES = '1'
 
+const FILTER_STORAGE_KEY = 'analytics_unmatched_filter'
+
+type StoredFilter = {
+  klicks: number | null
+  impressionen: number | null
+  saves: number | null
+}
+
 function parseThreshold(s: string): number | null {
   const t = s.trim()
   if (!t) return null
   const n = Number(t.replace(',', '.'))
   if (!Number.isFinite(n) || n < 0) return null
   return n
+}
+
+function thresholdToInput(n: number | null): string {
+  return n === null ? '' : String(n)
 }
 
 export default function UnmatchedPinsSection({
@@ -57,6 +69,28 @@ export default function UnmatchedPinsSection({
     parseThreshold(DEFAULT_SAVES)
   )
 
+  // Persistenz: gespeicherte Filter-Werte nach dem Mount aus localStorage
+  // laden (nach Mount, um SSR-Hydration-Mismatch zu vermeiden).
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(FILTER_STORAGE_KEY)
+      if (!raw) return
+      const parsed = JSON.parse(raw) as Partial<StoredFilter>
+      const k = typeof parsed.klicks === 'number' ? parsed.klicks : null
+      const i =
+        typeof parsed.impressionen === 'number' ? parsed.impressionen : null
+      const s = typeof parsed.saves === 'number' ? parsed.saves : null
+      setKlicksInput(thresholdToInput(k))
+      setImpInput(thresholdToInput(i))
+      setSavesInput(thresholdToInput(s))
+      setAppliedKlicks(k)
+      setAppliedImp(i)
+      setAppliedSaves(s)
+    } catch {
+      // Defekte localStorage-Werte ignorieren — Defaults greifen.
+    }
+  }, [])
+
   // ODER-Verknüpfung: ein Pin passt, wenn er mindestens einen GESETZTEN
   // Schwellwert erfüllt. Sind alle drei Schwellen leer, gilt kein Filter
   // → alle anzeigen.
@@ -81,18 +115,32 @@ export default function UnmatchedPinsSection({
   }, [unmatchedPins, appliedKlicks, appliedImp, appliedSaves])
 
   function applyFilter() {
-    setAppliedKlicks(parseThreshold(klicksInput))
-    setAppliedImp(parseThreshold(impInput))
-    setAppliedSaves(parseThreshold(savesInput))
+    const k = parseThreshold(klicksInput)
+    const i = parseThreshold(impInput)
+    const s = parseThreshold(savesInput)
+    setAppliedKlicks(k)
+    setAppliedImp(i)
+    setAppliedSaves(s)
+    try {
+      const stored: StoredFilter = { klicks: k, impressionen: i, saves: s }
+      localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(stored))
+    } catch {
+      // localStorage nicht verfügbar — Filter wirkt nur in dieser Session.
+    }
   }
 
   function showAll() {
-    setKlicksInput('')
-    setImpInput('')
-    setSavesInput('')
-    setAppliedKlicks(null)
-    setAppliedImp(null)
-    setAppliedSaves(null)
+    setKlicksInput(DEFAULT_KLICKS)
+    setImpInput(DEFAULT_IMPRESSIONEN)
+    setSavesInput(DEFAULT_SAVES)
+    setAppliedKlicks(parseThreshold(DEFAULT_KLICKS))
+    setAppliedImp(parseThreshold(DEFAULT_IMPRESSIONEN))
+    setAppliedSaves(parseThreshold(DEFAULT_SAVES))
+    try {
+      localStorage.removeItem(FILTER_STORAGE_KEY)
+    } catch {
+      // localStorage nicht verfügbar — kein Eintrag zum Löschen.
+    }
   }
 
   if (unmatchedPins.length === 0) return null
@@ -269,6 +317,12 @@ function UnmatchedPinRow({
     const fd = new FormData()
     fd.set('pin_id', selectedId)
     fd.set('pinterest_pin_id', unmatched.pinterestPinId)
+    // Volle Pinterest-URL mitschicken, damit der Server pinterest_pin_url auf
+    // der pins-Tabelle setzt — Voraussetzung für die Anzeige im Bearbeiten-Modal.
+    fd.set(
+      'pinterest_pin_url',
+      `https://www.pinterest.com/pin/${unmatched.pinterestPinId}/`
+    )
     fd.set('zeitraum_von', zeitraumVon)
     fd.set('zeitraum_bis', zeitraumBis)
     if (unmatched.impressionen !== null)

@@ -8,13 +8,11 @@ import {
   calcUpdateStatus,
   calcUpdateStatusTri,
   diagnoseBoard,
-  diagnosePin,
   diffDays,
   formatDateDe,
   formatGrowth,
   formatPercent,
   formatZahl,
-  PIN_HANDLUNG,
   boardScoreTooltip,
   scoreBoardHybrid,
   thresholdsFromSettings,
@@ -33,6 +31,7 @@ import {
   type ProfilAnalyticsWithGrowth,
   type UpdateStatusTri,
 } from './analytics/utils'
+import { diagnosePinAggregated } from './analytics/diagnosePinAggregated'
 import {
   computeStatus,
   type SaisonEvent,
@@ -376,7 +375,7 @@ const HANDLUNGS_CATEGORIES: HandlungsCategory[] = [
     },
   },
   {
-    diagnose: 'hohe_impressionen_niedrige_ctr',
+    diagnose: 'optimierungspotenzial',
     emoji: '🔧',
     label: 'Optimierungspotenzial',
     subtitle:
@@ -456,7 +455,6 @@ export default async function DashboardPage() {
         `profil_name, analytics_update_datum,
          schwellwert_beobachtung, schwellwert_min_klicks,
          schwellwert_alter_recycling, schwellwert_ctr, schwellwert_impressionen,
-         schwellwert_top_performer_bonus_impressionen,
          schwellwert_board_wenig_aktiv, schwellwert_board_inaktiv,
          schwellwert_board_top_er, schwellwert_board_top_prozent,
          schwellwert_board_schwach_er, schwellwert_board_wachstum_trend,
@@ -481,6 +479,7 @@ export default async function DashboardPage() {
           `id, pin_id, datum, impressionen, klicks, saves, created_at,
            pins ( id, titel, status, created_at, geplante_veroeffentlichung, pinterest_pin_url, board_id )`
         )
+        .is('deleted_at', null)
         .order('datum', { ascending: false })
     ).catch((err: unknown) => {
       console.error('[Dashboard] pins_analytics query failed:', err)
@@ -592,9 +591,8 @@ export default async function DashboardPage() {
   // ===== Handlungsbedarf =====
   // Identische Diagnose-Logik wie /dashboard/analytics (PinsTab):
   //   - Gleiche pins_analytics-Query (alle Einträge, datum DESC).
-  //   - Gleiche Threshold-Quelle (thresholdsFromSettings).
-  //   - Gleiche Dedup-Strategie (erste Begegnung pro pin_id = neueste).
-  //   - Identischer diagnosePin()-Aufruf mit denselben Argumenten.
+  //   - Pro pin_id über alle Perioden aggregiert.
+  //   - Gemeinsame Funktion diagnosePinAggregated() mit kumulierten Werten.
   // Damit zeigen Dashboard und Analytics-Tab dieselben Pins in
   // denselben Kategorien.
   const thresholds = thresholdsFromSettings(
@@ -654,40 +652,61 @@ export default async function DashboardPage() {
     }))
     .sort((a, b) => b.created_at.localeCompare(a.created_at))
 
-  // Dedup — nur neueste Datum pro pin_id (Server sortiert DESC)
-  const seenPin = new Set<string>()
-  const actionable: ActionablePin[] = []
+  // Pro pin_id über alle Perioden aggregieren (Server liefert DESC, also ist
+  // die erste Zeile pro pin_id die neueste). Diagnose läuft auf den
+  // kumulierten Werten — identisch zum Analytics-Pins-Tab.
+  const periodsByPin = new Map<string, RawPinAnalyticsRow[]>()
+  const orderedPinIds: string[] = []
   for (const row of rawPinAnalytics) {
-    if (seenPin.has(row.pin_id)) continue
-    seenPin.add(row.pin_id)
-    const pin = row.pins
+    if (!periodsByPin.has(row.pin_id)) {
+      orderedPinIds.push(row.pin_id)
+      periodsByPin.set(row.pin_id, [])
+    }
+    periodsByPin.get(row.pin_id)!.push(row)
+  }
+  const actionable: ActionablePin[] = []
+  for (const pin_id of orderedPinIds) {
+    const periods = periodsByPin.get(pin_id) ?? []
+    const latest = periods[0]
+    const pin = latest.pins
     const hatDatum = !!pin?.geplante_veroeffentlichung
     const refDate =
       pin?.geplante_veroeffentlichung ??
       pin?.created_at?.slice(0, 10) ??
-      row.datum
+      latest.datum
     const alterTage = Math.max(0, diffDays(refDate, today))
-    const ctr = calcCtr(row.klicks, row.impressionen)
-    const diagnose = diagnosePin({
-      alterTage,
-      klicks: row.klicks,
-      impressionen: row.impressionen,
-      ctr,
+
+    let cumKlicks = 0
+    let cumImpressionen = 0
+    let cumSaves = 0
+    for (const r of periods) {
+      cumKlicks += r.klicks
+      cumImpressionen += r.impressionen
+      cumSaves += r.saves
+    }
+    const avgCtr = calcCtr(cumKlicks, cumImpressionen)
+    const result = diagnosePinAggregated({
+      cumKlicks,
+      cumImpressionen,
+      cumSaves,
+      perioden: periods.length,
+      pinAlter: hatDatum ? alterTage : null,
       hatDatum,
       thresholds,
     })
+
     actionable.push({
-      id: row.id,
-      pin_id: row.pin_id,
+      id: latest.id,
+      pin_id,
       titel: pin?.titel ?? null,
-      klicks: row.klicks,
-      impressionen: row.impressionen,
-      ctr,
+      klicks: cumKlicks,
+      impressionen: cumImpressionen,
+      ctr: avgCtr,
       alterTage,
-      letzterAnalyticsDatum: row.datum,
+      letzterAnalyticsDatum: latest.datum,
       pinterestUrl: pin?.pinterest_pin_url ?? null,
-      diagnose,
-      handlung: PIN_HANDLUNG[diagnose],
+      diagnose: result.diagnose,
+      handlung: result.handlung,
       boardId: pin?.board_id ?? null,
       // Board-Felder werden nach boardsHealth-Berechnung gefüllt.
       boardName: null,
@@ -1346,7 +1365,7 @@ export default async function DashboardPage() {
     hasAnyAnalytics,
     hiddenGemCount: groupedActions.get('hidden_gem')?.length ?? 0,
     optimierungCount:
-      groupedActions.get('hohe_impressionen_niedrige_ctr')?.length ?? 0,
+      groupedActions.get('optimierungspotenzial')?.length ?? 0,
     aktivTopPerformerCount:
       groupedActions.get('aktiver_top_performer')?.length ?? 0,
     eingeschlafenerGewinnerCount:
@@ -2380,9 +2399,6 @@ function HandlungsbedarfKategorieCard({
                   kategorie={cat.diagnose}
                   metrics={buildMetrics(cat, pinData)}
                   primaryAction={cat.primaryAction}
-                  bonusImpressionenSchwelle={
-                    thresholds.topPerformerBonusImpressionen
-                  }
                 />
               )
             })}
@@ -2402,9 +2418,6 @@ function HandlungsbedarfKategorieCard({
                       kategorie={cat.diagnose}
                       metrics={buildMetrics(cat, pinData)}
                       primaryAction={cat.primaryAction}
-                      bonusImpressionenSchwelle={
-                        thresholds.topPerformerBonusImpressionen
-                      }
                     />
                   )
                 })}

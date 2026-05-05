@@ -320,6 +320,7 @@ export type PinOption = {
   created_at: string
   geplante_veroeffentlichung: string | null
   pinterest_pin_url?: string | null
+  pinterest_pin_id?: string | null
   board_id?: string | null
 }
 
@@ -335,54 +336,34 @@ export type PinAnalyticsEntry = {
   created_at: string
 }
 
-export const PIN_DIAGNOSEN = [
-  'evergreen',
-  'aktiver_top_performer',
-  'eingeschlafener_gewinner',
-  'hidden_gem',
-  'hohe_impressionen_niedrige_ctr',
-  'noch_zu_frueh',
-  'kein_signal_thema_pruefen',
-  'beobachten',
-  'kein_signal_default',
-] as const
-export type PinDiagnose = (typeof PIN_DIAGNOSEN)[number]
+// Diagnose-Schlüssel, Labels, Badges und Handlungstexte werden zentral
+// in diagnosePinAggregated.ts gepflegt. Hier nur Re-Exports + abgeleitete
+// Records, damit bestehende Import-Pfade weiter funktionieren.
+import {
+  PIN_DIAGNOSE_KEYS,
+  PIN_DIAGNOSE_META,
+  type PinDiagnose as AggregatedPinDiagnose,
+} from './diagnosePinAggregated'
 
-export const PIN_DIAGNOSE_LABEL: Record<PinDiagnose, string> = {
-  evergreen: 'Evergreen',
-  aktiver_top_performer: 'Aktiver Top Performer',
-  eingeschlafener_gewinner: 'Eingeschlafener Gewinner',
-  hidden_gem: 'Hidden Gem',
-  hohe_impressionen_niedrige_ctr: 'Optimierungspotenzial',
-  noch_zu_frueh: 'Noch zu früh',
-  kein_signal_thema_pruefen: 'Kein Signal',
-  beobachten: 'Beobachten',
-  kein_signal_default: 'Kein relevantes Signal',
-}
+export const PIN_DIAGNOSEN = PIN_DIAGNOSE_KEYS
+export type PinDiagnose = AggregatedPinDiagnose
 
-export const PIN_DIAGNOSE_BADGE: Record<PinDiagnose, string> = {
-  evergreen: 'bg-teal-100 text-teal-700',
-  aktiver_top_performer: 'bg-green-100 text-green-700',
-  eingeschlafener_gewinner: 'bg-amber-100 text-amber-800',
-  hidden_gem: 'bg-purple-100 text-purple-700',
-  hohe_impressionen_niedrige_ctr: 'bg-orange-100 text-orange-800',
-  noch_zu_frueh: 'bg-blue-100 text-blue-700',
-  kein_signal_thema_pruefen: 'bg-gray-100 text-gray-700',
-  beobachten: 'bg-cyan-100 text-cyan-700',
-  kein_signal_default: 'bg-gray-100 text-gray-700',
-}
+export const PIN_DIAGNOSE_LABEL: Record<PinDiagnose, string> =
+  Object.fromEntries(
+    PIN_DIAGNOSE_KEYS.map((k) => [k, PIN_DIAGNOSE_META[k].label])
+  ) as Record<PinDiagnose, string>
 
-export const PIN_HANDLUNG: Record<PinDiagnose, string> = {
-  evergreen: '🌿 Zeitlos — keine Aktion nötig',
-  aktiver_top_performer: '🚀 Variante produzieren',
-  eingeschlafener_gewinner: '♻️ Neu aufsetzen',
-  hidden_gem: '🔎 SEO pushen',
-  hohe_impressionen_niedrige_ctr: '🎨 Hook optimieren',
-  noch_zu_frueh: '⏸ Abwarten',
-  kein_signal_thema_pruefen: '💤 Thema prüfen',
-  beobachten: '⭐ Noch abwarten',
-  kein_signal_default: '❌ Kein Recycling',
-}
+export const PIN_DIAGNOSE_BADGE: Record<PinDiagnose, string> =
+  Object.fromEntries(
+    PIN_DIAGNOSE_KEYS.map((k) => [k, PIN_DIAGNOSE_META[k].badge])
+  ) as Record<PinDiagnose, string>
+
+export const PIN_HANDLUNG: Record<PinDiagnose, string> = Object.fromEntries(
+  PIN_DIAGNOSE_KEYS.map((k) => [
+    k,
+    `${PIN_DIAGNOSE_META[k].emoji} ${PIN_DIAGNOSE_META[k].handlungText}`,
+  ])
+) as Record<PinDiagnose, string>
 
 // Schwellwerte — Defaults; tatsächliche Werte kommen aus den Einstellungen
 export type PinAnalyticsThresholds = {
@@ -391,16 +372,14 @@ export type PinAnalyticsThresholds = {
   mindestAlter: number
   mindestCtr: number
   mindestImpressionen: number
-  topPerformerBonusImpressionen: number
 }
 
 export const PIN_ANALYTICS_THRESHOLDS: PinAnalyticsThresholds = {
-  beobachtungszeitraum: 60,
+  beobachtungszeitraum: 65,
   mindestKlicks: 15,
   mindestAlter: 70,
   mindestCtr: 1.5,
   mindestImpressionen: 1000,
-  topPerformerBonusImpressionen: 500,
 }
 
 export type EinstellungenSchwellwerte = {
@@ -409,7 +388,6 @@ export type EinstellungenSchwellwerte = {
   schwellwert_alter_recycling: number | null
   schwellwert_ctr: number | string | null
   schwellwert_impressionen: number | null
-  schwellwert_top_performer_bonus_impressionen: number | null
 }
 
 export function thresholdsFromSettings(
@@ -436,58 +414,13 @@ export function thresholdsFromSettings(
     mindestImpressionen:
       settings?.schwellwert_impressionen ??
       PIN_ANALYTICS_THRESHOLDS.mindestImpressionen,
-    topPerformerBonusImpressionen:
-      settings?.schwellwert_top_performer_bonus_impressionen ??
-      PIN_ANALYTICS_THRESHOLDS.topPerformerBonusImpressionen,
   }
-}
-
-export function diagnosePin(args: {
-  alterTage: number
-  klicks: number
-  impressionen: number
-  ctr: number | null
-  hatDatum: boolean
-  thresholds?: PinAnalyticsThresholds
-}): PinDiagnose {
-  const t = args.thresholds ?? PIN_ANALYTICS_THRESHOLDS
-  const { alterTage, klicks, impressionen, hatDatum } = args
-  const ctrValue = args.ctr ?? 0
-
-  if (!hatDatum) return 'evergreen'
-
-  if (
-    klicks >= t.mindestKlicks &&
-    ctrValue >= t.mindestCtr &&
-    alterTage < t.mindestAlter
-  )
-    return 'aktiver_top_performer'
-
-  if (klicks >= t.mindestKlicks && alterTage >= t.mindestAlter)
-    return 'eingeschlafener_gewinner'
-
-  if (ctrValue >= t.mindestCtr && impressionen < t.mindestImpressionen)
-    return 'hidden_gem'
-
-  if (impressionen >= t.mindestImpressionen && ctrValue < t.mindestCtr)
-    return 'hohe_impressionen_niedrige_ctr'
-
-  if (alterTage < t.beobachtungszeitraum) return 'noch_zu_frueh'
-
-  if (alterTage >= t.beobachtungszeitraum && klicks === 0 && impressionen < 50)
-    return 'kein_signal_thema_pruefen'
-
-  if (klicks > 0 && ctrValue > 0) return 'beobachten'
-
-  return 'kein_signal_default'
 }
 
 export type PinAnalyticsRow = PinAnalyticsEntry & {
   pin: PinOption | null
   ctr: number | null
   alter_tage: number
-  diagnose: PinDiagnose
-  handlung: string
 }
 
 // ===========================================================
