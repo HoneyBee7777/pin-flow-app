@@ -24,7 +24,8 @@
       "Bash(xargs grep *)",
       "Bash(echo \"exit code: $?\")",
       "Bash(echo \"Exit: $?\")",
-      "Bash(echo \"Final-Exit: $?\")"
+      "Bash(echo \"Final-Exit: $?\")",
+      "Bash(node -e \"const fs = require\\('fs'\\); const path = 'app/dashboard/page.tsx'; const content = fs.readFileSync\\(path, 'utf8'\\); const lines = content.split\\('\\\\n'\\); console.log\\('total lines:', lines.length\\); console.log\\('line 1895:', JSON.stringify\\(lines[1894]\\)\\); console.log\\('line 1896:', JSON.stringify\\(lines[1895]\\)\\); console.log\\('line 1897:', JSON.stringify\\(lines[1896]\\)\\); console.log\\('line 2143:', JSON.stringify\\(lines[2142]\\)\\); console.log\\('line 2144:', JSON.stringify\\(lines[2143]\\)\\); console.log\\('line 2145:', JSON.stringify\\(lines[2144]\\)\\); console.log\\('line 2146:', JSON.stringify\\(lines[2145]\\)\\);\")"
     ]
   }
 }

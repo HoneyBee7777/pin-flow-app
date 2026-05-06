@@ -26,6 +26,7 @@ export type HandlungsbedarfPin = {
   titel: string | null
   klicks: number
   impressionen: number
+  saves: number
   ctr: number | null
   alterTage: number
   letzterAnalyticsDatum: string
@@ -250,7 +251,7 @@ function BoardLine({ pin }: { pin: HandlungsbedarfPin }) {
 type CoachingKategorie =
   | 'aktiver_top_performer'
   | 'hidden_gem'
-  | 'optimierungspotenzial'
+  | 'reichweite_ohne_wirkung'
   | 'eingeschlafener_gewinner'
 
 type BoardKey =
@@ -294,7 +295,7 @@ const COACHING_MATRIX: Record<
       'Schwaches Board limitiert den Pin – überlege, ob ein stärkeres Board zur Pin-Thematik passen könnte.',
     kein: 'Hidden Gem ohne Board-Zuordnung – einem thematisch passenden Board zuordnen, dann können Keywords und Board gemeinsam wirken.',
   },
-  optimierungspotenzial: {
+  reichweite_ohne_wirkung: {
     top: 'Top-Board liefert Reichweite, aber Hook und Design konvertieren nicht – erstelle einen neuen Pin mit gleichem Titel und gleicher Beschreibung, aber anderem Hook und Design.',
     wachstum:
       'Wachstums-Board liefert Sichtbarkeit, aber Klicks fehlen – erstelle einen neuen Pin mit gleichem Titel und gleicher Beschreibung, aber anderem Hook und Design.',
@@ -349,7 +350,7 @@ function isCoachingKategorie(k: string): k is CoachingKategorie {
   return (
     k === 'aktiver_top_performer' ||
     k === 'hidden_gem' ||
-    k === 'optimierungspotenzial' ||
+    k === 'reichweite_ohne_wirkung' ||
     k === 'eingeschlafener_gewinner'
   )
 }

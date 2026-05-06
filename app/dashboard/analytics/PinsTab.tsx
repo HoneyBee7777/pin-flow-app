@@ -15,11 +15,13 @@ import {
   type UnmatchedPin,
 } from './actions'
 import SharedSortableTh from '@/components/SortableTh'
+import InfoTooltip from '@/components/InfoTooltip'
 import UnmatchedPinsSection from './UnmatchedPinsSection'
 import PinAnalyticsEditModal from './PinAnalyticsEditModal'
 import type { DeletedPinEntry } from './AnalyticsClient'
 import {
   calcCtr,
+  calcEngagement,
   effectiveZeitraum,
   formatDateDe,
   formatNumber,
@@ -31,19 +33,55 @@ import {
   type PinAnalyticsRow,
   type PinAnalyticsThresholds,
   type PinOption,
+  type UserPinBenchmark,
 } from './utils'
 import {
   diagnosePinAggregated,
   formatPinAge,
   PIN_DIAGNOSE_META,
+  PIN_DIAGNOSE_TOOLTIP,
   type PinDiagnose,
 } from './diagnosePinAggregated'
+import type { AccountNicheProfile } from '@/lib/account-niche-profile'
+import {
+  getEinordnung,
+  type Einordnung,
+  type Range,
+} from '@/lib/niche-benchmarks'
+
+// Spalten-Tooltips für die Top-Pins-Tabelle — Klartext-Erklärung was die
+// Kennzahl bedeutet und warum sie wichtig ist. Werden über InfoTooltip neben
+// jedem Spaltenkopf angezeigt.
+const COLUMN_TOOLTIPS = {
+  klicks:
+    'Wie oft Menschen vom Pin auf deine Website geklickt haben. Das ist die wichtigste Zahl — sie zeigt, ob dein Pin Besucher bringt. (Achtung: Das sind ausgehende Klicks zur Website — nicht das Vergrößern des Pins auf Pinterest.)',
+  impressionen:
+    'Wie oft dein Pin überhaupt angezeigt wurde — also wie viele Menschen ihn auf Pinterest gesehen haben. Sagt nichts darüber aus, ob jemand reagiert hat.',
+  saves:
+    'Wie oft Menschen deinen Pin auf eigene Boards gespeichert haben. Das ist Pinterests wichtigstes Signal: Viele Saves → Pinterest spielt deinen Pin mehr aus.',
+  ctr:
+    'Von 100 Menschen, die deinen Pin sehen — wie viele klicken auf deine Website? Beispiel: 1,5 % heißt: 1,5 von 100 klicken durch. Klingt wenig, ist aber bei Pinterest ein guter Wert.',
+  saveRate:
+    'Von 100 Menschen, die deinen Pin sehen — wie viele speichern ihn auf eigenen Boards? Beispiel: 0,5 % heißt: 1 von 200 speichert ihn. Pinterest belohnt hohe Save-Rates mit mehr Reichweite.',
+  er:
+    'Engagement-Rate. Zeigt die Gesamtwirkung eines Pins: von 100 Sehern, wie viele reagieren (durch Speichern oder Klicken)? Pinterest belohnt hohe Engagement-Werte mit mehr Reichweite. Beispiel: 1,5 % heißt: 1,5 von 100 Sehern reagieren irgendwie auf den Pin.',
+  diagnose:
+    'Welche Stärke und Schwäche hat dieser Pin? Die Diagnose entscheidet, was du als nächstes tun solltest.',
+  handlung:
+    'Was solltest du mit diesem Pin tun? Konkrete Empfehlung basierend auf der Diagnose.',
+  perioden:
+    'In wie vielen monatlichen Daten-Imports kommt dieser Pin schon vor? Mehr Perioden = stabilere Aussage.',
+  alter:
+    'Wie viele Tage seit der ersten Veröffentlichung. Pinterest braucht Zeit, um neue Pins voll auszuspielen — meist 60+ Tage.',
+} as const
 
 export default function PinsTab({
   pinAnalytics,
   deletedPinAnalytics,
   pins,
   thresholds,
+  benchmark,
+  nicheProfile,
   unmatchedPins,
   unmatchedZeitraumVon,
   unmatchedZeitraumBis,
@@ -55,6 +93,8 @@ export default function PinsTab({
   // Zuordnen) — die Pin-Tabelle selbst nutzt pinAnalytics.pin.
   pins: PinOption[]
   thresholds: PinAnalyticsThresholds
+  benchmark: UserPinBenchmark | null
+  nicheProfile: AccountNicheProfile
   unmatchedPins: UnmatchedPin[]
   unmatchedZeitraumVon: string
   unmatchedZeitraumBis: string
@@ -90,6 +130,11 @@ export default function PinsTab({
       }
       const latest = rows[0]
       const avgCtr = calcCtr(cumKlicks, cumImpressionen)
+      const saveRate =
+        cumImpressionen > 0
+          ? (cumSaves / cumImpressionen) * 100
+          : null
+      const engagementRate = calcEngagement(cumKlicks, cumSaves, cumImpressionen)
       const perioden = rows.length
       const hatDatum = !!latest.pin?.geplante_veroeffentlichung
       const result = diagnosePinAggregated({
@@ -109,6 +154,8 @@ export default function PinsTab({
         cumImpressionen,
         cumSaves,
         avgCtr,
+        saveRate,
+        engagementRate,
         perioden,
         pinAlter: hatDatum ? latest.alter_tage : null,
         diagnose: result.diagnose,
@@ -192,6 +239,8 @@ export default function PinsTab({
         onSkipped={onUnmatchedPinResolved}
       />
 
+      <TableLegend />
+
       <PinAnalyticsTable
         rows={aggregatedPins}
         onDelete={onDelete}
@@ -201,7 +250,11 @@ export default function PinsTab({
 
       <DeletedPinsSection deletedEntries={deletedPinAnalytics} />
 
-      <ThresholdInfo thresholds={thresholds} />
+      <ThresholdInfo
+        thresholds={thresholds}
+        benchmark={benchmark}
+        nicheProfile={nicheProfile}
+      />
 
       <PinAnalyticsEditModal
         open={editEntry !== null}
@@ -210,6 +263,49 @@ export default function PinsTab({
         entry={editEntry}
         pins={pins}
       />
+    </div>
+  )
+}
+
+// ===========================================================
+// Info-Block oberhalb der Tabelle — kompakte Spalten-Legende, damit
+// Erstnutzer ohne Tooltip-Hover die wichtigsten Spalten verstehen.
+// ===========================================================
+function TableLegend() {
+  return (
+    <div className="rounded-md border border-gray-200 bg-gray-50 p-3 text-[13px] text-gray-600">
+      <div className="flex items-start gap-2">
+        <span aria-hidden className="mt-0.5 text-gray-400">
+          ⓘ
+        </span>
+        <div className="space-y-1">
+          <p className="font-medium text-gray-700">So liest du die Tabelle:</p>
+          <ul className="space-y-0.5">
+            <li>
+              <strong>Klicks</strong> — wie oft auf deine Website geklickt wurde
+              (das wichtigste Ziel)
+            </li>
+            <li>
+              <strong>CTR</strong> — Klickrate: von 100 Sehern, wie viele
+              klicken? (Pinterest-Schnitt: 0,3–0,8 %)
+            </li>
+            <li>
+              <strong>Save-Rate</strong> — Speicherrate: von 100 Sehern, wie
+              viele speichern? (Schnitt: 0,2–0,5 %)
+            </li>
+            <li>
+              <strong>Diagnose</strong> — was ist los mit dem Pin?
+            </li>
+            <li>
+              <strong>Handlung</strong> — was solltest du jetzt damit tun?
+            </li>
+            <li>
+              Klick auf <span className="font-mono">▶</span> neben einem
+              Pin-Titel für Details und Verlauf.
+            </li>
+          </ul>
+        </div>
+      </div>
     </div>
   )
 }
@@ -225,6 +321,8 @@ type AggregatedPin = {
   cumImpressionen: number
   cumSaves: number
   avgCtr: number | null
+  saveRate: number | null
+  engagementRate: number | null
   perioden: number
   pinAlter: number | null
   diagnose: PinDiagnose
@@ -237,11 +335,40 @@ type SortKey =
   | 'cumImpressionen'
   | 'cumSaves'
   | 'avgCtr'
+  | 'saveRate'
+  | 'engagementRate'
   | 'diagnose'
   | 'handlung'
   | 'perioden'
   | 'pinAlter'
 type SortDir = 'asc' | 'desc'
+
+// Sekundäre Sortierung pro Kategorie — wenn nach 'diagnose' gruppiert wird,
+// soll die spec-gemäße Default-Reihenfolge greifen:
+//   Aktiver Top Performer / Eingeschlafener Gewinner: Klicks DESC
+//   Hidden Gem: CTR DESC
+//   Reichweite ohne Wirkung: Impressionen DESC
+//   Stiller Pin / Noch zu früh: Alter DESC
+function categorySecondaryOrder(
+  a: AggregatedPin,
+  b: AggregatedPin
+): number {
+  if (a.diagnose !== b.diagnose) return 0
+  switch (a.diagnose) {
+    case 'aktiver_top_performer':
+    case 'eingeschlafener_gewinner':
+      return b.cumKlicks - a.cumKlicks
+    case 'hidden_gem':
+      return (b.avgCtr ?? -Infinity) - (a.avgCtr ?? -Infinity)
+    case 'reichweite_ohne_wirkung':
+      return b.cumImpressionen - a.cumImpressionen
+    case 'stiller_pin':
+    case 'noch_zu_frueh':
+      return (b.pinAlter ?? -Infinity) - (a.pinAlter ?? -Infinity)
+    default:
+      return 0
+  }
+}
 
 function compareAggregated(
   a: AggregatedPin,
@@ -270,6 +397,13 @@ function compareAggregated(
     case 'avgCtr':
       res = (a.avgCtr ?? -Infinity) - (b.avgCtr ?? -Infinity)
       break
+    case 'saveRate':
+      res = (a.saveRate ?? -Infinity) - (b.saveRate ?? -Infinity)
+      break
+    case 'engagementRate':
+      res =
+        (a.engagementRate ?? -Infinity) - (b.engagementRate ?? -Infinity)
+      break
     case 'diagnose':
       res = PIN_DIAGNOSE_LABEL[a.diagnose].localeCompare(
         PIN_DIAGNOSE_LABEL[b.diagnose],
@@ -285,6 +419,9 @@ function compareAggregated(
     case 'pinAlter':
       res = (a.pinAlter ?? Infinity) - (b.pinAlter ?? Infinity)
       break
+  }
+  if (res === 0 && key === 'diagnose') {
+    return categorySecondaryOrder(a, b)
   }
   return res * sign
 }
@@ -358,7 +495,9 @@ function PinAnalyticsTable({
               dir={sortDir}
               onSort={toggleSort}
             >
-              Klicks ∑
+              <span className="whitespace-nowrap">
+                Klicks ∑<InfoTooltip text={COLUMN_TOOLTIPS.klicks} />
+              </span>
             </SortableTh>
             <SortableTh
               sortKey="cumImpressionen"
@@ -366,7 +505,9 @@ function PinAnalyticsTable({
               dir={sortDir}
               onSort={toggleSort}
             >
-              Imp ∑
+              <span className="whitespace-nowrap">
+                Imp ∑<InfoTooltip text={COLUMN_TOOLTIPS.impressionen} />
+              </span>
             </SortableTh>
             <SortableTh
               sortKey="cumSaves"
@@ -374,7 +515,9 @@ function PinAnalyticsTable({
               dir={sortDir}
               onSort={toggleSort}
             >
-              Saves ∑
+              <span className="whitespace-nowrap">
+                Saves ∑<InfoTooltip text={COLUMN_TOOLTIPS.saves} />
+              </span>
             </SortableTh>
             <SortableTh
               sortKey="avgCtr"
@@ -382,7 +525,29 @@ function PinAnalyticsTable({
               dir={sortDir}
               onSort={toggleSort}
             >
-              Ø CTR
+              <span className="whitespace-nowrap">
+                Ø CTR<InfoTooltip text={COLUMN_TOOLTIPS.ctr} />
+              </span>
+            </SortableTh>
+            <SortableTh
+              sortKey="saveRate"
+              current={sortKey}
+              dir={sortDir}
+              onSort={toggleSort}
+            >
+              <span className="whitespace-nowrap">
+                Save-Rate<InfoTooltip text={COLUMN_TOOLTIPS.saveRate} />
+              </span>
+            </SortableTh>
+            <SortableTh
+              sortKey="engagementRate"
+              current={sortKey}
+              dir={sortDir}
+              onSort={toggleSort}
+            >
+              <span className="whitespace-nowrap">
+                ER<InfoTooltip text={COLUMN_TOOLTIPS.er} />
+              </span>
             </SortableTh>
             <SortableTh
               sortKey="diagnose"
@@ -390,7 +555,9 @@ function PinAnalyticsTable({
               dir={sortDir}
               onSort={toggleSort}
             >
-              Diagnose
+              <span className="whitespace-nowrap">
+                Diagnose<InfoTooltip text={COLUMN_TOOLTIPS.diagnose} />
+              </span>
             </SortableTh>
             <SortableTh
               sortKey="handlung"
@@ -398,7 +565,9 @@ function PinAnalyticsTable({
               dir={sortDir}
               onSort={toggleSort}
             >
-              Handlung
+              <span className="whitespace-nowrap">
+                Handlung<InfoTooltip text={COLUMN_TOOLTIPS.handlung} />
+              </span>
             </SortableTh>
             <SortableTh
               sortKey="perioden"
@@ -406,7 +575,9 @@ function PinAnalyticsTable({
               dir={sortDir}
               onSort={toggleSort}
             >
-              Perioden
+              <span className="whitespace-nowrap">
+                Perioden<InfoTooltip text={COLUMN_TOOLTIPS.perioden} />
+              </span>
             </SortableTh>
             <SortableTh
               sortKey="pinAlter"
@@ -414,7 +585,9 @@ function PinAnalyticsTable({
               dir={sortDir}
               onSort={toggleSort}
             >
-              Alter
+              <span className="whitespace-nowrap">
+                Alter<InfoTooltip text={COLUMN_TOOLTIPS.alter} />
+              </span>
             </SortableTh>
             <Th align="right">Aktion</Th>
           </tr>
@@ -474,9 +647,16 @@ function PinAnalyticsTable({
                   <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">
                     {hasPeriods ? formatPercent(agg.avgCtr) : '—'}
                   </td>
+                  <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">
+                    {hasPeriods ? formatPercent(agg.saveRate, 2) : '—'}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">
+                    {hasPeriods ? formatPercent(agg.engagementRate, 2) : '—'}
+                  </td>
                   <td className="px-4 py-3 text-sm">
                     <span
-                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${PIN_DIAGNOSE_BADGE[agg.diagnose]}`}
+                      className={`inline-flex cursor-help items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${PIN_DIAGNOSE_BADGE[agg.diagnose]}`}
+                      title={PIN_DIAGNOSE_TOOLTIP[agg.diagnose]}
                     >
                       {PIN_DIAGNOSE_META[agg.diagnose].emoji}{' '}
                       {PIN_DIAGNOSE_LABEL[agg.diagnose]}
@@ -524,7 +704,7 @@ function PinAnalyticsTable({
                 </tr>
                 {hasPeriods && isOpen && (
                   <tr className="bg-gray-50">
-                    <td colSpan={11} className="px-4 py-3">
+                    <td colSpan={13} className="px-4 py-3">
                       <PinTimeline history={agg.history} pin={row.pin} />
                     </td>
                   </tr>
@@ -574,6 +754,12 @@ function PinTimeline({
             <th className="px-3 py-2 text-left font-semibold uppercase tracking-wide text-gray-500">
               CTR
             </th>
+            <th className="px-3 py-2 text-left font-semibold uppercase tracking-wide text-gray-500">
+              Save-Rate
+            </th>
+            <th className="px-3 py-2 text-left font-semibold uppercase tracking-wide text-gray-500">
+              ER
+            </th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
@@ -582,6 +768,18 @@ function PinTimeline({
             const prev = history[i + 1]
             const ctr = calcCtr(row.klicks, row.impressionen)
             const prevCtr = prev ? calcCtr(prev.klicks, prev.impressionen) : null
+            const saveRate =
+              row.impressionen > 0
+                ? (row.saves / row.impressionen) * 100
+                : null
+            const prevSaveRate =
+              prev && prev.impressionen > 0
+                ? (prev.saves / prev.impressionen) * 100
+                : null
+            const er = calcEngagement(row.klicks, row.saves, row.impressionen)
+            const prevEr = prev
+              ? calcEngagement(prev.klicks, prev.saves, prev.impressionen)
+              : null
             return (
               <tr key={row.id} className="text-gray-700">
                 <td className="whitespace-nowrap px-3 py-2 font-medium text-gray-900">
@@ -610,6 +808,20 @@ function PinTimeline({
                 </td>
                 <td className="whitespace-nowrap px-3 py-2">
                   <InlineMetricDelta value={ctr} prev={prevCtr} format="percent" />
+                </td>
+                <td className="whitespace-nowrap px-3 py-2">
+                  <InlineMetricDelta
+                    value={saveRate}
+                    prev={prevSaveRate}
+                    format="percent"
+                  />
+                </td>
+                <td className="whitespace-nowrap px-3 py-2">
+                  <InlineMetricDelta
+                    value={er}
+                    prev={prevEr}
+                    format="percent"
+                  />
                 </td>
               </tr>
             )
@@ -715,61 +927,221 @@ function SortableTh({
 }
 
 // ===========================================================
-// Schwellwert-Info — beschreibt jede Diagnose-Kategorie mit den
-// aktuellen Schwellwerten aus den Einstellungen.
+// Schwellwert-Info — erklärt das Diagnose-System in Klartext und zeigt
+// die persönliche Benchmark sowie die aktuellen Sicherheits-Schwellen.
 // ===========================================================
 function ThresholdInfo({
-  thresholds,
+  thresholds: t,
+  benchmark,
+  nicheProfile,
 }: {
   thresholds: PinAnalyticsThresholds
+  benchmark: UserPinBenchmark | null
+  nicheProfile: AccountNicheProfile
 }) {
+  const fmt = (v: number | null, digits = 2): string =>
+    v === null || !Number.isFinite(v) ? '—' : v.toFixed(digits)
+  const fmtImp = (v: number | null): string =>
+    v === null || !Number.isFinite(v)
+      ? '—'
+      : v.toLocaleString('de-DE')
+  const ctrBoostProzent = Math.round((t.ctrBoostFaktor - 1) * 100)
+  const ctrBoosted = (
+    (t.medianCtr ?? t.fallbackMindestCtr) * t.ctrBoostFaktor
+  )
+    .toFixed(2)
+    .replace('.', ',')
+  // Nischen-Einordnung nur wenn klare Hauptnische erkennbar ist —
+  // sonst vergleichen wir uns gegen Branchenwerte, die nichts mit dem
+  // Account zu tun haben.
+  const useNicheVergleich =
+    nicheProfile.primaryNiche !== null && !nicheProfile.isMixed
+  const nicheLabel = nicheProfile.primaryNiche?.label ?? null
   return (
     <details className="rounded-md border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600">
       <summary className="cursor-pointer text-sm font-medium text-gray-900">
-        Aktuelle Diagnose-Schwellwerte
+        So funktioniert die Diagnose
       </summary>
-      <ul className="mt-2 space-y-1">
+
+      <p className="mt-3">
+        Wir vergleichen jeden Pin mit deinem eigenen Durchschnitt. Performt er
+        besser oder schlechter? Plus ein paar Sicherheits-Schwellen, damit
+        Zufalls-Klicks nicht überbewertet werden.
+      </p>
+
+      <ul className="mt-3 space-y-1">
         <li>
-          ⭐ <strong>Aktiver Top Performer:</strong> ≥{' '}
-          {thresholds.mindestKlicks} Klicks + CTR ≥ {thresholds.mindestCtr}% +
-          Alter &lt; {thresholds.mindestAlter} Tage
+          ⭐ <strong>Aktiver Top Performer:</strong> Beide Signale stark —
+          Pinterest und Nutzer reagieren positiv.
         </li>
         <li>
-          ♻️ <strong>Eingeschlafener Gewinner:</strong> ≥{' '}
-          {thresholds.mindestKlicks} Klicks + Alter ≥ {thresholds.mindestAlter}{' '}
-          Tage
+          💎 <strong>Hidden Gem:</strong> Hohe Klickrate, aber wenig Reichweite.
+          Hook gut, SEO schwach.
         </li>
         <li>
-          💎 <strong>Hidden Gem:</strong> CTR ≥ {thresholds.mindestCtr}% +
-          Impressionen &lt; {thresholds.mindestImpressionen}
+          🔧 <strong>Reichweite ohne Wirkung:</strong> Viel Reichweite, wenig
+          Klicks. SEO gut, Hook schwach.
         </li>
         <li>
-          🔧 <strong>Optimierungspotenzial:</strong> Impressionen ≥{' '}
-          {thresholds.mindestImpressionen} + CTR &lt; {thresholds.mindestCtr}%
+          ♻️ <strong>Eingeschlafener Gewinner:</strong> Früher stark, jetzt zu
+          alt — Zeit fürs Recycling.
         </li>
         <li>
-          ⏳ <strong>Noch zu früh:</strong> Alter &lt;{' '}
-          {thresholds.beobachtungszeitraum} Tage — zu wenig Daten für Bewertung
+          💤 <strong>Stiller Pin:</strong> Kein Signal — archivieren oder neu
+          aufsetzen.
         </li>
         <li>
-          💤 <strong>Stiller Pin:</strong> Alter ≥{' '}
-          {thresholds.beobachtungszeitraum} Tage ohne klares Signal
-        </li>
-        <li>
-          ⚠️ <strong>Kein Datum:</strong> Veröffentlichungsdatum fehlt in der
-          Pin-Datenbank
+          ⏳ <strong>Noch zu früh:</strong> Zu wenig Daten — abwarten.
         </li>
       </ul>
-      <p className="mt-2 text-xs text-gray-500">
-        Schwellwerte anpassen in den{' '}
+
+      <div className="mt-3 border-t border-gray-200 pt-2">
+        <p className="font-medium text-gray-900">
+          Womit wir vergleichen — deine persönliche Benchmark
+        </p>
+        {useNicheVergleich && nicheLabel ? (
+          <p className="mt-0.5 text-[11px] text-gray-500">
+            Hauptnische: {nicheLabel} (
+            {Math.round(nicheProfile.primaryShare * 100)} % deiner Pins) —
+            Einordnung gegen Branchenschnitt.
+          </p>
+        ) : (
+          <p className="mt-0.5 text-[11px] text-gray-500">
+            Keine klare Hauptnische erkannt — Branchenvergleich ist
+            ausgeblendet, Account-Median bleibt aktiv.
+          </p>
+        )}
+        {t.medianCtr === null &&
+        t.medianSaveRate === null &&
+        t.medianImpressionen === null ? (
+          <p className="mt-1 text-gray-500">
+            Noch keine Benchmark berechnet — solange weniger als 10
+            qualifizierte Pins vorliegen, greift der Fallback-CTR{' '}
+            {t.fallbackMindestCtr}%.
+          </p>
+        ) : (
+          <ul className="mt-1 space-y-1">
+            <li>
+              <strong>Median CTR:</strong> {fmt(t.medianCtr)}% — das ist deine
+              durchschnittliche Klickrate. Pins müssen {ctrBoostProzent}%
+              drüber liegen, um als klickstark zu gelten (also ab {ctrBoosted}
+              %).
+              <InlineNicheEinordnung
+                value={t.medianCtr}
+                range={
+                  useNicheVergleich
+                    ? nicheProfile.primaryNiche!.ctr
+                    : null
+                }
+                nicheLabel={nicheLabel}
+              />
+            </li>
+            <li>
+              <strong>Median Save-Rate:</strong> {fmt(t.medianSaveRate)}% — das
+              ist deine durchschnittliche Speicher-Rate. Liegt ein Pin drüber,
+              mag Pinterest ihn.
+              <InlineNicheEinordnung
+                value={t.medianSaveRate}
+                range={
+                  useNicheVergleich
+                    ? nicheProfile.primaryNiche!.save_rate
+                    : null
+                }
+                nicheLabel={nicheLabel}
+              />
+            </li>
+            <li>
+              <strong>Median Impressionen:</strong> {fmtImp(t.medianImpressionen)}{' '}
+              — Referenzwert (Reichweite ist account-spezifisch und wird nicht
+              für Branchen-Vergleiche genutzt).
+            </li>
+            {benchmark?.qualifiziertePins != null && (
+              <li className="text-gray-500">
+                Berechnet aus {benchmark.qualifiziertePins} Pins, die jünger als
+                90 Tage sind und mindestens 100 Impressionen haben.
+              </li>
+            )}
+          </ul>
+        )}
+      </div>
+
+      <div className="mt-3 border-t border-gray-200 pt-2">
+        <p className="font-medium text-gray-900">Sicherheits-Schwellen</p>
+        <p className="mt-1">
+          Damit kleine Stichproben nicht fehlinterpretiert werden, gelten diese
+          Mindestwerte:
+        </p>
+        <ul className="mt-1 space-y-0.5">
+          <li>
+            – Mindestens {t.minImpCtrUrteil} Impressionen, bevor wir eine
+            Klickrate bewerten
+          </li>
+          <li>
+            – Mindestens {t.minImpReichweiteStark} Impressionen, bevor wir
+            sagen „Pinterest pusht den Pin"
+          </li>
+          <li>
+            – Mindestens {t.minKlicksNutzerSignal} Klicks, bevor wir sagen
+            „Menschen klicken den Pin gerne"
+          </li>
+          <li>
+            – Mindestens {t.minKlicksTopPerformer} Klicks für Top Performer-Status
+          </li>
+        </ul>
+      </div>
+
+      <p className="mt-3 text-xs text-gray-500">
+        Schwellen ändern? →{' '}
         <Link
-          href="/dashboard/einstellungen"
+          href="/dashboard/einstellungen#pin-schwellwerte"
           className="font-medium text-red-600 hover:underline"
         >
-          → Einstellungen
+          Einstellungen
         </Link>
       </p>
     </details>
+  )
+}
+
+// Inline-Nischen-Einordnung neben einem Median-Wert. Zeigt nur etwas an,
+// wenn eine Nischen-Range vorliegt UND der Wert auswertbar ist — sonst still.
+const INLINE_EINORDNUNG_COLOR: Record<Einordnung['color'], string> = {
+  green: 'text-green-700',
+  gray: 'text-gray-500',
+  orange: 'text-orange-700',
+}
+const INLINE_EINORDNUNG_LABEL: Record<Einordnung['label'], string> = {
+  'top-performer': 'Top-Performer',
+  überdurchschnittlich: 'überdurchschnittlich',
+  durchschnittlich: 'durchschnittlich',
+  'unter-durchschnitt': 'unter Branchenschnitt',
+}
+
+function InlineNicheEinordnung({
+  value,
+  range,
+  nicheLabel,
+}: {
+  value: number | null
+  range: Range | null
+  nicheLabel: string | null
+}) {
+  if (
+    !range ||
+    !nicheLabel ||
+    value === null ||
+    !Number.isFinite(value)
+  ) {
+    return null
+  }
+  const e = getEinordnung(value, range)
+  return (
+    <span
+      className={`ml-1 whitespace-nowrap text-[11px] font-medium ${INLINE_EINORDNUNG_COLOR[e.color]}`}
+    >
+      {' '}
+      — {e.icon} {INLINE_EINORDNUNG_LABEL[e.label]} für {nicheLabel}
+    </span>
   )
 }
 

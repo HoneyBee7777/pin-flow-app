@@ -80,7 +80,7 @@ export type BuildBriefingInput = {
   // Pin-Handlungsbedarf
   hasAnyAnalytics: boolean
   hiddenGemCount: number
-  optimierungCount: number
+  reichweiteOhneWirkungCount: number
   aktivTopPerformerCount: number
   eingeschlafenerGewinnerCount: number
 
@@ -218,13 +218,13 @@ export function buildBriefingItems(
         sectionId: BRIEFING_ANCHORS.pinHandlung,
         prio: 'hoch',
       })
-    } else if (input.optimierungCount > 0) {
+    } else if (input.reichweiteOhneWirkungCount > 0) {
       items.push({
         icon: '🔧',
         parts: [
-          bold(String(input.optimierungCount)),
+          bold(String(input.reichweiteOhneWirkungCount)),
           txt(
-            ` ${input.optimierungCount === 1 ? 'Pin' : 'Pins'} mit Optimierungspotenzial – Hooks und Designs überarbeiten.`
+            ` ${input.reichweiteOhneWirkungCount === 1 ? 'Pin' : 'Pins'} mit Reichweite ohne Wirkung – Pinterest spielt sie aus, aber niemand klickt durch. Cover und Hooks neu gestalten.`
           ),
         ],
         sectionLabel: 'Bestehende Pins optimieren',

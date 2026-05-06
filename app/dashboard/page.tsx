@@ -31,7 +31,15 @@ import {
   type ProfilAnalyticsWithGrowth,
   type UpdateStatusTri,
 } from './analytics/utils'
-import { diagnosePinAggregated } from './analytics/diagnosePinAggregated'
+import {
+  diagnosePinAggregated,
+  PIN_DIAGNOSE_TOOLTIP,
+} from './analytics/diagnosePinAggregated'
+import { loadUserBenchmark } from './analytics/benchmark'
+import { loadAccountNicheProfile } from './analytics/account-niche'
+import { calculateCoachingDiagnoses } from '@/lib/account-coaching'
+import AccountDiagnoseSection from './AccountDiagnoseSection'
+import ProfilGesundheitBlock from './ProfilGesundheitBlock'
 import {
   computeStatus,
   type SaisonEvent,
@@ -125,6 +133,7 @@ type ActionablePin = {
   titel: string | null
   klicks: number
   impressionen: number
+  saves: number
   ctr: number | null
   alterTage: number
   letzterAnalyticsDatum: string
@@ -324,10 +333,13 @@ type HandlungsCategory = {
   counterBg: string
   primaryAction: ActionButton
   metrics: Array<
-    'klicks' | 'impressionen' | 'ctr' | 'alter' | 'datum' | 'push'
+    'klicks' | 'impressionen' | 'saves' | 'ctr' | 'alter' | 'datum' | 'push'
   >
   metricLabels: Partial<
-    Record<'klicks' | 'impressionen' | 'ctr' | 'alter' | 'datum' | 'push', string>
+    Record<
+      'klicks' | 'impressionen' | 'saves' | 'ctr' | 'alter' | 'datum' | 'push',
+      string
+    >
   >
 }
 
@@ -338,20 +350,20 @@ const HANDLUNGS_CATEGORIES: HandlungsCategory[] = [
     label: 'Aktiver Top Performer',
     subtitle:
       'Diese Pins laufen stark – produziere Varianten solange der Algorithmus pusht.',
-    tooltip:
-      'Deine stärksten Pins nach Klicks. Pins jünger als 70 Tage mit mindestens 15 Klicks performen aktiv. Pinterest pusht neue Pins in den ersten 60-90 Tagen besonders stark – nutze dieses Zeitfenster.',
+    tooltip: PIN_DIAGNOSE_TOOLTIP.aktiver_top_performer,
     iconBg: 'bg-green-100 text-green-700',
     counterBg: 'bg-green-100 text-green-700',
     primaryAction: {
       type: 'variante',
       varianteTyp: 'variante',
-      label: 'Variante produzieren',
+      label: 'Variante erstellen',
     },
-    metrics: ['klicks', 'ctr', 'impressionen', 'alter', 'push'],
+    metrics: ['klicks', 'ctr', 'impressionen', 'saves', 'alter', 'push'],
     metricLabels: {
       klicks: 'Klicks',
       ctr: 'CTR',
       impressionen: 'Impressionen',
+      saves: 'Saves',
       alter: 'alt',
       push: 'Algorithmus-Push',
     },
@@ -361,39 +373,39 @@ const HANDLUNGS_CATEGORIES: HandlungsCategory[] = [
     emoji: '💎',
     label: 'Hidden Gem',
     subtitle:
-      'Hohe CTR wenig Reichweite – Hook und Design top aber SEO schwach – Keywords und Boards optimieren.',
-    tooltip:
-      'Pins mit einer CTR über 1,5% aber weniger als 1.000 Impressionen. Der Hook funktioniert – aber das SEO ist schwach. Keywords und Board optimieren für mehr Reichweite.',
+      'Hohe CTR bei wenig Reichweite – Hook und Design funktionieren, aber Pinterest findet ihn nicht.',
+    tooltip: PIN_DIAGNOSE_TOOLTIP.hidden_gem,
     iconBg: 'bg-blue-100 text-blue-700',
     counterBg: 'bg-blue-100 text-blue-700',
     primaryAction: { type: 'edit', label: 'Keywords optimieren' },
-    metrics: ['ctr', 'impressionen', 'klicks'],
+    metrics: ['ctr', 'impressionen', 'klicks', 'saves'],
     metricLabels: {
       ctr: 'CTR',
       impressionen: 'Impressionen',
       klicks: 'Klicks',
+      saves: 'Saves',
     },
   },
   {
-    diagnose: 'optimierungspotenzial',
+    diagnose: 'reichweite_ohne_wirkung',
     emoji: '🔧',
-    label: 'Optimierungspotenzial',
+    label: 'Reichweite ohne Wirkung',
     subtitle:
-      'Viel ausgespielt wenig geklickt – SEO läuft, Hook und Design optimieren.',
-    tooltip:
-      'Viel ausgespielt (SEO funktioniert) aber wenig geklickt. Titel und Beschreibung können identisch bleiben — sie funktionieren für den Algorithmus. Was geändert werden muss: Hook-Text auf dem Bild und Pin-Design. Erstelle einen neuen Pin mit demselben Titel aber anderem Hook und Design.',
+      'Pinterest spielt diesen Pin gut aus – aber zu wenige Menschen klicken durch.',
+    tooltip: PIN_DIAGNOSE_TOOLTIP.reichweite_ohne_wirkung,
     iconBg: 'bg-orange-100 text-orange-700',
     counterBg: 'bg-orange-100 text-orange-700',
     primaryAction: {
       type: 'variante',
       varianteTyp: 'variante',
-      label: 'Hook optimieren',
+      label: 'Hook & Design optimieren',
     },
-    metrics: ['impressionen', 'ctr', 'klicks'],
+    metrics: ['impressionen', 'ctr', 'klicks', 'saves'],
     metricLabels: {
       impressionen: 'Impressionen',
       ctr: 'CTR',
       klicks: 'Klicks',
+      saves: 'Saves',
     },
   },
   {
@@ -402,18 +414,18 @@ const HANDLUNGS_CATEGORIES: HandlungsCategory[] = [
     label: 'Eingeschlafener Gewinner',
     subtitle:
       'Pins die früher stark liefen – jetzt Zeit fürs Recycling mit frischem Design.',
-    tooltip:
-      'Pins die älter als 120 Tage sind und mindestens 15 Klicks hatten – aber nicht mehr aktiv performen. Produziere eine neue Variante mit frischem Design und aktualisierten Keywords.',
-    iconBg: 'bg-gray-200 text-gray-700',
-    counterBg: 'bg-gray-200 text-gray-700',
+    tooltip: PIN_DIAGNOSE_TOOLTIP.eingeschlafener_gewinner,
+    iconBg: 'bg-amber-100 text-amber-800',
+    counterBg: 'bg-amber-100 text-amber-800',
     primaryAction: {
       type: 'variante',
       varianteTyp: 'recycling',
-      label: 'Recycling starten',
+      label: 'Neu aufsetzen',
     },
-    metrics: ['klicks', 'alter', 'datum'],
+    metrics: ['klicks', 'saves', 'alter', 'datum'],
     metricLabels: {
       klicks: 'Frühere Klicks',
+      saves: 'Saves',
       alter: 'alt',
       datum: 'Letzter Analytics-Eintrag',
     },
@@ -441,6 +453,8 @@ export default async function DashboardPage() {
     contentInhalteRes,
     keywordsRes,
     pinKeywordsRes,
+    benchmark,
+    nicheProfile,
   ] = await Promise.all([
     supabase
       .from('profil_analytics')
@@ -454,7 +468,12 @@ export default async function DashboardPage() {
       .select(
         `profil_name, analytics_update_datum,
          schwellwert_beobachtung, schwellwert_min_klicks,
-         schwellwert_alter_recycling, schwellwert_ctr, schwellwert_impressionen,
+         schwellwert_ctr,
+         schwellwert_min_imp_ctr_urteil, schwellwert_min_imp_reichweite_stark,
+         schwellwert_min_klicks_nutzer_signal,
+         schwellwert_top_performer_max_alter,
+         schwellwert_schlafender_gewinner_alter,
+         schwellwert_ctr_boost_faktor,
          schwellwert_board_wenig_aktiv, schwellwert_board_inaktiv,
          schwellwert_board_top_er, schwellwert_board_top_prozent,
          schwellwert_board_schwach_er, schwellwert_board_wachstum_trend,
@@ -556,6 +575,8 @@ export default async function DashboardPage() {
       console.error('[Dashboard] pin_keywords query failed:', err)
       return { data: [], error: err as Error }
     }),
+    loadUserBenchmark(user.id),
+    loadAccountNicheProfile(user.id),
   ])
 
   const rows = (profilRes.data ?? []) as ProfilAnalytics[]
@@ -596,7 +617,8 @@ export default async function DashboardPage() {
   // Damit zeigen Dashboard und Analytics-Tab dieselben Pins in
   // denselben Kategorien.
   const thresholds = thresholdsFromSettings(
-    settingsRes.data as Partial<EinstellungenSchwellwerte> | null
+    settingsRes.data as Partial<EinstellungenSchwellwerte> | null,
+    benchmark
   )
 
   type RawPipelineSettings = {
@@ -701,6 +723,7 @@ export default async function DashboardPage() {
       titel: pin?.titel ?? null,
       klicks: cumKlicks,
       impressionen: cumImpressionen,
+      saves: cumSaves,
       ctr: avgCtr,
       alterTage,
       letzterAnalyticsDatum: latest.datum,
@@ -857,6 +880,57 @@ export default async function DashboardPage() {
     else cur.geplant++
     preparedPinsByBoard.set(p.board_id, cur)
   }
+
+  // ===== Account-Diagnose / Coaching =====
+  // Aggregiert bereits berechnete Pin-Daten für das Account-weite Coaching-
+  // Layer (lib/account-coaching.ts). Klassifikations-Logik bleibt unverändert
+  // — das hier ist reine Anzeige- und Hinweis-Schicht.
+  const pinsAeltAls60Tage = actionable.filter(
+    (p) => p.alterTage >= 60
+  ).length
+  const pinsOhneImpressionen = actionable.filter(
+    (p) => p.impressionen === 0
+  ).length
+  const reichweiteOhneWirkungCount =
+    groupedActions.get('reichweite_ohne_wirkung')?.length ?? 0
+  // Account-Alter aus der vollen pins-Tabelle (allPinsRows), nicht aus
+  // actionable[]: actionable enthält nur Pins mit pins_analytics-Eintrag,
+  // alte Pins ohne Analytics-Datensatz würden sonst unterschlagen und das
+  // Account-Alter zu jung ausweisen.
+  const oldestPinAlterTage = (() => {
+    let max = 0
+    for (const p of allPinsRows) {
+      const refDate =
+        p.geplante_veroeffentlichung ?? p.created_at?.slice(0, 10) ?? null
+      if (!refDate) continue
+      const days = Math.max(0, diffDays(refDate, today))
+      if (days > max) max = days
+    }
+    return max
+  })()
+  const accountAlterMonate = oldestPinAlterTage / 30
+  const alteSchlechtePin = actionable.filter((p) => {
+    if (p.alterTage <= 365) return false
+    if (p.impressionen <= 0) return false
+    const saveRate = (p.saves / p.impressionen) * 100
+    return saveRate < 0.1
+  }).length
+  const boardsOhneKategorie = Math.max(
+    0,
+    boardsCount -
+      nicheProfile.niches.reduce((sum, n) => sum + n.boardCount, 0)
+  )
+  const coachingDiagnoses = calculateCoachingDiagnoses({
+    benchmark,
+    nicheProfile,
+    pinsAeltAls60Tage,
+    pinsOhneImpressionen,
+    reichweiteOhneWirkungCount,
+    accountAlterMonate,
+    alteSchlechtePin,
+    totalBoards: boardsCount,
+    boardsOhneKategorie,
+  })
 
   // ===== Strategie-Check (180 Tage, IST vs. SOLL) =====
   // Vergleicht IST-Verteilung der Pins der letzten 180 Tage mit den SOLL-Werten
@@ -1364,8 +1438,8 @@ export default async function DashboardPage() {
       : null,
     hasAnyAnalytics,
     hiddenGemCount: groupedActions.get('hidden_gem')?.length ?? 0,
-    optimierungCount:
-      groupedActions.get('optimierungspotenzial')?.length ?? 0,
+    reichweiteOhneWirkungCount:
+      groupedActions.get('reichweite_ohne_wirkung')?.length ?? 0,
     aktivTopPerformerCount:
       groupedActions.get('aktiver_top_performer')?.length ?? 0,
     eingeschlafenerGewinnerCount:
@@ -1393,7 +1467,10 @@ export default async function DashboardPage() {
       (acc, p) => (p.alterTage < acc.alterTage ? p : acc),
       list[0]
     )
-    const remaining = Math.max(0, 70 - best.alterTage)
+    const remaining = Math.max(
+      0,
+      thresholds.topPerformerMaxAlter - best.alterTage
+    )
     if (remaining <= 0) return null
     return {
       titel: best.titel ?? '(ohne Titel)',
@@ -1533,12 +1610,21 @@ export default async function DashboardPage() {
       {/* 3. Phasen-Trenner */}
       <PhasenTrenner title="Wo stehst du?" />
 
-      {/* 4. Profil-Gesundheit (Coaching + Ampel) */}
+      {/* 4. Profil-Gesundheit (Status aus aktiven Coaching-Diagnosen +
+            Account-Snapshot). Status leitet sich client-seitig aus den
+            Diagnosen ab — Dismiss-State liegt in localStorage. */}
       <ProfilGesundheitBlock
-        ctr={latest?.ctr ?? null}
-        engagement={latest?.engagement ?? null}
-        impressionenGrowth={latest?.impressionen_growth ?? null}
+        profilEr={latest?.engagement ?? null}
+        profilCtr={latest?.ctr ?? null}
+        nicheProfile={nicheProfile}
+        coachingDiagnoses={coachingDiagnoses}
+        totalPins={allPinsRows.length}
       />
+
+      {/* 4b. Account-Diagnose (Coaching) — Status-Aussage zum Gesamt-Account,
+          gehört thematisch in "Wo stehst du?" zwischen Profil-Gesundheit und
+          Performance-KPIs. */}
+      <AccountDiagnoseSection diagnoses={coachingDiagnoses} />
 
       {/* 5. Gesamt-Profil-Performance (KPIs + Performance-Verlauf in 3 Spalten) */}
       <ProfilPerformanceSection
@@ -1808,254 +1894,11 @@ function KpiSectionGroup({
   )
 }
 
-// ===========================================================
-// Profil-Gesundheit Ampel — 4-Stufen-Skala basierend auf ER + CTR.
-// Linke Spalte des Profil-Gesundheit-Bereichs; rechts daneben rendert das
-// bestehende ProfilGesundheitWidget den ausführlichen Coaching-Text.
-// ===========================================================
-type AmpelStufe = 'schwach' | 'ausbaufaehig' | 'solide' | 'stark'
-
-function computeAmpelStufe(
-  ctr: number | null,
-  engagement: number | null
-): AmpelStufe | null {
-  if (ctr === null || engagement === null) return null
-  if (engagement > 2 && ctr > 2) return 'stark'
-  if (engagement >= 1 || ctr >= 0.8) return 'solide'
-  if (engagement >= 0.5 || ctr >= 0.5) return 'ausbaufaehig'
-  return 'schwach'
-}
-
-function ProfilAmpel({
-  ctr,
-  engagement,
-}: {
-  ctr: number | null
-  engagement: number | null
-}) {
-  const current = computeAmpelStufe(ctr, engagement)
-  const stufen: Array<{
-    key: AmpelStufe
-    emoji: string
-    label: string
-    text: string
-    activeText: string
-    activeBg: string
-    activeBorder: string
-  }> = [
-    {
-      key: 'schwach',
-      emoji: '🔴',
-      label: 'Schwach',
-      text: 'Profil braucht dringend Aufmerksamkeit',
-      activeText: 'text-red-800',
-      activeBg: 'bg-red-50',
-      activeBorder: 'border-red-500',
-    },
-    {
-      key: 'ausbaufaehig',
-      emoji: '🟠',
-      label: 'Ausbaufähig',
-      text: 'Erste Erfolge, aber viel Potenzial',
-      activeText: 'text-orange-800',
-      activeBg: 'bg-orange-50',
-      activeBorder: 'border-orange-500',
-    },
-    {
-      key: 'solide',
-      emoji: '🟡',
-      label: 'Solide',
-      text: 'Guter Stand, gezielt optimieren',
-      activeText: 'text-yellow-800',
-      activeBg: 'bg-yellow-50',
-      activeBorder: 'border-yellow-500',
-    },
-    {
-      key: 'stark',
-      emoji: '🟢',
-      label: 'Stark',
-      text: 'Top-Performance, weiter ausbauen',
-      activeText: 'text-green-800',
-      activeBg: 'bg-green-50',
-      activeBorder: 'border-green-500',
-    },
-  ]
-  return (
-    <div className="space-y-1.5">
-      {stufen.map((s) => {
-        const isActive = s.key === current
-        return (
-          <div
-            key={s.key}
-            className={
-              isActive
-                ? `flex items-start gap-2 rounded-r-md border-l-[3px] ${s.activeBorder} ${s.activeBg} px-2 py-1.5`
-                : 'flex items-start gap-2 px-2 py-1.5 opacity-50'
-            }
-          >
-            <span aria-hidden className="leading-tight">
-              {s.emoji}
-            </span>
-            <div className="text-xs leading-snug">
-              <span
-                className={
-                  isActive
-                    ? `font-semibold ${s.activeText}`
-                    : 'font-medium text-gray-500'
-                }
-              >
-                {s.label}
-              </span>
-              {isActive && (
-                <span className="ml-1 text-gray-700">— {s.text}</span>
-              )}
-            </div>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-// ===========================================================
-// Profil-Gesundheit Widget
-// ===========================================================
-function ProfilGesundheitWidget({
-  ctr,
-  engagement,
-  impressionenGrowth,
-  embedded = false,
-}: {
-  ctr: number | null
-  engagement: number | null
-  impressionenGrowth: number | null
-  embedded?: boolean
-}) {
-  type StatusKey =
-    | 'stark'
-    | 'wachsend'
-    | 'solide'
-    | 'aufbau'
-    | 'optimieren'
-    | 'leer'
-
-  console.log('[ProfilGesundheit] received:', {
-    ctr,
-    engagement,
-    impressionenGrowth,
-  })
-
-  const ctrFmt = ctr !== null ? formatPercent(ctr) : '—'
-  const engagementFmt = engagement !== null ? formatPercent(engagement) : '—'
-
-  const status: StatusKey = (() => {
-    if (ctr === null || engagement === null) return 'leer'
-    if (ctr >= 1.54 && engagement >= 1) return 'stark'
-    if (ctr >= 1 && engagement >= 0.5) return 'wachsend'
-    if (ctr >= 0.5 && engagement >= 0.25) return 'solide'
-    if (ctr >= 0.5 || engagement >= 0.15) return 'aufbau'
-    return 'optimieren'
-  })()
-
-  console.log('[ProfilGesundheit] computed status:', status)
-
-  const showImpWarn =
-    impressionenGrowth !== null &&
-    Number.isFinite(impressionenGrowth) &&
-    impressionenGrowth < -10
-
-  const solideText = (() => {
-    const base =
-      engagement !== null && engagement >= 1
-        ? `Deine Engagement Rate (${engagementFmt}) ist ausgezeichnet — weit über dem Durchschnitt (0,15–0,25%). Schwachpunkt: CTR (${ctrFmt}) noch unter 1%. Pinterest spielt deine Pins aus und Nutzer interagieren — aber der Hook könnte überzeugender sein. Optimiere Titel und Design der Pins mit niedrigster CTR in „Bestehende Pins optimieren".`
-        : `CTR (${ctrFmt}) und Engagement Rate (${engagementFmt}) im soliden Bereich. Nächster Schritt: Hooks der Pins mit hohen Impressionen aber niedriger CTR optimieren — schau in „Bestehende Pins optimieren".`
-    return showImpWarn
-      ? `${base} ⚠️ Impressionen rückläufig (${formatGrowth(
-          impressionenGrowth
-        )}) — Pinning-Frequenz erhöhen oder Keywords überarbeiten.`
-      : base
-  })()
-
-  const config: Record<
-    StatusKey,
-    { emoji: string; label: string; text: string; cls: string }
-  > = {
-    stark: {
-      emoji: '🟢',
-      label: 'Stark',
-      text: 'Dein Profil performt über dem Pinterest-Durchschnitt (organische CTR: 1,54%). Skaliere was funktioniert — produziere Varianten deiner Top Performer und erweitere erfolgreiche Keyword-Cluster.',
-      cls: 'border-green-200 bg-green-50 text-green-900',
-    },
-    wachsend: {
-      emoji: '🟢',
-      label: 'Wachsend',
-      text: `Solide Performance über dem Branchendurchschnitt. Deine CTR (${ctrFmt}) zeigt dass deine Hooks funktionieren. Nächster Fokus: Impressionen steigern durch mehr Pins und stärkere Keywords.`,
-      cls: 'border-green-200 bg-green-50 text-green-900',
-    },
-    solide: {
-      emoji: '🟡',
-      label: 'Solide',
-      text: solideText,
-      cls: 'border-yellow-200 bg-yellow-50 text-yellow-900',
-    },
-    aufbau: {
-      emoji: '🟡',
-      label: 'Aufbauphase',
-      text: 'Erste Signale sichtbar — der Account wächst. Pinterest braucht 3–6 Monate um thematische Autorität aufzubauen. Konsistenz ist jetzt wichtiger als Perfektion. Halte deinen monatlichen Produktionstag ein.',
-      cls: 'border-yellow-200 bg-yellow-50 text-yellow-900',
-    },
-    optimieren: {
-      emoji: '🔴',
-      label: 'Optimierungsbedarf',
-      text: 'Deine Zahlen liegen unter dem Pinterest-Durchschnitt (organische CTR: 1,54%, Engagement Standard Pins: 0,15–0,25%). Häufigste Ursachen: schwache Hooks, falsche Keywords oder zu wenig Pins. Starte mit „Bestehende Pins optimieren" — dort siehst du welche Pins sofortige Aufmerksamkeit brauchen.',
-      cls: 'border-red-200 bg-red-50 text-red-900',
-    },
-    leer: {
-      emoji: '⚪',
-      label: 'Noch keine Daten',
-      text: 'Trage deine ersten Analytics ein um deinen Profil-Gesundheits-Score zu sehen.',
-      cls: 'border-gray-200 bg-gray-50 text-gray-700',
-    },
-  }
-  const c = config[status]
-
-  // Bei „solide" steckt die Impressionen-Warnung schon im Text — keine Doppel-Anzeige.
-  const showSeparateWarn = showImpWarn && status !== 'solide'
-
-  // Embedded-Mode: kein eigener Hintergrund/Border — Hero-Section liefert
-  // den einheitlichen Status-Hintergrund. Erkennbar bleibt der Status durch
-  // Ampel-Icon, Titel und Coaching-Text.
-  const innerCls = embedded
-    ? 'flex flex-wrap items-start gap-3 px-1 text-sm text-gray-800'
-    : `flex flex-wrap items-start gap-3 rounded-md border px-4 py-3 text-sm ${c.cls}`
-
-  return (
-    <div className={embedded ? 'space-y-2' : 'mt-4 space-y-2'}>
-      <div className={innerCls}>
-        <span className="text-lg leading-tight" aria-hidden>
-          {c.emoji}
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="font-semibold">Profil-Gesundheit: {c.label}</p>
-          <p className="mt-0.5 text-gray-700">{c.text}</p>
-        </div>
-      </div>
-      {showSeparateWarn && (
-        <div className="warn-box flex items-start gap-3">
-          <span className="text-lg leading-tight" aria-hidden>
-            🚨
-          </span>
-          <p>
-            <span className="font-semibold">
-              Impressionen rückläufig ({formatGrowth(impressionenGrowth)})
-            </span>{' '}
-            — Pinning-Frequenz prüfen oder Keywords überarbeiten.
-          </p>
-        </div>
-      )}
-    </div>
-  )
-}
+// Profil-Gesundheit lebt jetzt komplett in app/dashboard/ProfilGesundheitBlock.tsx
+// (Client-Component) — Status-Berechnung in lib/profil-gesundheit.ts. Die alte
+// Aggregat-CTR/ER-Logik mit hartkodierten Pinterest-Branchen-Schnitten
+// (0,15-0,25 % etc.) wurde entfernt: sie hat account-spezifische Bewertung
+// mit allgemeinen Werten vermischt.
 
 type KpiVariant = 'hero' | 'normal' | 'context'
 
@@ -2159,14 +2002,24 @@ function GrowthBadge({ growth }: { growth: number | null | undefined }) {
 // Handlungsbedarf
 // ===========================================================
 function formatMetric(
-  kind: 'klicks' | 'impressionen' | 'ctr' | 'alter' | 'datum' | 'push',
-  pin: HandlungsbedarfPin
+  kind:
+    | 'klicks'
+    | 'impressionen'
+    | 'saves'
+    | 'ctr'
+    | 'alter'
+    | 'datum'
+    | 'push',
+  pin: HandlungsbedarfPin,
+  thresholds: PinAnalyticsThresholds
 ): string {
   switch (kind) {
     case 'klicks':
       return formatZahl(pin.klicks)
     case 'impressionen':
       return formatZahl(pin.impressionen)
+    case 'saves':
+      return formatZahl(pin.saves)
     case 'ctr':
       return formatPercent(pin.ctr)
     case 'alter':
@@ -2174,7 +2027,7 @@ function formatMetric(
     case 'datum':
       return formatDateDe(pin.letzterAnalyticsDatum)
     case 'push': {
-      const remaining = 70 - pin.alterTage
+      const remaining = thresholds.topPerformerMaxAlter - pin.alterTage
       return remaining > 0 ? `noch ${remaining} Tage aktiv` : ''
     }
   }
@@ -2309,6 +2162,7 @@ function buildPinData(p: ActionablePin): HandlungsbedarfPin {
     titel: p.titel,
     klicks: p.klicks,
     impressionen: p.impressionen,
+    saves: p.saves,
     ctr: p.ctr,
     alterTage: p.alterTage,
     letzterAnalyticsDatum: p.letzterAnalyticsDatum,
@@ -2319,11 +2173,15 @@ function buildPinData(p: ActionablePin): HandlungsbedarfPin {
   }
 }
 
-function buildMetrics(cat: HandlungsCategory, pinData: HandlungsbedarfPin) {
+function buildMetrics(
+  cat: HandlungsCategory,
+  pinData: HandlungsbedarfPin,
+  thresholds: PinAnalyticsThresholds
+) {
   return cat.metrics
     .map((kind) => ({
       label: cat.metricLabels[kind] ?? '',
-      value: formatMetric(kind, pinData),
+      value: formatMetric(kind, pinData, thresholds),
       tooltip: kind === 'push' ? PUSH_TOOLTIP : undefined,
     }))
     .filter((m) => m.value !== '')
@@ -2341,17 +2199,9 @@ function HandlungsbedarfKategorieCard({
   const visiblePins = pins.slice(0, 3)
   const remaining = pins.length - visiblePins.length
 
-  // Top-Performer-Tooltip dynamisch mit aktuellen Schwellwerten — die anderen
-  // Kategorien nutzen weiterhin den statischen Text aus der Konfiguration.
-  const ctrText = String(thresholds.mindestCtr).replace('.', ',')
-  const tooltip =
-    cat.diagnose === 'aktiver_top_performer'
-      ? `Pins, die alle drei Kriterien erfüllen:\n` +
-        `- Mehr als ${thresholds.mindestKlicks} Klicks\n` +
-        `- CTR über ${ctrText}%\n` +
-        `- Jünger als ${thresholds.mindestAlter} Tage\n\n` +
-        `Diese Pins laufen aktiv und profitieren vom Algorithmus-Push. Varianten produzieren, solange der Push aktiv ist.`
-      : cat.tooltip
+  // Statischer Klartext-Tooltip aus PIN_DIAGNOSE_TOOLTIP — Struktur:
+  // Erklärung → Was tun → Wie wir das erkennen.
+  const tooltip = cat.tooltip
 
   return (
     <details className="group rounded-lg border border-gray-200 bg-white shadow-sm">
@@ -2397,7 +2247,7 @@ function HandlungsbedarfKategorieCard({
                   key={p.id}
                   pin={pinData}
                   kategorie={cat.diagnose}
-                  metrics={buildMetrics(cat, pinData)}
+                  metrics={buildMetrics(cat, pinData, thresholds)}
                   primaryAction={cat.primaryAction}
                 />
               )
@@ -2416,7 +2266,7 @@ function HandlungsbedarfKategorieCard({
                       key={p.id}
                       pin={pinData}
                       kategorie={cat.diagnose}
-                      metrics={buildMetrics(cat, pinData)}
+                      metrics={buildMetrics(cat, pinData, thresholds)}
                       primaryAction={cat.primaryAction}
                     />
                   )
@@ -4524,34 +4374,6 @@ function BriefingBlock({
         zuletzt eingepflegten Daten. Pflege einmal monatlich deine
         Pinterest-Analytics ein.
       </p>
-    </section>
-  )
-}
-
-// ===========================================================
-// Profil-Gesundheit-Block: weiße Sektion mit 70/30-Layout
-// (Coaching-Text + Ampel-Skala).
-// ===========================================================
-function ProfilGesundheitBlock({
-  ctr,
-  engagement,
-  impressionenGrowth,
-}: {
-  ctr: number | null
-  engagement: number | null
-  impressionenGrowth: number | null
-}) {
-  return (
-    <section className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-[7fr_3fr]">
-        <ProfilGesundheitWidget
-          ctr={ctr}
-          engagement={engagement}
-          impressionenGrowth={impressionenGrowth}
-          embedded
-        />
-        <ProfilAmpel ctr={ctr} engagement={engagement} />
-      </div>
     </section>
   )
 }

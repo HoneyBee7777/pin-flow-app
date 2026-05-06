@@ -5,13 +5,24 @@ import { useState, useTransition, type FormEvent } from 'react'
 import { saveEinstellungen } from './actions'
 import { saveStrategieManual } from '../strategie/actions'
 import { adjustProportional } from '../strategie/lib'
+import type { UserPinBenchmark } from '../analytics/utils'
+import type { AccountNicheProfile } from '@/lib/account-niche-profile'
+import {
+  getEinordnung,
+  type Einordnung,
+  type Range,
+} from '@/lib/niche-benchmarks'
 
 export type InitialSchwellwerte = {
   beobachtung: number | null
-  minKlicks: number | null
-  alterRecycling: number | null
-  ctr: number | null
-  impressionen: number | null
+  minKlicksTopPerformer: number | null
+  minImpCtrUrteil: number | null
+  minImpReichweiteStark: number | null
+  minKlicksNutzerSignal: number | null
+  topPerformerMaxAlter: number | null
+  schlafenderGewinnerAlter: number | null
+  ctrBoostFaktor: number | null
+  fallbackCtr: number | null
 }
 
 export type InitialPersoenlicheLinks = {
@@ -57,6 +68,8 @@ export default function EinstellungenClient({
   initialPinterestAnalyticsUrl,
   initialPersoenlicheLinks,
   initialSchwellwerte,
+  initialBenchmark,
+  initialNicheProfile,
   initialBoardSchwellwerte,
   initialContentPipelineSchwellwerte,
   initialStatusSchwellwerte,
@@ -67,6 +80,8 @@ export default function EinstellungenClient({
   initialPinterestAnalyticsUrl: string
   initialPersoenlicheLinks: InitialPersoenlicheLinks
   initialSchwellwerte: InitialSchwellwerte
+  initialBenchmark: UserPinBenchmark | null
+  initialNicheProfile: AccountNicheProfile
   initialBoardSchwellwerte: InitialBoardSchwellwerte
   initialContentPipelineSchwellwerte: InitialContentPipelineSchwellwerte
   initialStatusSchwellwerte: InitialStatusSchwellwerte
@@ -78,7 +93,11 @@ export default function EinstellungenClient({
       <SignalwoerterSection initial={initialEigeneSignalwoerter} />
       <PersoenlicheLinksSection initial={initialPersoenlicheLinks} />
       <AnalyticsLinkSection initial={initialPinterestAnalyticsUrl} />
-      <SchwellwerteSection initial={initialSchwellwerte} />
+      <SchwellwerteSection
+        initial={initialSchwellwerte}
+        benchmark={initialBenchmark}
+        nicheProfile={initialNicheProfile}
+      />
       <BoardSchwellwerteSection initial={initialBoardSchwellwerte} />
       <ContentPipelineSchwellwerteSection
         initial={initialContentPipelineSchwellwerte}
@@ -364,23 +383,53 @@ function SignalwoerterSection({ initial }: { initial: string }) {
 
 function SchwellwerteSection({
   initial,
+  benchmark,
+  nicheProfile,
 }: {
   initial: InitialSchwellwerte
+  benchmark: UserPinBenchmark | null
+  nicheProfile: AccountNicheProfile
 }) {
   const [beobachtung, setBeobachtung] = useState(
-    initial.beobachtung !== null ? String(initial.beobachtung) : '60'
+    initial.beobachtung !== null ? String(initial.beobachtung) : '65'
   )
-  const [minKlicks, setMinKlicks] = useState(
-    initial.minKlicks !== null ? String(initial.minKlicks) : '15'
+  const [minImpCtrUrteil, setMinImpCtrUrteil] = useState(
+    initial.minImpCtrUrteil !== null
+      ? String(initial.minImpCtrUrteil)
+      : '300'
   )
-  const [alterRecycling, setAlterRecycling] = useState(
-    initial.alterRecycling !== null ? String(initial.alterRecycling) : '70'
+  const [minImpReichweiteStark, setMinImpReichweiteStark] = useState(
+    initial.minImpReichweiteStark !== null
+      ? String(initial.minImpReichweiteStark)
+      : '500'
   )
-  const [ctr, setCtr] = useState(
-    initial.ctr !== null ? String(initial.ctr) : '1.5'
+  const [minKlicksTopPerformer, setMinKlicksTopPerformer] = useState(
+    initial.minKlicksTopPerformer !== null
+      ? String(initial.minKlicksTopPerformer)
+      : '10'
   )
-  const [impressionen, setImpressionen] = useState(
-    initial.impressionen !== null ? String(initial.impressionen) : '1000'
+  const [minKlicksNutzerSignal, setMinKlicksNutzerSignal] = useState(
+    initial.minKlicksNutzerSignal !== null
+      ? String(initial.minKlicksNutzerSignal)
+      : '3'
+  )
+  const [topPerformerMaxAlter, setTopPerformerMaxAlter] = useState(
+    initial.topPerformerMaxAlter !== null
+      ? String(initial.topPerformerMaxAlter)
+      : '90'
+  )
+  const [schlafenderGewinnerAlter, setSchlafenderGewinnerAlter] = useState(
+    initial.schlafenderGewinnerAlter !== null
+      ? String(initial.schlafenderGewinnerAlter)
+      : '180'
+  )
+  const [ctrBoostFaktor, setCtrBoostFaktor] = useState(
+    initial.ctrBoostFaktor !== null
+      ? String(initial.ctrBoostFaktor)
+      : '1.2'
+  )
+  const [fallbackCtr, setFallbackCtr] = useState(
+    initial.fallbackCtr !== null ? String(initial.fallbackCtr) : '1.5'
   )
   const [isPending, startTransition] = useTransition()
   const [feedback, setFeedback] = useState<{
@@ -407,10 +456,35 @@ function SchwellwerteSection({
       <h2 className="text-lg font-semibold text-gray-900">
         Pin-Schwellwerte für Analytics
       </h2>
-      <p className="mt-1 text-sm text-gray-600">
-        Diese Werte steuern die Diagnose-Logik im Pin-Analytics-Tab. Passe sie
-        an die Größe deines Accounts an.
-      </p>
+      <div className="mt-1 space-y-2 text-sm text-gray-600">
+        <p>
+          Diese Werte entscheiden, wann ein Pin als „gut", „schlecht" oder „noch
+          zu früh zur Bewertung" gilt.
+        </p>
+        <p>
+          <strong>Wie funktioniert die Bewertung?</strong> Wir vergleichen jeden
+          deiner Pins mit deinem eigenen Durchschnitt — performt er besser oder
+          schlechter als deine anderen Pins? Damit das fair funktioniert, gibt
+          es zusätzliche Sicherheits-Schwellen:
+        </p>
+        <ul className="ml-4 list-disc space-y-0.5">
+          <li>
+            <strong>Mindest-Daten:</strong> Bei zu wenig Impressionen sind alle
+            Quoten unzuverlässig.
+          </li>
+          <li>
+            <strong>Mindest-Aktivität:</strong> Ein neuer Pin braucht Wochen,
+            bevor Pinterest ihn voll ausspielt.
+          </li>
+        </ul>
+        <p>
+          <strong>Müssen die Werte geändert werden?</strong> Meistens nein.
+          Anpassen lohnt sich nur in Sonderfällen — siehe die Hinweise an jedem
+          Feld.
+        </p>
+      </div>
+
+      <BenchmarkInfoBox benchmark={benchmark} nicheProfile={nicheProfile} />
 
       <form onSubmit={onSubmit} className="mt-4 space-y-4">
         <SchwellwertField
@@ -419,39 +493,80 @@ function SchwellwerteSection({
           value={beobachtung}
           onChange={setBeobachtung}
           step={1}
-          help="Wie lange gilt ein Pin als zu jung für die Bewertung?"
+          help={'Wie lange ist ein Pin „zu jung" für eine Bewertung?\nPinterest spielt neue Pins langsam an. Erst nach ~65 Tagen ist eine Aussage stabil.'}
+          whenToAdjust={'Niedriger (z. B. 45) → schnellere Diagnose, aber unsicherer.\nHöher (z. B. 90) → vorsichtiger, aber spätere Reaktion.'}
+        />
+        <SchwellwertField
+          label="Mindest-Impressionen für CTR-Urteil"
+          name="schwellwert_min_imp_ctr_urteil"
+          value={minImpCtrUrteil}
+          onChange={setMinImpCtrUrteil}
+          step={1}
+          help={'Ab wann sind Klickraten verlässlich?\nBeispiel: 1 Klick aus 50 Impressionen wäre 2 % CTR — das wäre Glück, nicht Muster.'}
+          whenToAdjust={'Niedriger (z. B. 200) → schnellere Bewertung, aber höheres Fehlrisiko.\nHöher (z. B. 500) → sicherer, aber mehr Pins bleiben länger in „Noch zu früh".'}
+        />
+        <SchwellwertField
+          label="Mindest-Impressionen für starke Reichweite"
+          name="schwellwert_min_imp_reichweite_stark"
+          value={minImpReichweiteStark}
+          onChange={setMinImpReichweiteStark}
+          step={1}
+          help={'Ab wann gilt ein Pin als „von Pinterest gut ausgespielt"?'}
+          whenToAdjust={'Bei kleinem Account (alle Pins unter 200 Impressionen): niedriger setzen, z. B. 200.\nBei großem Account mit viralen Pins: höher setzen, z. B. 1000.'}
         />
         <SchwellwertField
           label="Mindest-Klicks für Top Performer"
           name="schwellwert_min_klicks"
-          value={minKlicks}
-          onChange={setMinKlicks}
+          value={minKlicksTopPerformer}
+          onChange={setMinKlicksTopPerformer}
           step={1}
-          help="Ab wie vielen Klicks gilt ein Pin als Top Performer? Bei kleinen Accounts empfehlen wir 5, bei großen 20+."
+          help={'Wie viele Klicks muss ein Pin mindestens haben, um als Top Performer zu gelten?\nSchutz davor, dass 1-2 Zufalls-Klicks zum Top Performer machen.'}
+          whenToAdjust={'Bei großem Account: höher setzen (z. B. 20).\nBei kleinem Account: 5 lassen — ist schon ein Erfolg.'}
         />
         <SchwellwertField
-          label="Mindest-Alter für Recycling (Tage)"
-          name="schwellwert_alter_recycling"
-          value={alterRecycling}
-          onChange={setAlterRecycling}
+          label="Mindest-Klicks für Nutzer-Signal"
+          name="schwellwert_min_klicks_nutzer_signal"
+          value={minKlicksNutzerSignal}
+          onChange={setMinKlicksNutzerSignal}
           step={1}
-          help="Ab wann gilt ein eingeschlafener Pin als Recycling-Kandidat?"
+          help={'Schutz vor Zufalls-Klicks.\nBei nur 1-2 Klicks könnte das Glück sein. Erst ab diesem Wert reden wir von einem Muster.'}
+          whenToAdjust={'Höher → strengere Bewertung. Niedriger nicht empfohlen.'}
         />
         <SchwellwertField
-          label="Mindest-CTR (Hidden Gem & Top Performer) (%)"
-          name="schwellwert_ctr"
-          value={ctr}
-          onChange={setCtr}
+          label="Top Performer Max-Alter (Tage)"
+          name="schwellwert_top_performer_max_alter"
+          value={topPerformerMaxAlter}
+          onChange={setTopPerformerMaxAlter}
+          step={1}
+          help={'Ab welchem Alter ist ein Top Performer kein „aktiver" Top Performer mehr?\nPinterest-Algorithmus belohnt frische Pins — auch gute alte Pins verlieren irgendwann ihre Sonderbehandlung.'}
+          whenToAdjust={'Selten nötig — Standardwert passt für die meisten Accounts.'}
+        />
+        <SchwellwertField
+          label="Eingeschlafener Gewinner ab Alter (Tage)"
+          name="schwellwert_schlafender_gewinner_alter"
+          value={schlafenderGewinnerAlter}
+          onChange={setSchlafenderGewinnerAlter}
+          step={1}
+          help={'Wann gilt ein historisch starker Pin als Recycling-Kandidat?\nTypische Pinterest-Halbwertszeit für Pins: ca. 6 Monate.'}
+          whenToAdjust={'Selten nötig.'}
+        />
+        <SchwellwertField
+          label="CTR-Boost-Faktor"
+          name="schwellwert_ctr_boost_faktor"
+          value={ctrBoostFaktor}
+          onChange={setCtrBoostFaktor}
           step={0.1}
-          help="Pins mit einer CTR über diesem Schwellwert gelten als qualitativ hochwertig – sie landen je nach Klick-Anzahl in Hidden Gem (wenig Reichweite) oder Top Performer (viel Reichweite)."
+          help={'Wie stark muss die Klickrate über deinem Durchschnitt liegen, um als „stark" zu gelten?\nBeispiel: Bei 1.2 muss ein Pin 20 % über deiner Durchschnitts-CTR liegen.'}
+          whenToAdjust={'Niedriger (1.0) → mehr Pins als klickstark erkannt, weniger Trennschärfe.\nHöher (1.5) → nur deutliche Outperformer werden erkannt.'}
         />
         <SchwellwertField
-          label="Mindest-Impressionen für Optimierungspotenzial"
-          name="schwellwert_impressionen"
-          value={impressionen}
-          onChange={setImpressionen}
-          step={1}
-          help="Ab wie vielen Impressionen prüfen wir, ob der Hook optimiert werden sollte?"
+          label="Mindest-CTR (Fallback) (%)"
+          name="schwellwert_ctr"
+          value={fallbackCtr}
+          onChange={setFallbackCtr}
+          step={0.1}
+          help={'Notfall-Wert für junge Accounts mit weniger als 10 qualifizierten Pins.\nSobald du genug Pins hast, wird dieser Wert automatisch durch deinen eigenen Durchschnitt ersetzt.'}
+          whenToAdjust={'Bei sehr neuem Account auf 1.0 setzen, damit überhaupt etwas erkannt wird.'}
         />
 
         <div className="flex items-center gap-3">
@@ -463,7 +578,9 @@ function SchwellwerteSection({
             {isPending ? 'Speichert…' : 'Speichern'}
           </button>
           {feedback.saved && (
-            <span className="text-sm text-green-700">✓ Gespeichert</span>
+            <span className="text-sm text-green-700">
+              ✓ Schwellwerte gespeichert — alle Pins wurden neu bewertet.
+            </span>
           )}
           {feedback.error && (
             <span className="text-sm text-red-700">{feedback.error}</span>
@@ -474,6 +591,230 @@ function SchwellwerteSection({
   )
 }
 
+// Mindestanzahl qualifizierter Pins, ab der die App eine eigene Benchmark
+// berechnet — bis dahin greift der Fallback-CTR und die Median-Spalte zeigt
+// "noch nicht berechenbar". Spiegelt BENCHMARK_MIN_PINS aus benchmark.ts.
+const BENCHMARK_MIN_PINS_FOR_DISPLAY = 10
+
+function BenchmarkInfoBox({
+  benchmark,
+  nicheProfile,
+}: {
+  benchmark: UserPinBenchmark | null
+  nicheProfile: AccountNicheProfile
+}) {
+  const niche = nicheProfile.primaryNiche
+  const useNicheVergleich =
+    niche !== null && !nicheProfile.isMixed
+  const qualifiziertePins = benchmark?.qualifiziertePins ?? 0
+  const fehlendePins = Math.max(
+    0,
+    BENCHMARK_MIN_PINS_FOR_DISPLAY - qualifiziertePins
+  )
+
+  return (
+    <div className="mt-3 rounded-md border border-cyan-200 bg-cyan-50 p-4 text-sm text-cyan-900">
+      <p className="text-base font-semibold">
+        Deine aktuelle Benchmark — so performen deine Pins im Schnitt:
+      </p>
+
+      <NicheHeader nicheProfile={nicheProfile} />
+
+      <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
+        <BenchmarkMetricCard
+          label="Median CTR"
+          value={benchmark?.medianCtr ?? null}
+          digits={2}
+          unit="%"
+          range={useNicheVergleich ? niche!.ctr : null}
+          fallbackHint={
+            fehlendePins > 0
+              ? `Du brauchst noch ${fehlendePins} qualifizierte Pin${fehlendePins === 1 ? '' : 's'} (≥ 100 Imp.) für eine eigene Benchmark.`
+              : null
+          }
+        />
+        <BenchmarkMetricCard
+          label="Median Save-Rate"
+          value={benchmark?.medianSaveRate ?? null}
+          digits={2}
+          unit="%"
+          range={useNicheVergleich ? niche!.save_rate : null}
+          fallbackHint={
+            fehlendePins > 0
+              ? `Du brauchst noch ${fehlendePins} qualifizierte Pin${fehlendePins === 1 ? '' : 's'} (≥ 100 Imp.) für eine eigene Benchmark.`
+              : null
+          }
+        />
+        <BenchmarkImpressionsCard
+          value={benchmark?.medianImpressionen ?? null}
+        />
+      </div>
+
+      {niche && useNicheVergleich && niche.hinweis && (
+        <p className="mt-3 rounded-md border border-cyan-200 bg-white/60 p-2 text-xs text-cyan-900">
+          <strong>{niche.label}-Tipp:</strong> {niche.hinweis}
+        </p>
+      )}
+
+      <p className="mt-3 text-xs text-cyan-800/80">
+        Berechnet aus {qualifiziertePins} deiner Pins (jünger als 90 Tage,
+        mind. 100 Impressionen). Diese Werte aktualisieren sich automatisch
+        bei jedem Daten-Import.
+      </p>
+    </div>
+  )
+}
+
+// Header über den Benchmark-Karten — zeigt Hauptnische + Anteil oder
+// "kein klarer Fokus"-Hinweis bei gemischten/uncategorisierten Accounts.
+function NicheHeader({ nicheProfile }: { nicheProfile: AccountNicheProfile }) {
+  const sharePct = Math.round(nicheProfile.primaryShare * 100)
+  if (nicheProfile.unzureichendKategorisiert) {
+    return (
+      <p className="mt-2 text-xs text-cyan-800/80">
+        <strong>Hauptnische:</strong> noch keine Zuordnung möglich — weniger
+        als die Hälfte deiner Pins liegt auf kategorisierten Boards.
+        Generelle Pinterest-Vergleichswerte werden angezeigt.
+      </p>
+    )
+  }
+  if (!nicheProfile.primaryNiche || nicheProfile.isMixed) {
+    return (
+      <p className="mt-2 text-xs text-cyan-800/80">
+        <strong>Hauptnische:</strong> Dein Account hat keine klare Hauptnische
+        — generelle Pinterest-Vergleichswerte werden angezeigt.
+      </p>
+    )
+  }
+  return (
+    <p className="mt-2 text-xs text-cyan-800/80">
+      <strong>Hauptnische:</strong> {nicheProfile.primaryNiche.label} (
+      {sharePct} % deiner Pins)
+    </p>
+  )
+}
+
+// Eine Karte für CTR oder Save-Rate. Liegt eine Nischen-Range vor, wird die
+// Einordnung farbig angezeigt; sonst greift der Fallback-Hinweis (zu wenig
+// Pins für eigene Benchmark).
+function BenchmarkMetricCard({
+  label,
+  value,
+  digits,
+  unit,
+  range,
+  fallbackHint,
+}: {
+  label: string
+  value: number | null
+  digits: number
+  unit: string
+  range: Range | null
+  fallbackHint: string | null
+}) {
+  const formatted =
+    value === null || !Number.isFinite(value)
+      ? null
+      : value.toFixed(digits).replace('.', ',')
+  const einordnung: Einordnung | null =
+    value !== null && Number.isFinite(value) && range
+      ? getEinordnung(value, range)
+      : null
+
+  return (
+    <div className="rounded-md border border-cyan-200 bg-white/70 p-3">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-cyan-700">
+        {label}
+      </p>
+      <p className="mt-0.5 text-lg font-semibold tabular-nums text-cyan-900">
+        {formatted !== null ? (
+          <>
+            {formatted}
+            {unit}
+          </>
+        ) : (
+          <span className="text-sm font-medium text-gray-500">
+            noch nicht berechenbar
+          </span>
+        )}
+      </p>
+      {range ? (
+        <p className="mt-1 text-xs text-cyan-800/80">
+          Branchenschnitt:{' '}
+          <span className="tabular-nums">
+            {range.schwach.toFixed(1).replace('.', ',')}–
+            {range.durchschnitt.toFixed(1).replace('.', ',')}
+            {unit}
+          </span>
+        </p>
+      ) : (
+        <p className="mt-1 text-xs text-cyan-800/80">
+          Allgemeiner Pinterest-Schnitt: 0,3–0,8 % (CTR), 0,2–0,5 %
+          (Save-Rate).
+        </p>
+      )}
+      {einordnung ? (
+        <p
+          className={`mt-1 text-xs font-medium ${EINORDNUNG_TEXT[einordnung.color]}`}
+        >
+          {einordnung.icon} {einordnungLabel(einordnung.label)}
+        </p>
+      ) : fallbackHint ? (
+        <p className="mt-1 text-xs italic text-gray-500">{fallbackHint}</p>
+      ) : null}
+    </div>
+  )
+}
+
+// Impressionen-Karte ohne Nischen-Einordnung — Reichweite ist account-spezifisch.
+function BenchmarkImpressionsCard({ value }: { value: number | null }) {
+  const formatted =
+    value === null || !Number.isFinite(value)
+      ? null
+      : value.toLocaleString('de-DE')
+  return (
+    <div className="rounded-md border border-cyan-200 bg-white/70 p-3">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-cyan-700">
+        Median Impressionen
+      </p>
+      <p className="mt-0.5 text-lg font-semibold tabular-nums text-cyan-900">
+        {formatted !== null ? (
+          formatted
+        ) : (
+          <span className="text-sm font-medium text-gray-500">
+            noch nicht berechenbar
+          </span>
+        )}
+      </p>
+      <p className="mt-1 text-xs text-cyan-800/80">
+        Nur als Referenzwert — Reichweite ist stark account-spezifisch und
+        wird nicht für Branchen-Vergleiche genutzt.
+      </p>
+    </div>
+  )
+}
+
+// Tailwind-Mapping für die drei Einordnungs-Farben.
+const EINORDNUNG_TEXT = {
+  green: 'text-green-700',
+  gray: 'text-gray-600',
+  orange: 'text-orange-700',
+} as const
+
+function einordnungLabel(label: Einordnung['label']): string {
+  switch (label) {
+    case 'top-performer':
+      return 'Top-Performer in deiner Nische'
+    case 'überdurchschnittlich':
+      return 'Überdurchschnittlich für deine Nische'
+    case 'durchschnittlich':
+      return 'Durchschnittlich für deine Nische'
+    case 'unter-durchschnitt':
+      return 'Unter Branchenschnitt'
+  }
+}
+
+
 function SchwellwertField({
   label,
   name,
@@ -482,6 +823,7 @@ function SchwellwertField({
   step,
   help,
   orientation,
+  whenToAdjust,
 }: {
   label: string
   name: string
@@ -490,6 +832,9 @@ function SchwellwertField({
   step: number
   help: string
   orientation?: string
+  // Optionaler "Wann anpassen?"-Hinweis (Pin-Schwellwerte). Whitespace
+  // wird respektiert, damit mehrzeilige Empfehlungen sauber umbrechen.
+  whenToAdjust?: string
 }) {
   return (
     <div>
@@ -509,7 +854,13 @@ function SchwellwertField({
         onChange={(e) => onChange(e.target.value)}
         className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500 md:max-w-xs"
       />
-      <p className="mt-1 text-xs text-gray-500">{help}</p>
+      <p className="mt-1 whitespace-pre-line text-xs text-gray-500">{help}</p>
+      {whenToAdjust && (
+        <p className="mt-1 whitespace-pre-line text-xs text-gray-500">
+          <span className="font-medium text-gray-600">Wann anpassen?</span>{' '}
+          {whenToAdjust}
+        </p>
+      )}
       {orientation && (
         <p className="mt-0.5 text-xs italic text-gray-400">{orientation}</p>
       )}

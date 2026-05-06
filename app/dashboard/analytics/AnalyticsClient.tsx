@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import {
   type ImportPinterestCsvResult,
@@ -23,7 +23,9 @@ import {
   type PinAnalyticsThresholds,
   type PinOption,
   type ProfilAnalyticsWithGrowth,
+  type UserPinBenchmark,
 } from './utils'
+import type { AccountNicheProfile } from '@/lib/account-niche-profile'
 
 // Snapshot eines CSV-Imports. Quelle ist entweder eine frische Session
 // (durch `onImportFinished` gesetzt) ODER die persistente csv_import_pending-
@@ -64,6 +66,8 @@ export default function AnalyticsClient({
   pinAnalytics,
   deletedPinAnalytics,
   thresholds,
+  benchmark,
+  nicheProfile,
   boards,
   boardAnalytics,
   boardHistory,
@@ -77,6 +81,8 @@ export default function AnalyticsClient({
   pinAnalytics: PinAnalyticsRow[]
   deletedPinAnalytics: DeletedPinEntry[]
   thresholds: PinAnalyticsThresholds
+  benchmark: UserPinBenchmark | null
+  nicheProfile: AccountNicheProfile
   boards: BoardOption[]
   boardAnalytics: BoardAnalyticsRow[]
   boardHistory: Record<string, BoardAnalyticsEntry[]>
@@ -191,6 +197,8 @@ export default function AnalyticsClient({
 
   return (
     <div className="space-y-6">
+      <ClassificationV2Notice />
+      <ClassificationExplainerBanner />
       <div className="border-b border-gray-200">
         <nav className="flex gap-6" aria-label="Tabs">
           {TABS.map((t) => {
@@ -262,6 +270,8 @@ export default function AnalyticsClient({
           deletedPinAnalytics={deletedPinAnalytics}
           pins={pins}
           thresholds={thresholds}
+          benchmark={benchmark}
+          nicheProfile={nicheProfile}
           unmatchedPins={pinsPending}
           unmatchedZeitraumVon={pendingImport?.zeitraum_von ?? ''}
           unmatchedZeitraumBis={pendingImport?.zeitraum_bis ?? ''}
@@ -281,6 +291,155 @@ export default function AnalyticsClient({
           onUnmatchedBoardResolved={removeUnmatchedBoard}
         />
       )}
+    </div>
+  )
+}
+
+// Erstnutzer-Erklär-Banner für die Pin-Bewertung. Erscheint erst, wenn der
+// V2-Migrations-Banner geschlossen wurde — beide sind nicht gleichzeitig
+// sichtbar. localStorage-Flag `pin_classification_explainer_seen` verhindert
+// erneutes Auftauchen nach Bestätigung.
+function ClassificationExplainerBanner() {
+  const STORAGE_KEY = 'pin_classification_explainer_seen'
+  const V2_KEY = 'pin_classification_v2_seen'
+  const [visible, setVisible] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const seen = window.localStorage.getItem(STORAGE_KEY)
+      const v2Seen = window.localStorage.getItem(V2_KEY)
+      // Erst zeigen, wenn V2-Banner schon weg ist — sonst hätten wir zwei
+      // Banner gleichzeitig auf dem Tab.
+      if (!seen && v2Seen) setVisible(true)
+    } catch {
+      // localStorage nicht verfügbar — Banner einfach zeigen.
+      setVisible(true)
+    }
+  }, [])
+
+  if (!visible) return null
+
+  function dismiss() {
+    setVisible(false)
+    try {
+      window.localStorage.setItem(STORAGE_KEY, '1')
+    } catch {
+      // ignore
+    }
+  }
+
+  return (
+    <div className="rounded-md border border-cyan-200 bg-cyan-50 p-4 text-sm text-cyan-900">
+      <div className="flex items-start gap-3">
+        <div className="flex-1 space-y-2">
+          <p className="text-base font-semibold">
+            👋 So funktioniert die Pin-Bewertung in dieser App
+          </p>
+          <p>
+            Jeder Pin bekommt automatisch eine Diagnose und eine konkrete
+            Handlungsempfehlung.
+          </p>
+          <ol className="ml-4 list-decimal space-y-1">
+            <li>
+              Wir vergleichen jeden Pin mit deinem eigenen Durchschnitt — du
+              performst gegen dich selbst, nicht gegen Branchenwerte.
+            </li>
+            <li>
+              Sicherheits-Schwellen sorgen dafür, dass keine Zufalls-Klicks als
+              Erfolg gefeiert werden.
+            </li>
+            <li>
+              Jede Diagnose hat eine konkrete Handlung — du musst nie raten, was
+              zu tun ist.
+            </li>
+          </ol>
+          <p>
+            Detail-Erklärungen findest du an jeder Spalte und jeder
+            Diagnose-Kategorie als ⓘ-Tooltip.
+          </p>
+          <div className="pt-1">
+            <button
+              type="button"
+              onClick={dismiss}
+              className="rounded-md border border-cyan-300 bg-white px-3 py-1 text-xs font-medium text-cyan-900 hover:bg-cyan-100"
+            >
+              Verstanden
+            </button>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={dismiss}
+          className="shrink-0 rounded-md p-1 text-cyan-700 hover:bg-cyan-100"
+          aria-label="Banner schließen"
+          title="Schließen"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+            className="h-4 w-4"
+            aria-hidden
+          >
+            <path
+              fillRule="evenodd"
+              d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+              clipRule="evenodd"
+            />
+          </svg>
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// Einmalig angezeigtes Banner zur V2-Migration. localStorage-Flag
+// `pin_classification_v2_seen` verhindert, dass es nach Schließen erneut auftaucht.
+function ClassificationV2Notice() {
+  const STORAGE_KEY = 'pin_classification_v2_seen'
+  const [visible, setVisible] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const seen = window.localStorage.getItem(STORAGE_KEY)
+      if (!seen) setVisible(true)
+    } catch {
+      // localStorage nicht verfügbar (z.B. Privacy-Mode) — Banner einfach zeigen
+      setVisible(true)
+    }
+  }, [])
+
+  if (!visible) return null
+
+  function dismiss() {
+    setVisible(false)
+    try {
+      window.localStorage.setItem(STORAGE_KEY, '1')
+    } catch {
+      // ignore
+    }
+  }
+
+  return (
+    <div className="rounded-md border border-cyan-200 bg-cyan-50 p-3 text-sm text-cyan-900">
+      <div className="flex items-start gap-3">
+        <span aria-hidden>💡</span>
+        <div className="flex-1">
+          Das Klassifikations-System wurde verbessert. Deine Pins wurden neu
+          bewertet — du wirst leichte Verschiebungen zwischen den Kategorien
+          sehen. Das ist normal.
+        </div>
+        <button
+          type="button"
+          onClick={dismiss}
+          className="shrink-0 rounded-md border border-cyan-300 bg-white px-2 py-0.5 text-xs font-medium text-cyan-900 hover:bg-cyan-100"
+          aria-label="Hinweis schließen"
+        >
+          Verstanden
+        </button>
+      </div>
     </div>
   )
 }

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase-server'
+import { reclassifyAllPinsForUser } from '../analytics/benchmark'
 
 export async function saveEinstellungen(
   formData: FormData
@@ -42,9 +43,24 @@ export async function saveEinstellungen(
 
   const intFields = [
     ['schwellwert_beobachtung', 'Beobachtungszeitraum'],
-    ['schwellwert_min_klicks', 'Mindest-Klicks'],
-    ['schwellwert_alter_recycling', 'Mindest-Alter'],
-    ['schwellwert_impressionen', 'Mindest-Impressionen'],
+    ['schwellwert_min_klicks', 'Mindest-Klicks für Top Performer'],
+    [
+      'schwellwert_min_imp_ctr_urteil',
+      'Mindest-Impressionen für CTR-Urteil',
+    ],
+    [
+      'schwellwert_min_imp_reichweite_stark',
+      'Mindest-Impressionen für starke Reichweite',
+    ],
+    [
+      'schwellwert_min_klicks_nutzer_signal',
+      'Mindest-Klicks für Nutzer-Signal',
+    ],
+    ['schwellwert_top_performer_max_alter', 'Top Performer Max-Alter'],
+    [
+      'schwellwert_schlafender_gewinner_alter',
+      'Eingeschlafener Gewinner ab Alter',
+    ],
     ['schwellwert_board_wenig_aktiv', 'Wenig aktiv ab (Tage)'],
     ['schwellwert_board_inaktiv', 'Inaktiv ab (Tage)'],
     ['cp_min_pins_gesamt', 'Mindest-Pin-Anzahl pro Inhalt'],
@@ -71,7 +87,8 @@ export async function saveEinstellungen(
   }
 
   const decFields = [
-    ['schwellwert_ctr', 'Mindest-CTR'],
+    ['schwellwert_ctr', 'Mindest-CTR (Fallback)'],
+    ['schwellwert_ctr_boost_faktor', 'CTR-Boost-Faktor'],
     ['schwellwert_board_top_er', 'Top Board ER Schwellwert'],
     ['schwellwert_board_top_prozent', 'Top Board Profil-Prozent'],
     ['schwellwert_board_schwach_er', 'Schwach ER Schwellwert'],
@@ -148,6 +165,26 @@ export async function saveEinstellungen(
       { onConflict: 'user_id' }
     )
   if (error) return { error: error.message }
+
+  // Re-Klassifikation triggern, wenn Pin-Schwellwerte angepasst wurden.
+  // Nicht-Pin-Schwellwerte (Boards, Status, Content-Pipeline) lösen das nicht aus.
+  const pinThresholdKeys = new Set([
+    'schwellwert_beobachtung',
+    'schwellwert_min_klicks',
+    'schwellwert_ctr',
+    'schwellwert_min_imp_ctr_urteil',
+    'schwellwert_min_imp_reichweite_stark',
+    'schwellwert_min_klicks_nutzer_signal',
+    'schwellwert_top_performer_max_alter',
+    'schwellwert_schlafender_gewinner_alter',
+    'schwellwert_ctr_boost_faktor',
+  ])
+  const pinThresholdsTouched = Object.keys(updates).some((k) =>
+    pinThresholdKeys.has(k)
+  )
+  if (pinThresholdsTouched) {
+    await reclassifyAllPinsForUser(user.id)
+  }
 
   revalidatePath('/dashboard/einstellungen')
   revalidatePath('/dashboard/pin-produktion')

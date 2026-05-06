@@ -1,6 +1,12 @@
 import { createClient } from '@/lib/supabase-server'
 import StrategieClient from './StrategieClient'
 import { STRATEGIE_SELECT, type StrategieRow } from './lib'
+import { loadUserBenchmark } from '../analytics/benchmark'
+import {
+  thresholdsFromSettings,
+  type EinstellungenSchwellwerte,
+  type PinAnalyticsThresholds,
+} from '../analytics/utils'
 
 export default async function StrategiePage() {
   const supabase = createClient()
@@ -9,13 +15,36 @@ export default async function StrategiePage() {
   } = await supabase.auth.getUser()
 
   let row: StrategieRow | null = null
+  // Default-Thresholds für den Logged-out- und Fallback-Fall, damit die
+  // Texte in „Analytics & Boards" auch ohne User-Settings sinnvolle Werte zeigen.
+  let thresholds: PinAnalyticsThresholds = thresholdsFromSettings(null, null)
   if (user) {
-    const { data } = await supabase
-      .from('einstellungen')
-      .select(STRATEGIE_SELECT)
-      .eq('user_id', user.id)
-      .maybeSingle()
-    row = (data ?? null) as StrategieRow | null
+    const [strategieRes, settingsRes, benchmark] = await Promise.all([
+      supabase
+        .from('einstellungen')
+        .select(STRATEGIE_SELECT)
+        .eq('user_id', user.id)
+        .maybeSingle(),
+      supabase
+        .from('einstellungen')
+        .select(
+          `schwellwert_beobachtung, schwellwert_min_klicks,
+           schwellwert_ctr,
+           schwellwert_min_imp_ctr_urteil, schwellwert_min_imp_reichweite_stark,
+           schwellwert_min_klicks_nutzer_signal,
+           schwellwert_top_performer_max_alter,
+           schwellwert_schlafender_gewinner_alter,
+           schwellwert_ctr_boost_faktor`
+        )
+        .eq('user_id', user.id)
+        .maybeSingle(),
+      loadUserBenchmark(user.id),
+    ])
+    row = (strategieRes.data ?? null) as StrategieRow | null
+    thresholds = thresholdsFromSettings(
+      settingsRes.data as Partial<EinstellungenSchwellwerte> | null,
+      benchmark
+    )
   }
 
   return (
@@ -30,7 +59,7 @@ export default async function StrategiePage() {
         </p>
       </header>
 
-      <StrategieClient strategie={row} />
+      <StrategieClient strategie={row} thresholds={thresholds} />
     </div>
   )
 }

@@ -11,6 +11,7 @@ import {
   type PinMetric,
 } from './csvImport'
 import { todayIso } from './utils'
+import { reclassifyAllPinsForUser } from './benchmark'
 
 function parseInt0(v: FormDataEntryValue | null): number {
   const s = String(v ?? '').trim()
@@ -156,6 +157,8 @@ export async function savePinAnalytics(
     .delete()
     .eq('user_id', user.id)
     .eq('pin_id', pin_id)
+
+  await reclassifyAllPinsForUser(user.id)
 
   revalidatePath('/dashboard/analytics')
   revalidatePath('/dashboard')
@@ -315,6 +318,8 @@ export async function updatePinAnalyticsEntry(
     .eq('id', id)
     .eq('user_id', user.id)
   if (error) return { error: error.message }
+
+  await reclassifyAllPinsForUser(user.id)
 
   revalidatePath('/dashboard/analytics')
   revalidatePath('/dashboard')
@@ -986,6 +991,12 @@ export async function importPinterestCsv(
       })
   }
 
+  // Benchmark neu berechnen + alle Pins re-klassifizieren. Macht den
+  // CSV-Import zur Single-Source-of-Truth für Klassifikations-Aktualität.
+  if (pinsImported > 0) {
+    await reclassifyAllPinsForUser(user.id)
+  }
+
   revalidatePath('/dashboard/analytics')
   revalidatePath('/dashboard')
   return {
@@ -1103,6 +1114,8 @@ export async function assignPinAndImportMetrics(
     .eq('user_id', user.id)
     .eq('type', 'pin')
     .eq('pinterest_id', pinterest_pin_id)
+
+  await reclassifyAllPinsForUser(user.id)
 
   revalidatePath('/dashboard/analytics')
   revalidatePath('/dashboard/pin-produktion')

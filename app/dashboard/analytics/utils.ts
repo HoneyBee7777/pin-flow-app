@@ -365,55 +365,103 @@ export const PIN_HANDLUNG: Record<PinDiagnose, string> = Object.fromEntries(
   ])
 ) as Record<PinDiagnose, string>
 
-// Schwellwerte — Defaults; tatsächliche Werte kommen aus den Einstellungen
-export type PinAnalyticsThresholds = {
-  beobachtungszeitraum: number
-  mindestKlicks: number
-  mindestAlter: number
-  mindestCtr: number
-  mindestImpressionen: number
+// Pin-Klassifikation V2 — Schwellwerte werden aus den Einstellungen
+// geladen, Mediane optional aus der user_pin_benchmark-Tabelle.
+export type UserPinBenchmark = {
+  medianCtr: number | null
+  medianSaveRate: number | null
+  medianImpressionen: number | null
+  qualifiziertePins: number | null
 }
 
-export const PIN_ANALYTICS_THRESHOLDS: PinAnalyticsThresholds = {
-  beobachtungszeitraum: 65,
-  mindestKlicks: 15,
-  mindestAlter: 70,
-  mindestCtr: 1.5,
-  mindestImpressionen: 1000,
+export type PinAnalyticsThresholds = {
+  // Beobachtung & Hard-Floors
+  beobachtungszeitraum: number
+  minImpCtrUrteil: number
+  minImpReichweiteStark: number
+  minKlicksTopPerformer: number
+  minKlicksNutzerSignal: number
+  // Alter
+  topPerformerMaxAlter: number
+  schlafenderGewinnerAlter: number
+  // Multiplikator
+  ctrBoostFaktor: number
+  // Fallback wenn keine Benchmark vorhanden
+  fallbackMindestCtr: number
+  // Mediane (null wenn < 10 qualifizierte Pins)
+  medianCtr: number | null
+  medianSaveRate: number | null
+  medianImpressionen: number | null
 }
+
+export const PIN_ANALYTICS_THRESHOLD_DEFAULTS = {
+  beobachtungszeitraum: 65,
+  minImpCtrUrteil: 300,
+  minImpReichweiteStark: 500,
+  minKlicksTopPerformer: 10,
+  minKlicksNutzerSignal: 3,
+  topPerformerMaxAlter: 90,
+  schlafenderGewinnerAlter: 180,
+  ctrBoostFaktor: 1.2,
+  fallbackMindestCtr: 1.5,
+} as const
 
 export type EinstellungenSchwellwerte = {
   schwellwert_beobachtung: number | null
-  schwellwert_min_klicks: number | null
-  schwellwert_alter_recycling: number | null
   schwellwert_ctr: number | string | null
-  schwellwert_impressionen: number | null
+  schwellwert_min_klicks: number | null
+  schwellwert_min_imp_ctr_urteil: number | null
+  schwellwert_min_imp_reichweite_stark: number | null
+  schwellwert_min_klicks_nutzer_signal: number | null
+  schwellwert_top_performer_max_alter: number | null
+  schwellwert_schlafender_gewinner_alter: number | null
+  schwellwert_ctr_boost_faktor: number | string | null
+}
+
+function numOrFallbackCtr(
+  raw: number | string | null | undefined,
+  fallback: number
+): number {
+  if (raw === null || raw === undefined) return fallback
+  const n = Number(raw)
+  return Number.isFinite(n) ? n : fallback
 }
 
 export function thresholdsFromSettings(
-  settings: Partial<EinstellungenSchwellwerte> | null | undefined
+  settings: Partial<EinstellungenSchwellwerte> | null | undefined,
+  benchmark: UserPinBenchmark | null = null
 ): PinAnalyticsThresholds {
-  const ctrRaw = settings?.schwellwert_ctr
-  const ctrNum =
-    ctrRaw === null || ctrRaw === undefined
-      ? PIN_ANALYTICS_THRESHOLDS.mindestCtr
-      : Number(ctrRaw)
+  const D = PIN_ANALYTICS_THRESHOLD_DEFAULTS
   return {
     beobachtungszeitraum:
-      settings?.schwellwert_beobachtung ??
-      PIN_ANALYTICS_THRESHOLDS.beobachtungszeitraum,
-    mindestKlicks:
-      settings?.schwellwert_min_klicks ??
-      PIN_ANALYTICS_THRESHOLDS.mindestKlicks,
-    mindestAlter:
-      settings?.schwellwert_alter_recycling ??
-      PIN_ANALYTICS_THRESHOLDS.mindestAlter,
-    mindestCtr: Number.isFinite(ctrNum)
-      ? ctrNum
-      : PIN_ANALYTICS_THRESHOLDS.mindestCtr,
-    mindestImpressionen:
-      settings?.schwellwert_impressionen ??
-      PIN_ANALYTICS_THRESHOLDS.mindestImpressionen,
+      settings?.schwellwert_beobachtung ?? D.beobachtungszeitraum,
+    minImpCtrUrteil:
+      settings?.schwellwert_min_imp_ctr_urteil ?? D.minImpCtrUrteil,
+    minImpReichweiteStark:
+      settings?.schwellwert_min_imp_reichweite_stark ??
+      D.minImpReichweiteStark,
+    minKlicksTopPerformer:
+      settings?.schwellwert_min_klicks ?? D.minKlicksTopPerformer,
+    minKlicksNutzerSignal:
+      settings?.schwellwert_min_klicks_nutzer_signal ??
+      D.minKlicksNutzerSignal,
+    topPerformerMaxAlter:
+      settings?.schwellwert_top_performer_max_alter ??
+      D.topPerformerMaxAlter,
+    schlafenderGewinnerAlter:
+      settings?.schwellwert_schlafender_gewinner_alter ??
+      D.schlafenderGewinnerAlter,
+    ctrBoostFaktor: numOrFallbackCtr(
+      settings?.schwellwert_ctr_boost_faktor,
+      D.ctrBoostFaktor
+    ),
+    fallbackMindestCtr: numOrFallbackCtr(
+      settings?.schwellwert_ctr,
+      D.fallbackMindestCtr
+    ),
+    medianCtr: benchmark?.medianCtr ?? null,
+    medianSaveRate: benchmark?.medianSaveRate ?? null,
+    medianImpressionen: benchmark?.medianImpressionen ?? null,
   }
 }
 

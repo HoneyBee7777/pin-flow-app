@@ -1,5 +1,7 @@
 import { createClient } from '@/lib/supabase-server'
 import EinstellungenClient from './EinstellungenClient'
+import { loadUserBenchmark } from '../analytics/benchmark'
+import { loadAccountNicheProfile } from '../analytics/account-niche'
 
 export default async function EinstellungenPage() {
   const supabase = createClient()
@@ -8,13 +10,19 @@ export default async function EinstellungenPage() {
   } = await supabase.auth.getUser()
   if (!user) return null
 
-  const { data, error } = await supabase
-    .from('einstellungen')
-    .select(
-      `profil_name, eigene_signalwoerter, pinterest_analytics_url,
+  const [{ data, error }, benchmark, nicheProfile] = await Promise.all([
+    supabase
+      .from('einstellungen')
+      .select(
+        `profil_name, eigene_signalwoerter, pinterest_analytics_url,
        pinterest_account_url, website_url, tailwind_url,
        schwellwert_beobachtung, schwellwert_min_klicks,
-       schwellwert_alter_recycling, schwellwert_ctr, schwellwert_impressionen,
+       schwellwert_ctr,
+       schwellwert_min_imp_ctr_urteil, schwellwert_min_imp_reichweite_stark,
+       schwellwert_min_klicks_nutzer_signal,
+       schwellwert_top_performer_max_alter,
+       schwellwert_schlafender_gewinner_alter,
+       schwellwert_ctr_boost_faktor,
        schwellwert_board_wenig_aktiv, schwellwert_board_inaktiv,
        schwellwert_board_top_er, schwellwert_board_top_prozent,
        schwellwert_board_schwach_er, schwellwert_board_wachstum_trend,
@@ -26,9 +34,12 @@ export default async function EinstellungenPage() {
        strategie_onboarding_abgeschlossen,
        strategie_check_schwelle_gelb, strategie_check_schwelle_rot,
        status_update_intervall, status_update_vorwarnung`
-    )
-    .eq('user_id', user.id)
-    .maybeSingle()
+      )
+      .eq('user_id', user.id)
+      .maybeSingle(),
+    loadUserBenchmark(user.id),
+    loadAccountNicheProfile(user.id),
+  ])
 
   return (
     <div className="p-8">
@@ -56,15 +67,29 @@ export default async function EinstellungenPage() {
         }}
         initialSchwellwerte={{
           beobachtung: data?.schwellwert_beobachtung ?? null,
-          minKlicks: data?.schwellwert_min_klicks ?? null,
-          alterRecycling: data?.schwellwert_alter_recycling ?? null,
-          ctr:
+          minKlicksTopPerformer: data?.schwellwert_min_klicks ?? null,
+          minImpCtrUrteil: data?.schwellwert_min_imp_ctr_urteil ?? null,
+          minImpReichweiteStark:
+            data?.schwellwert_min_imp_reichweite_stark ?? null,
+          minKlicksNutzerSignal:
+            data?.schwellwert_min_klicks_nutzer_signal ?? null,
+          topPerformerMaxAlter:
+            data?.schwellwert_top_performer_max_alter ?? null,
+          schlafenderGewinnerAlter:
+            data?.schwellwert_schlafender_gewinner_alter ?? null,
+          ctrBoostFaktor:
+            data?.schwellwert_ctr_boost_faktor === null ||
+            data?.schwellwert_ctr_boost_faktor === undefined
+              ? null
+              : Number(data.schwellwert_ctr_boost_faktor),
+          fallbackCtr:
             data?.schwellwert_ctr === null ||
             data?.schwellwert_ctr === undefined
               ? null
               : Number(data.schwellwert_ctr),
-          impressionen: data?.schwellwert_impressionen ?? null,
         }}
+        initialBenchmark={benchmark}
+        initialNicheProfile={nicheProfile}
         initialBoardSchwellwerte={{
           wenigAktiv: data?.schwellwert_board_wenig_aktiv ?? null,
           inaktiv: data?.schwellwert_board_inaktiv ?? null,

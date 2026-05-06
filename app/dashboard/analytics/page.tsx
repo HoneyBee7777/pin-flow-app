@@ -22,6 +22,8 @@ import {
   type PinOption,
   type ProfilAnalytics,
 } from './utils'
+import { loadUserBenchmark } from './benchmark'
+import { loadAccountNicheProfile } from './account-niche'
 
 type RawPinAnalyticsRow = {
   id: string
@@ -65,7 +67,12 @@ export default async function AnalyticsPage() {
       .select(
         `pinterest_analytics_url, analytics_update_datum,
          schwellwert_beobachtung, schwellwert_min_klicks,
-         schwellwert_alter_recycling, schwellwert_ctr, schwellwert_impressionen,
+         schwellwert_ctr,
+         schwellwert_min_imp_ctr_urteil, schwellwert_min_imp_reichweite_stark,
+         schwellwert_min_klicks_nutzer_signal,
+         schwellwert_top_performer_max_alter,
+         schwellwert_schlafender_gewinner_alter,
+         schwellwert_ctr_boost_faktor,
          schwellwert_board_wenig_aktiv, schwellwert_board_inaktiv,
          schwellwert_board_top_er, schwellwert_board_top_prozent,
          schwellwert_board_schwach_er, schwellwert_board_wachstum_trend`
@@ -129,8 +136,13 @@ export default async function AnalyticsPage() {
   const pins = (pinsRes.data ?? []) as PinOption[]
 
   const today = todayIso()
+  const [benchmark, nicheProfile] = await Promise.all([
+    loadUserBenchmark(user.id),
+    loadAccountNicheProfile(user.id),
+  ])
   const thresholds = thresholdsFromSettings(
-    settingsRes.data as Partial<EinstellungenSchwellwerte> | null
+    settingsRes.data as Partial<EinstellungenSchwellwerte> | null,
+    benchmark
   )
   const rawPinAnalytics =
     (pinAnalyticsRes.data ?? []) as unknown as RawPinAnalyticsRow[]
@@ -410,6 +422,8 @@ export default async function AnalyticsPage() {
         pinAnalytics={pinAnalytics}
         deletedPinAnalytics={deletedPinAnalytics}
         thresholds={thresholds}
+        benchmark={benchmark}
+        nicheProfile={nicheProfile}
         boards={boards}
         boardAnalytics={boardAnalytics}
         boardHistory={Object.fromEntries(historyByBoard)}
