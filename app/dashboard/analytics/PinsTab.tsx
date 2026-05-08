@@ -18,6 +18,7 @@ import SharedSortableTh from '@/components/SortableTh'
 import InfoTooltip from '@/components/InfoTooltip'
 import UnmatchedPinsSection from './UnmatchedPinsSection'
 import PinAnalyticsEditModal from './PinAnalyticsEditModal'
+import PinLifecycleCompact from './PinLifecycleCompact'
 import type { DeletedPinEntry } from './AnalyticsClient'
 import {
   calcCtr,
@@ -239,7 +240,11 @@ export default function PinsTab({
         onSkipped={onUnmatchedPinResolved}
       />
 
-      <TableLegend />
+      <PinLifecycleCompact thresholds={thresholds} />
+
+      <p className="text-sm text-gray-500">
+        💡 Halte den Mauszeiger über die Spaltenüberschriften für Erklärungen.
+      </p>
 
       <PinAnalyticsTable
         rows={aggregatedPins}
@@ -263,49 +268,6 @@ export default function PinsTab({
         entry={editEntry}
         pins={pins}
       />
-    </div>
-  )
-}
-
-// ===========================================================
-// Info-Block oberhalb der Tabelle — kompakte Spalten-Legende, damit
-// Erstnutzer ohne Tooltip-Hover die wichtigsten Spalten verstehen.
-// ===========================================================
-function TableLegend() {
-  return (
-    <div className="rounded-md border border-gray-200 bg-gray-50 p-3 text-[13px] text-gray-600">
-      <div className="flex items-start gap-2">
-        <span aria-hidden className="mt-0.5 text-gray-400">
-          ⓘ
-        </span>
-        <div className="space-y-1">
-          <p className="font-medium text-gray-700">So liest du die Tabelle:</p>
-          <ul className="space-y-0.5">
-            <li>
-              <strong>Klicks</strong> — wie oft auf deine Website geklickt wurde
-              (das wichtigste Ziel)
-            </li>
-            <li>
-              <strong>CTR</strong> — Klickrate: von 100 Sehern, wie viele
-              klicken? (Pinterest-Schnitt: 0,3–0,8 %)
-            </li>
-            <li>
-              <strong>Save-Rate</strong> — Speicherrate: von 100 Sehern, wie
-              viele speichern? (Schnitt: 0,2–0,5 %)
-            </li>
-            <li>
-              <strong>Diagnose</strong> — was ist los mit dem Pin?
-            </li>
-            <li>
-              <strong>Handlung</strong> — was solltest du jetzt damit tun?
-            </li>
-            <li>
-              Klick auf <span className="font-mono">▶</span> neben einem
-              Pin-Titel für Details und Verlauf.
-            </li>
-          </ul>
-        </div>
-      </div>
     </div>
   )
 }

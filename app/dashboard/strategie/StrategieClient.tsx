@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation'
 import type { StrategieRow } from './lib'
 import type { PinAnalyticsThresholds } from '../analytics/utils'
 import MyStrategy from './MyStrategy'
+import PinLifecycleSection from './PinLifecycleSection'
 
 type TabKey =
   | 'meine'
@@ -53,6 +54,16 @@ export default function StrategieClient({
     return t && (TAB_KEYS as string[]).includes(t) ? (t as TabKey) : 'meine'
   })()
   const [active, setActive] = useState<TabKey>(initialTab)
+
+  // Soft-Navigation: ändert sich `?tab=` ohne Full-Reload (z.B. via Link von
+  // einem anderen Tab innerhalb der Strategie-Seite), holt der State sich den
+  // neuen Tab nach.
+  useEffect(() => {
+    const t = searchParams?.get('tab')
+    if (t && (TAB_KEYS as string[]).includes(t) && t !== active) {
+      setActive(t as TabKey)
+    }
+  }, [searchParams, active])
 
   return (
     <div className="space-y-6">
@@ -2832,6 +2843,8 @@ function TabAnalytics({
         </div>
       </Accordion>
 
+      <PinLifecycleSection thresholds={t} />
+
       <Accordion title="Deine Analytics: welche Pins und welche Kennzahlen du tracken musst">
         <H4>Die drei Kennzahlen die du brauchst</H4>
         <Para>
@@ -2856,17 +2869,25 @@ function TabAnalytics({
         <Bullets
           items={[
             <>
-              <strong>CTR</strong> = Klicks ÷ Impressionen
+              <strong>CTR (Click-Through-Rate)</strong> = Klicks ÷
+              Impressionen × 100
             </>,
             <>
-              <strong>Engagement Rate</strong> = (Saves + Klicks) ÷
+              <strong>Save-Rate</strong> = Saves ÷ Impressionen × 100
+            </>,
+            <>
+              <strong>Engagement-Rate</strong> = (Saves + Klicks) ÷
               Impressionen × 100
             </>,
           ]}
         />
         <Para>
-          Drei Zahlen. Zwei berechnete Werte. Vier klare Kategorien. Für
-          jeden Pin weißt du sofort was zu tun ist.
+          Die Save-Rate ist der wichtigste Frühindikator: Pinterest nutzt sie
+          selbst, um zu entscheiden, ob ein Pin weiter ausgespielt wird.
+        </Para>
+        <Para>
+          Drei Zahlen. Drei berechnete Werte. Sechs klare Kategorien. Für
+          jeden Pin weißt du sofort, was zu tun ist.
         </Para>
 
         <H4>Welchen Zeitraum du verwendest</H4>
@@ -2944,7 +2965,7 @@ function TabAnalytics({
         />
 
         <HinweisBox variant="merke">
-          💡 <strong>Merke:</strong> Drei Zahlen. Zwei berechnete Werte. Sechs
+          💡 <strong>Merke:</strong> Drei Zahlen. Drei berechnete Werte. Sechs
           klare Diagnose-Kategorien. Für jeden Pin weißt du sofort, was zu tun
           ist.
         </HinweisBox>
