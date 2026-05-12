@@ -7,10 +7,12 @@ import {
   type UnmatchedBoard,
   type UnmatchedPin,
 } from './actions'
+import AudienceTab from './AudienceTab'
 import BoardsTab, { type BoardWithoutAnalytics } from './BoardsTab'
 import EingabeTab from './EingabeTab'
 import PinsTab from './PinsTab'
 import ProfilTab from './ProfilTab'
+import type { AudienceSnapshot } from '@/lib/audience-types'
 import {
   addDays,
   effectiveZeitraum,
@@ -38,17 +40,24 @@ export type PendingImport = {
   unmatchedBoards: UnmatchedBoard[]
 }
 
-type Tab = 'eingabe' | 'profil' | 'pins' | 'boards'
+type Tab = 'eingabe' | 'profil' | 'pins' | 'boards' | 'audience'
 
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: 'eingabe', label: '✏️ Eingabe' },
   { id: 'profil', label: 'Profil-Entwicklung' },
   { id: 'pins', label: 'Top Pins' },
   { id: 'boards', label: 'Boards' },
+  { id: 'audience', label: 'Zielgruppe' },
 ]
 
 function isTab(v: string | null | undefined): v is Tab {
-  return v === 'eingabe' || v === 'profil' || v === 'pins' || v === 'boards'
+  return (
+    v === 'eingabe' ||
+    v === 'profil' ||
+    v === 'pins' ||
+    v === 'boards' ||
+    v === 'audience'
+  )
 }
 
 export type DeletedPinEntry = {
@@ -75,6 +84,7 @@ export default function AnalyticsClient({
   publicBoardsWithoutAnalytics,
   pinterestAnalyticsUrl,
   initialPending,
+  audienceSnapshots,
 }: {
   profilAnalytics: ProfilAnalyticsWithGrowth[]
   pins: PinOption[]
@@ -91,6 +101,8 @@ export default function AnalyticsClient({
   pinterestAnalyticsUrl: string | null
   // Aus csv_import_pending vorgeladenes Pending — überlebt Page-Reloads.
   initialPending: PendingImport | null
+  // V3.0 — Audience-Snapshots aus audience_snapshots-Tabelle, DESC nach Datum.
+  audienceSnapshots: AudienceSnapshot[]
 }) {
   const searchParams = useSearchParams()
   const initialTab = searchParams?.get('tab')
@@ -289,6 +301,12 @@ export default function AnalyticsClient({
           unmatchedZeitraumVon={pendingImport?.zeitraum_von ?? ''}
           unmatchedZeitraumBis={pendingImport?.zeitraum_bis ?? ''}
           onUnmatchedBoardResolved={removeUnmatchedBoard}
+        />
+      )}
+      {tab === 'audience' && (
+        <AudienceTab
+          snapshots={audienceSnapshots}
+          nicheProfile={nicheProfile}
         />
       )}
     </div>

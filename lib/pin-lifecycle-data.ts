@@ -41,12 +41,16 @@ export type LifecycleCategory = {
   svgStroke: string
 }
 
-// Layout: 3 Spalten × 3 Zeilen-Cluster (V2.3.6 — Boxen ein Drittel kleiner).
+// Layout: 3 Spalten × 3 Zeilen-Cluster.
 //   Spalte 1 (links):  x=20…130 — „Noch zu früh"
 //   Spalte 2 (mitte):  x=210…320 — Hidden Gem / Top Performer / Reichweite o.W.
-//   Spalte 3 (rechts): x=400…510 — Eingeschlafener Gewinner / Stiller Pin
-//   Zeilen: y=20…80 (oben), y=140…200 (mitte), y=260…320 (unten)
-//   Korridore zwischen Spalten: 80px (Platz für Pfeil-Beschriftungen).
+//   Spalte 3 (rechts): x=480…590 — Eingeschlafener Gewinner / Stiller Pin
+//   Zeilen: y=20…80 (oben), y=140…200 (mitte), y=240…300 (unten).
+//   V2.3.11: vertikale Korridore zwischen Reihen auf 60/40 px erweitert.
+//   V2.3.14: Spalte 3 um 80 px nach rechts (vorher x=400…510) und viewBox-
+//   Breite entsprechend auf 620 — damit die Beschriftungen der horizontalen
+//   Pfeile zwischen Spalte 2 und 3 einzeilig in die jetzt 160 px breite
+//   Lücke passen.
 export const LIFECYCLE_CATEGORIES: LifecycleCategory[] = [
   {
     slug: 'noch-zu-frueh',
@@ -100,7 +104,7 @@ export const LIFECYCLE_CATEGORIES: LifecycleCategory[] = [
     nameLines: ['Reichweite ohne', 'Wirkung'],
     shortAction: 'Cover & Hook optimieren',
     x: 210,
-    y: 260,
+    y: 240,
     width: 110,
     height: 60,
     bgClass: 'bg-amber-100',
@@ -114,7 +118,7 @@ export const LIFECYCLE_CATEGORIES: LifecycleCategory[] = [
     name: 'Eingeschlafener Gewinner',
     nameLines: ['Eingeschlafener', 'Gewinner'],
     shortAction: 'Recyceln',
-    x: 400,
+    x: 480,
     y: 140,
     width: 110,
     height: 60,
@@ -129,8 +133,8 @@ export const LIFECYCLE_CATEGORIES: LifecycleCategory[] = [
     name: 'Stiller Pin',
     nameLines: ['Stiller Pin'],
     shortAction: 'Archivieren',
-    x: 400,
-    y: 260,
+    x: 480,
+    y: 240,
     width: 110,
     height: 60,
     bgClass: 'bg-gray-200',
@@ -264,7 +268,6 @@ export type ArrowLabel = {
 export type ArrowLabels = {
   zuHiddenGem: ArrowLabel
   zuTopPerformerVonHiddenGem: ArrowLabel
-  zuTopPerformerDirekt: ArrowLabel
   zuReichweiteOhneWirkung: ArrowLabel
   langWegStillerPin: ArrowLabel
   zuEingeschlafenerGewinner: ArrowLabel
@@ -283,26 +286,27 @@ export function getArrowLabels(t: PinAnalyticsThresholds): ArrowLabels {
     t.medianSaveRate != null ? formatProzent(t.medianSaveRate) : null
 
   return {
+    // V2.3.7 Fix 6: „z. B." raus, „bei dir" rein. Macht klar, dass der Wert
+    // aus den eigenen Daten des Users kommt — keine zufällige Beispielzahl.
     zuHiddenGem: {
       main: ['Pin wird geklickt,', 'aber kaum ausgespielt'],
       condition: [
         ctrSchwelle
-          ? `CTR über Ø (z. B. > ${ctrSchwelle})`
+          ? `CTR über Ø (bei dir: > ${ctrSchwelle})`
           : 'CTR über Durchschnitt',
       ],
     },
     // V2.3.6 Fix 5: Kausalität korrigiert. Pinterest reagiert auf gestiegene
     // Save-Rate, die durch Keyword-Optimierung (Nutzer-Aktion) entsteht.
+    // V2.3.8 Konflikt 2: Bedingungs-Zeile gekürzt — die längere
+    // „Save-Rate über deinem Ø (…) / nach Keyword-Optimierung"-Variante
+    // wurde im engen Korridor zwischen Hidden Gem und Top Performer
+    // sichtbar angeschnitten.
     zuTopPerformerVonHiddenGem: {
       main: ['Mehr ausgespielt', 'und mehr Saves'],
       condition: saveRateSchwelle
-        ? [`Save-Rate über ${saveRateSchwelle}`, 'nach Keyword-Optimierung']
-        : ['Save-Rate über Durchschnitt', 'nach Keyword-Optimierung'],
-    },
-    // V2.3.6 Fix 4: Konkretisiert — die drei Erfolgs-Indikatoren benannt.
-    zuTopPerformerDirekt: {
-      main: ['Pin wird ausgespielt,', 'geklickt und gespeichert'],
-      condition: ['CTR + Save-Rate über Durchschnitt'],
+        ? [`Save-Rate über ${saveRateSchwelle}`, 'nach SEO']
+        : ['Save-Rate über Ø', 'nach SEO'],
     },
     zuReichweiteOhneWirkung: {
       main: ['Wird gut ausgespielt,', 'aber kaum geklickt'],
@@ -316,8 +320,11 @@ export function getArrowLabels(t: PinAnalyticsThresholds): ArrowLabels {
       main: ['Pin schläft ein'],
       condition: [`${t.beobachtungszeitraum}+ Tage ohne Reaktion`],
     },
+    // V2.3.14: einzeilig, weil die horizontale Lücke zwischen TP und
+    // Eingeschlafener jetzt 160 px ist (vorher 80) und Platz für die volle
+    // Phrase bietet — vermeidet den Zeilenumbruch innerhalb des Labels.
     zuEingeschlafenerGewinner: {
-      main: ['Pinterest verliert', 'Interesse'],
+      main: ['Pinterest verliert Interesse'],
       condition: [`nach ${t.schlafenderGewinnerAlter}+ Tagen`],
     },
     coverFunktioniert: {
@@ -330,62 +337,6 @@ export function getArrowLabels(t: PinAnalyticsThresholds): ArrowLabels {
     },
   }
 }
-
-export type PinJourneyStep = {
-  tag: string
-  slug: LifecycleSlug
-}
-
-export type PinJourney = {
-  titel: string
-  steps: PinJourneyStep[]
-  aktion: string
-}
-
-// Tag-Werte sind illustrativ hartcodiert — Beispiele zeigen typische
-// Zeitpunkte, nicht systemische Regeln.
-export const PIN_JOURNEYS: PinJourney[] = [
-  {
-    titel: 'Pin-Reise A — der erfolgreiche Pin',
-    steps: [
-      { tag: 'Tag 1–30', slug: 'noch-zu-frueh' },
-      { tag: 'Tag 35', slug: 'hidden-gem' },
-      { tag: 'Tag 50', slug: 'top-performer' },
-      { tag: 'Tag 200', slug: 'eingeschlafener-gewinner' },
-    ],
-    aktion: 'Recyceln mit frischem Cover',
-  },
-  {
-    titel: 'Pin-Reise B — Cover & Hook funktionieren nicht',
-    steps: [
-      { tag: 'Tag 1–40', slug: 'noch-zu-frueh' },
-      { tag: 'Tag 60', slug: 'reichweite-ohne-wirkung' },
-      { tag: 'Tag 90', slug: 'stiller-pin' },
-    ],
-    aktion:
-      'Schon bei Tag 60 neuen Pin mit anderem Cover & Hook erstellen — bevor Pin „kalt“ wird',
-  },
-  {
-    titel: 'Pin-Reise C — der Schläfer',
-    steps: [
-      { tag: 'Tag 1–65', slug: 'noch-zu-frueh' },
-      { tag: 'Tag 70+', slug: 'stiller-pin' },
-    ],
-    aktion: 'Archivieren oder komplett neu konzipieren',
-  },
-  {
-    titel: 'Pin-Reise D — der versteckte Schatz (SEO/Keyword-Problem)',
-    // Zwei Hidden-Gem-Phasen sind Absicht: ohne Keyword-Korrektur bleibt
-    // der Pin in dieser Kategorie stehen — Pinterest verbreitet ihn nicht.
-    steps: [
-      { tag: 'Tag 1–25', slug: 'noch-zu-frueh' },
-      { tag: 'Tag 30', slug: 'hidden-gem' },
-      { tag: 'Tag 60', slug: 'hidden-gem' },
-    ],
-    aktion:
-      'Neuen Pin mit gleichem Cover erstellen, aber überarbeiteten Keywords im Titel und in der Beschreibung. Eventuell auf ein anderes Board pinnen, falls das aktuelle Board thematisch nicht ideal passt.',
-  },
-]
 
 export function getCategory(slug: LifecycleSlug): LifecycleCategory {
   const c = LIFECYCLE_CATEGORIES.find((x) => x.slug === slug)

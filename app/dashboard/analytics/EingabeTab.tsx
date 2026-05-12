@@ -30,6 +30,7 @@ import {
   type PinOption,
   type ProfilAnalyticsWithGrowth,
 } from './utils'
+import AudienceCsvUpload from './AudienceCsvUpload'
 
 const inputCls =
   'mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500'
@@ -169,13 +170,19 @@ export default function EingabeTab({
         latestZeitraumBis={latestZeitraumBis}
       />
 
-      <Schritt2CsvUpload
-        expectedZeitraumVon={expectedZeitraumVon}
-        expectedZeitraumBis={expectedZeitraumBis}
-        onImported={onImported}
-        onJumpToUnmatchedPins={onJumpToUnmatchedPins}
-        onJumpToUnmatchedBoards={onJumpToUnmatchedBoards}
-      />
+      {/* V3.0: Zwei-Spalten-Layout — Top Pins + Audience parallel.
+          lg-Breakpoint, weil die einzelnen Importer-Boxen jeweils zu eng
+          würden, sobald die Spalten schmaler als ~480 px werden. */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <Schritt2CsvUpload
+          expectedZeitraumVon={expectedZeitraumVon}
+          expectedZeitraumBis={expectedZeitraumBis}
+          onImported={onImported}
+          onJumpToUnmatchedPins={onJumpToUnmatchedPins}
+          onJumpToUnmatchedBoards={onJumpToUnmatchedBoards}
+        />
+        <AudienceCsvUpload />
+      </div>
 
       <ManualEntryToggle
         pins={pins}
@@ -743,7 +750,7 @@ function Schritt2CsvUpload({
     <section className="space-y-3">
       <div>
         <h2 className="text-lg font-semibold text-gray-900">
-          2) Top Pins & Boards importieren
+          2a) Top Pins & Boards importieren
         </h2>
         <p className="mt-0.5 text-sm text-gray-600">
           Empfohlen: CSV-Import. Optional: manuelle Eingabe weiter unten.

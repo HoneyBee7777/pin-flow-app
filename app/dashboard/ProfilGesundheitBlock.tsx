@@ -221,7 +221,7 @@ function AccountSnapshot({
 
   return (
     <div className="text-[13px] text-gray-600">
-      <p className="font-medium text-gray-700">Account-Snapshot:</p>
+      <p className="font-medium text-gray-700">Profil-Snapshot:</p>
       <ul className="mt-1 space-y-0.5">
         <li className="flex items-center gap-1">
           <span>

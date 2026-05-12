@@ -112,7 +112,7 @@ export default function BoardsTab({
       <p style={{ color: '#111827', fontWeight: '600', fontSize: '14px' }}>
         Boards sind entscheidend für deine Reichweite auf Pinterest — korrekte
         Keywords im Board-Namen helfen Pinterest zu verstehen, worum es auf
-        deinem Account geht.
+        deinem Profil geht.
       </p>
 
       {publicBoardsWithoutAnalytics.length > 0 && (

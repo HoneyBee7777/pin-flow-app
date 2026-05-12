@@ -24,6 +24,7 @@ import {
 } from './utils'
 import { loadUserBenchmark } from './benchmark'
 import { loadAccountNicheProfile } from './account-niche'
+import { getAudienceSnapshots } from '@/lib/audience-snapshot'
 
 type RawPinAnalyticsRow = {
   id: string
@@ -136,9 +137,10 @@ export default async function AnalyticsPage() {
   const pins = (pinsRes.data ?? []) as PinOption[]
 
   const today = todayIso()
-  const [benchmark, nicheProfile] = await Promise.all([
+  const [benchmark, nicheProfile, audienceSnapshots] = await Promise.all([
     loadUserBenchmark(user.id),
     loadAccountNicheProfile(user.id),
+    getAudienceSnapshots(),
   ])
   const thresholds = thresholdsFromSettings(
     settingsRes.data as Partial<EinstellungenSchwellwerte> | null,
@@ -433,6 +435,7 @@ export default async function AnalyticsPage() {
           settingsRes.data?.pinterest_analytics_url ?? null
         }
         initialPending={initialPending}
+        audienceSnapshots={audienceSnapshots}
       />
     </div>
   )

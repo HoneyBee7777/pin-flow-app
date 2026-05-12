@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from 'react'
 import LifecycleDiagram from '@/components/LifecycleDiagram'
 import {
   LIFECYCLE_CATEGORIES,
-  PIN_JOURNEYS,
   getCategory,
   getLifecycleDetails,
   type LifecycleSlug,
@@ -108,7 +107,9 @@ export default function PinLifecycleSection({
         </p>
 
         <div className="rounded-md border border-gray-200 bg-gray-50 p-3">
-          <div className="hidden sm:block">
+          {/* V2.3.7 Fix 1: max-width begrenzt die Render-Höhe auf ~600px,
+              damit das Diagramm in einer Bildschirmansicht erfassbar bleibt. */}
+          <div className="mx-auto hidden max-w-[900px] sm:block">
             <LifecycleDiagram
               thresholds={thresholds}
               active={activeCategory}
@@ -116,7 +117,6 @@ export default function PinLifecycleSection({
                 setActiveCategory(slug === activeCategory ? null : slug)
               }
             />
-            <DiagramLegend />
           </div>
           <div className="block space-y-2 sm:hidden">
             <p className="text-xs text-gray-500">
@@ -165,40 +165,8 @@ export default function PinLifecycleSection({
         )}
 
         <ComparisonLevels />
-
-        <PinJourneysBlock />
       </div>
     </details>
-  )
-}
-
-// Kleine Legende unter dem Vollversions-Diagramm. Erklärt den
-// Linienart-Unterschied: durchgezogen = automatischer Übergang,
-// gestrichelt = durch Nutzer-Aktion ausgelöst.
-function DiagramLegend() {
-  return (
-    <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-gray-200 pt-2 text-xs text-gray-600">
-      <span className="inline-flex items-center gap-2">
-        <svg width="32" height="6" aria-hidden>
-          <line x1="0" y1="3" x2="32" y2="3" stroke="#6b7280" strokeWidth="1.5" />
-        </svg>
-        automatischer Übergang
-      </span>
-      <span className="inline-flex items-center gap-2">
-        <svg width="32" height="6" aria-hidden>
-          <line
-            x1="0"
-            y1="3"
-            x2="32"
-            y2="3"
-            stroke="#6b7280"
-            strokeWidth="1.5"
-            strokeDasharray="4 2"
-          />
-        </svg>
-        durch deine Aktion ausgelöst
-      </span>
-    </div>
   )
 }
 
@@ -289,7 +257,7 @@ function ComparisonLevels() {
           </p>
           <ul className="ml-5 mt-1 list-disc space-y-1 text-gray-700">
             <li>
-              <strong>Wofür:</strong> Die Account-Diagnose auf dem Dashboard
+              <strong>Wofür:</strong> Die Profil-Diagnose auf dem Dashboard
             </li>
             <li>
               <strong>Wie:</strong> Dein Median wird gegen den
@@ -297,7 +265,7 @@ function ComparisonLevels() {
             </li>
             <li>
               <strong>Vorteil:</strong> Zeigt absolute Position. Du merkst,
-              ob dein Account systemisch unter Branchenschnitt liegt.
+              ob dein Profil systemisch unter Branchenschnitt liegt.
             </li>
           </ul>
         </div>
@@ -306,8 +274,8 @@ function ComparisonLevels() {
       <div className="mt-3 rounded-md border border-amber-200 border-l-[3px] border-l-amber-400 bg-amber-50 p-3 text-amber-900">
         <p className="font-semibold">Warum beide Ebenen wichtig sind:</p>
         <p className="mt-1">
-          Nur Eigenvergleich → du merkst nicht, dass dein Account insgesamt
-          unter Branchenschnitt liegt. Nur Branchenvergleich → neue Accounts
+          Nur Eigenvergleich → du merkst nicht, dass dein Profil insgesamt
+          unter Branchenschnitt liegt. Nur Branchenvergleich → neue Profile
           mit niedrigem Niveau hätten nie einen Top Performer. Die Mischform
           schützt vor beiden Fällen.
         </p>
@@ -316,51 +284,3 @@ function ComparisonLevels() {
   )
 }
 
-function PinJourneysBlock() {
-  return (
-    <div className="rounded-md border border-gray-200 bg-white p-4">
-      <h4 className="mb-3 text-base font-semibold text-gray-900">
-        Typische Pin-Reisen
-      </h4>
-      <div className="space-y-4">
-        {PIN_JOURNEYS.map((journey) => (
-          <div
-            key={journey.titel}
-            className="rounded-md border border-gray-200 bg-gray-50 p-3"
-          >
-            <p className="text-sm font-semibold text-gray-900">
-              {journey.titel}
-            </p>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              {journey.steps.map((step, i) => {
-                const c = getCategory(step.slug)
-                return (
-                  <div key={i} className="flex items-center gap-2">
-                    <span
-                      className={`inline-flex flex-col rounded-md border px-2 py-1 text-xs ${c.bgClass} ${c.borderClass}`}
-                    >
-                      <span className="text-[10px] text-gray-500">
-                        {step.tag}
-                      </span>
-                      <span className="font-medium text-gray-900">
-                        {c.emoji} {c.name}
-                      </span>
-                    </span>
-                    {i < journey.steps.length - 1 && (
-                      <span aria-hidden className="text-gray-400">
-                        →
-                      </span>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-            <p className="mt-2 text-xs text-gray-600">
-              <strong>Aktion:</strong> {journey.aktion}
-            </p>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}

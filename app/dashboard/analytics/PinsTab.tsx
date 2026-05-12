@@ -18,7 +18,6 @@ import SharedSortableTh from '@/components/SortableTh'
 import InfoTooltip from '@/components/InfoTooltip'
 import UnmatchedPinsSection from './UnmatchedPinsSection'
 import PinAnalyticsEditModal from './PinAnalyticsEditModal'
-import PinLifecycleCompact from './PinLifecycleCompact'
 import type { DeletedPinEntry } from './AnalyticsClient'
 import {
   calcCtr,
@@ -222,12 +221,13 @@ export default function PinsTab({
         Hier siehst du die Performance deiner Top Pins über alle erfassten
         Zeiträume.
         <br />
+        →{' '}
         <Link
           href="/dashboard/strategie?tab=analytics"
           className="font-medium text-red-600 hover:underline"
         >
-          → Mehr zur Analyse und was die Kategorien bedeuten in Strategie
-          &amp; Ausrichtung
+          Mehr zur Analyse: Pin-Lebenszyklus, Kategorien und Vergleichswerte
+          in Strategie &amp; Ausrichtung
         </Link>
       </p>
 
@@ -239,8 +239,6 @@ export default function PinsTab({
         onAssigned={onUnmatchedPinResolved}
         onSkipped={onUnmatchedPinResolved}
       />
-
-      <PinLifecycleCompact thresholds={thresholds} />
 
       <p className="text-sm text-gray-500">
         💡 Halte den Mauszeiger über die Spaltenüberschriften für Erklärungen.

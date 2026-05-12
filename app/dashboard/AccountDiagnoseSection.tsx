@@ -106,10 +106,10 @@ export default function AccountDiagnoseSection({
     <section className="scroll-mt-4">
       <header className="mb-3">
         <h2 className="text-lg font-semibold text-gray-900">
-          Account-Diagnose
+          Profil-Diagnose
         </h2>
         <p className="text-sm text-gray-600">
-          Automatisch erkannte Muster in deinem Account.
+          Automatisch erkannte Muster in deinem Profil.
         </p>
       </header>
 

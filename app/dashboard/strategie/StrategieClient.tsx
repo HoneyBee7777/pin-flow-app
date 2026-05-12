@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import type { StrategieRow } from './lib'
 import type { PinAnalyticsThresholds } from '../analytics/utils'
+import AudienceWissen from './AudienceWissen'
 import MyStrategy from './MyStrategy'
 import PinLifecycleSection from './PinLifecycleSection'
 
@@ -15,11 +16,15 @@ type TabKey =
   | 'design'
   | 'keywords'
   | 'analytics'
+  | 'audience'
 
 // Tab-Schlüssel bleiben bewusst stabil (`meine`, `grundlagen`, …), damit
 // gespeicherte URLs wie `?tab=analytics` und alte Bookmarks weiter
 // funktionieren. Geändert wurden nur Labels und Anzeigereihenfolge gemäß
 // V2.1.
+// V3.0 (Phase 2c): neuer `audience`-Tab direkt nach `analytics` —
+// Audience-Wissen war bisher ein Sub-Block in „Erfolg messen", ist jetzt
+// eine eigene Sektion.
 const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'grundlagen', label: '📚 So funktioniert Pinterest' },
   { key: 'strategien', label: '💼 Strategie-Modelle' },
@@ -27,6 +32,7 @@ const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'design', label: '🎨 Pin-Gestaltung' },
   { key: 'keywords', label: '🔍 Sichtbarkeit & Keywords' },
   { key: 'analytics', label: '📊 Erfolg messen' },
+  { key: 'audience', label: '👥 Zielgruppe verstehen' },
 ]
 
 const TAB_KEYS: TabKey[] = [
@@ -36,6 +42,7 @@ const TAB_KEYS: TabKey[] = [
   'design',
   'keywords',
   'analytics',
+  'audience',
 ]
 
 export default function StrategieClient({
@@ -102,6 +109,7 @@ export default function StrategieClient({
         {active === 'design' && <TabDesign />}
         {active === 'keywords' && <TabKeywords />}
         {active === 'analytics' && <TabAnalytics thresholds={thresholds} />}
+        {active === 'audience' && <AudienceWissen />}
       </div>
     </div>
   )
@@ -856,7 +864,7 @@ function TabGrundlagen() {
           Wenn du privat nach Themen suchst die nichts mit deiner Nische zu
           tun haben — Rezepte, Reisen, Mode — und diese Pins auf öffentlichen
           Boards speicherst sendest du Pinterest widersprüchliche Signale.
-          Pinterest denkt dein Account bedient mehrere unzusammenhängende
+          Pinterest denkt dein Profil bedient mehrere unzusammenhängende
           Themen und spielt deine Pins weniger zielgerichtet aus.
         </Para>
 
@@ -1825,7 +1833,7 @@ function TabDesign() {
         <div>
           <H3>4. Eigenes Branding</H3>
           <Para>
-            Konsistentes Branding macht deinen Account unverwechselbar:
+            Konsistentes Branding macht dein Profil unverwechselbar:
           </Para>
           <Bullets
             items={[

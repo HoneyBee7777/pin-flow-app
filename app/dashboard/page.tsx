@@ -39,6 +39,8 @@ import { loadUserBenchmark } from './analytics/benchmark'
 import { loadAccountNicheProfile } from './analytics/account-niche'
 import { calculateCoachingDiagnoses } from '@/lib/account-coaching'
 import AccountDiagnoseSection from './AccountDiagnoseSection'
+import AudienceWidget from './AudienceWidget'
+import { getAudienceSnapshots } from '@/lib/audience-snapshot'
 import ProfilGesundheitBlock from './ProfilGesundheitBlock'
 import {
   computeStatus,
@@ -455,6 +457,7 @@ export default async function DashboardPage() {
     pinKeywordsRes,
     benchmark,
     nicheProfile,
+    audienceSnapshots,
   ] = await Promise.all([
     supabase
       .from('profil_analytics')
@@ -577,6 +580,7 @@ export default async function DashboardPage() {
     }),
     loadUserBenchmark(user.id),
     loadAccountNicheProfile(user.id),
+    getAudienceSnapshots(),
   ])
 
   const rows = (profilRes.data ?? []) as ProfilAnalytics[]
@@ -1611,7 +1615,7 @@ export default async function DashboardPage() {
       <PhasenTrenner title="Wo stehst du?" />
 
       {/* 4. Profil-Gesundheit (Status aus aktiven Coaching-Diagnosen +
-            Account-Snapshot). Status leitet sich client-seitig aus den
+            Profil-Snapshot). Status leitet sich client-seitig aus den
             Diagnosen ab — Dismiss-State liegt in localStorage. */}
       <ProfilGesundheitBlock
         profilEr={latest?.engagement ?? null}
@@ -1621,10 +1625,16 @@ export default async function DashboardPage() {
         totalPins={allPinsRows.length}
       />
 
-      {/* 4b. Account-Diagnose (Coaching) — Status-Aussage zum Gesamt-Account,
+      {/* 4b. Profil-Diagnose (Coaching) — Status-Aussage zum Gesamt-Profil,
           gehört thematisch in "Wo stehst du?" zwischen Profil-Gesundheit und
           Performance-KPIs. */}
       <AccountDiagnoseSection diagnoses={coachingDiagnoses} />
+
+      {/* 4c. Zielgruppe-Widget (V3.0 Phase 2d) — kompakte Sicht auf den
+          neuesten Snapshot direkt neben der Profil-Diagnose. Zeigt Größe +
+          Trend + Top-3-Affinitäten und linkt in die Vollansicht im
+          Analytics-Tab „Zielgruppe". */}
+      <AudienceWidget snapshots={audienceSnapshots} />
 
       {/* 5. Gesamt-Profil-Performance (KPIs + Performance-Verlauf in 3 Spalten) */}
       <ProfilPerformanceSection
