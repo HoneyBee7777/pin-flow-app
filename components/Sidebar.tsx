@@ -63,7 +63,7 @@ const NAV_GROUPS: NavGroup[] = [
     collapsible: true,
     defaultOpen: true,
     items: [
-      { name: 'Wissen & Prompts', href: '/dashboard/ressourcen' },
+      { name: 'Prompts & Vorlagen', href: '/dashboard/ressourcen' },
       { name: 'Strategie & Ausrichtung', href: '/dashboard/strategie' },
       { name: 'FAQ', href: '/dashboard/faq' },
     ],

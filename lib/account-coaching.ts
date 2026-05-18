@@ -47,6 +47,15 @@ export type CoachingSnapshot = {
   primaryNicheId?: string | null
 }
 
+// V3.2.2 — strukturierter Link zu einer ausführlicheren Erklärung in der
+// App (statt reinem Text-Pfad). UI rendert: „Mehr dazu: → {label}
+// (in {parent})" mit {label} als klickbarem Link auf {href}.
+export type WeiterführendLink = {
+  label: string
+  parent: string
+  href: string
+}
+
 export type CoachingDiagnosis = {
   id: CoachingDiagnosisId
   severity: CoachingSeverity
@@ -54,9 +63,9 @@ export type CoachingDiagnosis = {
   problem: string
   ursache: string
   handlung: string
-  // Pfad zu einer ausführlicheren Erklärung in der App; null wenn keiner
-  // sinnvoll ist.
-  weiterführend: string | null
+  // Klickbarer Verweis auf eine ausführlichere Erklärung; null wenn
+  // keiner sinnvoll ist.
+  weiterführend: WeiterführendLink | null
   // Snapshot zum Persistieren beim Dismiss — siehe shouldShowDespiteDismissal.
   snapshot: CoachingSnapshot
 }
@@ -224,7 +233,7 @@ export function calculateCoachingDiagnoses(
         id,
         severity: 'wichtig',
         titel: 'Pinterest-Algorithmus traut deinen Pins nicht',
-        problem: `Deine durchschnittliche Save-Rate von ${fmtPct(sr!)}% liegt deutlich unter dem Branchenschnitt für ${niche.label} (${fmtPct(niche.save_rate.schwach, 1)}–${fmtPct(niche.save_rate.durchschnitt, 1)}%). Pinterest bekommt zu wenig Bestätigung, dass deine Inhalte wertvoll sind, und spielt sie deshalb sparsam aus.`,
+        problem: `Deine durchschnittliche Save-Rate von ${fmtPct(sr!)}% liegt deutlich unter dem Branchenschnitt für die Save-Rate (${fmtPct(niche.save_rate.schwach, 1)}–${fmtPct(niche.save_rate.durchschnitt, 1)}%). Pinterest bekommt zu wenig Bestätigung, dass deine Inhalte wertvoll sind, und spielt sie deshalb sparsam aus.`,
         ursache:
           'In den meisten Fällen drei mögliche Ursachen: (1) Themen treffen die Zielgruppe nicht, (2) Pin-Cover sind nicht emotional genug aufgeladen, oder (3) Keywords passen nicht zum Bild — Pinterest spielt den Pin falschen Nutzern aus.',
         handlung:
@@ -296,13 +305,16 @@ export function calculateCoachingDiagnoses(
         severity: 'kritisch',
         titel: 'Deine Pins werden kaum ausgespielt',
         problem:
-          'Mehr als 70 % deiner Pins haben weniger als 200 Impressionen. Pinterest gibt deinem Account aktuell wenig Reichweite — das ist meist ein SEO- oder Board-Strukturproblem.',
+          'Mehr als 70 % deiner Pins haben weniger als 200 Impressionen. Pinterest gibt deinem Profil aktuell wenig Reichweite — das ist meist ein SEO- oder Board-Strukturproblem.',
         ursache:
           'Häufige Gründe: (1) Pins ohne klare Keywords in Titel und Beschreibung, (2) Boards mit schlechten Namen oder leerer Beschreibung, (3) zu breit gestreute Themen ohne klare Nischen-Konsistenz.',
         handlung:
           'Erste Schritte: Prüfe deine 5 wichtigsten Boards — haben sie aussagekräftige Namen mit Keywords ganz vorn? Beschreibungen mit 2-3 Sätzen? Wenn nicht: erst Boards optimieren, dann mit der Pin-Produktion fortfahren.',
-        weiterführend:
-          'Strategie & Ausrichtung > Erfolg messen > Board-Performance',
+        weiterführend: {
+          label: 'Erfolg messen',
+          parent: 'Strategie & Ausrichtung',
+          href: '/dashboard/strategie?tab=analytics',
+        },
         snapshot: { pinsAeltAls60Tage, medianImpressionen: medianImp },
       })
       trace.push({ id, triggered: true, reason: 'OK', values })
@@ -340,11 +352,11 @@ export function calculateCoachingDiagnoses(
       diagnoses.push({
         id,
         severity: 'hinweis',
-        titel: 'Dein Account hat keine klare Nische',
+        titel: 'Dein Profil hat keine klare Nische',
         problem:
-          'Pinterest erkennt aktuell nicht klar, wofür dein Account steht. Du hast Pins in mehreren Nischen, ohne dass eine klar dominiert. Das macht es dem Algorithmus schwer, deine Inhalte den richtigen Menschen zu zeigen.',
+          'Pinterest erkennt aktuell nicht klar, wofür dein Profil steht. Du hast Pins in mehreren Nischen, ohne dass eine klar dominiert. Das macht es dem Algorithmus schwer, deine Inhalte den richtigen Menschen zu zeigen.',
         ursache:
-          'Pinterest funktioniert nach Themen-Konsistenz. Ein Account, der zu 60 %+ aus einer Nische besteht, wird vom Algorithmus klar zugeordnet.',
+          'Pinterest funktioniert nach Themen-Konsistenz. Ein Profil, das zu 60 %+ aus einer Nische besteht, wird vom Algorithmus klar zugeordnet.',
         handlung:
           'Definiere eine Hauptnische und 1-2 Nebennischen. Ziel: 60-70 % deiner Pins in der Hauptnische. Boards außerhalb entweder löschen oder geheim setzen.',
         weiterführend: null,
@@ -386,7 +398,7 @@ export function calculateCoachingDiagnoses(
         severity: 'hinweis',
         titel: 'Boards ohne Nischen-Zuordnung',
         problem:
-          'Wir können dein Account-Profil aktuell nicht analysieren, weil weniger als die Hälfte deiner Boards einer Nische zugeordnet sind.',
+          'Wir können dein Profil aktuell nicht analysieren, weil weniger als die Hälfte deiner Boards einer Nische zugeordnet sind.',
         ursache:
           'Bei der Board-Anlage wurde das Kategorie-Feld nicht ausgefüllt.',
         handlung:
@@ -421,9 +433,9 @@ export function calculateCoachingDiagnoses(
         id,
         severity: 'hinweis',
         titel: 'Deine ältesten Pins ziehen den Schnitt nach unten',
-        problem: `Du hast ${alteSchlechtePin} Pins, die älter als ein Jahr sind und kaum Performance zeigen. Diese Pins ziehen deinen Account-Schnitt nach unten.`,
+        problem: `Du hast ${alteSchlechtePin} Pins, die älter als ein Jahr sind und kaum Performance zeigen. Diese Pins ziehen deinen Profil-Schnitt nach unten.`,
         ursache:
-          'Typischer Verlauf bei Accounts, die ohne klare Strategie und Keyword-Recherche gestartet sind.',
+          'Typischer Verlauf bei Profilen, die ohne klare Strategie und Keyword-Recherche gestartet sind.',
         handlung:
           'Schwache alte Pins auf private Boards verschieben. Bei Pins zu strategisch wichtigen Themen: Recyceln mit neuem Cover und überarbeiteten Keywords. Nicht löschen — du verlierst eingehende Backlinks.',
         weiterführend: null,

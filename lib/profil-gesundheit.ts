@@ -29,6 +29,64 @@ export type ProfilGesundheitErgebnis = {
 // jede Aussage statistisch wackelig ist.
 export const PROFIL_GESUNDHEIT_MIN_PINS = 30
 
+// Deutsche Zahlwörter für die Befund-Anzahl (0–12 reichen — mehr Befunde
+// kann das Coaching-System realistisch nicht gleichzeitig auslösen).
+const ZAHLWORT = [
+  'Null',
+  'Ein',
+  'Zwei',
+  'Drei',
+  'Vier',
+  'Fünf',
+  'Sechs',
+  'Sieben',
+  'Acht',
+  'Neun',
+  'Zehn',
+  'Elf',
+  'Zwölf',
+] as const
+
+function zahlwort(n: number): string {
+  return ZAHLWORT[n] ?? String(n)
+}
+
+// V3.2 Fix 3 — dynamischer Beschreibungs-Satz aus der Befund-Anzahl.
+// „Befund" (Singular) / „Befunde" (Plural); verweist auf den Sektions-
+// Namen „Profil-Diagnose" statt auf ein Layout-Konzept („unten").
+function buildBefundBeschreibung(kritisch: number, wichtig: number): string {
+  const total = kritisch + wichtig
+  if (total === 0) {
+    return 'Keine kritischen Befunde — alles im grünen Bereich.'
+  }
+
+  const nachsatz =
+    ' Im Bereich Befunde findest du die Schritte zur Verbesserung.'
+
+  let kern: string
+  if (kritisch === 0) {
+    kern =
+      wichtig === 1
+        ? 'Ein Befund — wichtig.'
+        : wichtig === 2
+          ? 'Zwei Befunde — beide wichtig.'
+          : `${zahlwort(wichtig)} Befunde — alle wichtig.`
+  } else if (wichtig === 0) {
+    kern =
+      kritisch === 1
+        ? 'Ein Befund — kritisch.'
+        : `${zahlwort(kritisch)} Befunde — alle kritisch.`
+  } else {
+    const totalWort = zahlwort(total)
+    kern =
+      kritisch === 1
+        ? `${totalWort} Befunde — einer kritisch.`
+        : `${totalWort} Befunde — ${zahlwort(kritisch).toLowerCase()} kritisch.`
+  }
+
+  return kern + nachsatz
+}
+
 export function computeProfilGesundheit(
   diagnosen: ReadonlyArray<CoachingDiagnosis>,
   totalPins: number
@@ -53,47 +111,31 @@ export function computeProfilGesundheit(
     else if (d.severity === 'wichtig') wichtig += 1
   }
 
+  // Beschreibung ist ab V3.2 rein datengetrieben (Anzahl + Schweregrad
+  // der Befunde) und an allen Stufen identisch aufgebaut — nur Status
+  // und Label hängen von den Schwellen unten ab.
+  const beschreibung = buildBefundBeschreibung(kritisch, wichtig)
+
   // Reihenfolge ist bewusst: kritisch schlägt wichtig schlägt rest. Ein
   // Account mit 1 kritischen + 3 wichtigen ist 'ausbaufaehig', nicht
   // 'solide-mit-optimierung'.
   if (kritisch >= 2) {
-    return {
-      status: 'schwach',
-      label: 'Schwach',
-      beschreibung:
-        'Mehrere kritische Probleme erkannt. Schau dir die Diagnose unten an — dort steht, womit du anfangen solltest.',
-    }
+    return { status: 'schwach', label: 'Schwach', beschreibung }
   }
   if (kritisch === 1) {
-    return {
-      status: 'ausbaufaehig',
-      label: 'Ausbaufähig',
-      beschreibung:
-        'Ein kritisches Problem erkannt. Lies die Diagnose unten — die Lösung ist dort konkret beschrieben.',
-    }
+    return { status: 'ausbaufaehig', label: 'Ausbaufähig', beschreibung }
   }
   if (wichtig >= 2) {
     return {
       status: 'solide-mit-optimierung',
       label: 'Solide mit Optimierungsbedarf',
-      beschreibung:
-        'Dein Account funktioniert grundsätzlich, hat aber mehrere Hebel. Die Diagnose unten zeigt dir, wo du ansetzen kannst.',
+      beschreibung,
     }
   }
   if (wichtig === 1) {
-    return {
-      status: 'solide',
-      label: 'Solide',
-      beschreibung:
-        'Dein Account ist gut aufgestellt. Eine konkrete Optimierung kannst du in der Diagnose unten anschauen.',
-    }
+    return { status: 'solide', label: 'Solide', beschreibung }
   }
-  return {
-    status: 'stark',
-    label: 'Stark',
-    beschreibung:
-      'Dein Account zeigt eine sehr gesunde Pinterest-Performance. Halte die Frequenz und prüfe beim nächsten Daten-Import erneut.',
-  }
+  return { status: 'stark', label: 'Stark', beschreibung }
 }
 
 // Visuelle Klassen für die 5-stufige Ampel. Aktive Stufe nutzt activeBg/border,
@@ -125,7 +167,7 @@ export const PROFIL_GESUNDHEIT_STUFEN: ReadonlyArray<{
   {
     key: 'solide-mit-optimierung',
     emoji: '🟡',
-    label: 'Solide + Opt.',
+    label: 'Optimierbar',
     activeText: 'text-yellow-700',
     activeBg: 'bg-yellow-100',
     activeBorder: 'border-yellow-500',

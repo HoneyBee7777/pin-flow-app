@@ -307,6 +307,7 @@ export default function AnalyticsClient({
         <AudienceTab
           snapshots={audienceSnapshots}
           nicheProfile={nicheProfile}
+          profilAnalytics={profilAnalytics}
         />
       )}
     </div>

@@ -62,6 +62,20 @@ export type AudienceSnapshot = {
   data: AudienceSnapshotData
 }
 
+// V3.0.9 — strukturierter 3-Absatz-Coaching-Text. Wird an beiden Orten
+// (Dashboard-Performance-Block + Analytics-Tab) identisch ausgespielt.
+//   observation  — was zeigen die Daten
+//   explanation  — warum es strategisch wichtig ist (Algorithmus-Logik)
+//   reflection   — Reflexions-Impuls (Selbst-Aktivierung)
+// Absätze können sparsame **fett**-Marker enthalten, die der gemeinsame
+// Renderer (components/CoachingParagraphs) in <strong> umwandelt.
+export type CoachingBlock = {
+  observation: string
+  explanation: string
+  reflection: string
+  variant: 'A' | 'B' | 'C'
+}
+
 // Ergebnis der Heuristik. UI rendert daraus den „Auf einen Blick"-Block.
 // Einzelne Felder sind optional, damit das UI gezielt einzelne Bausteine
 // einblenden kann (z. B. trendHint nur wenn ≥ 2 Snapshots vorhanden sind).
@@ -72,4 +86,7 @@ export type AudienceInsight = {
   demographicHighlight: string
   nicheGapHint: string | null
   trendHint: string | null
+  // null, wenn keine Top-Affinität vorliegt (dann gibt es keinen
+  // sinnvollen 3-Absatz-Coaching-Text — UI fällt auf `summary` zurück).
+  coachingBlock: CoachingBlock | null
 }

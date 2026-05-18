@@ -4,6 +4,10 @@ import { useEffect, useMemo, useState } from 'react'
 import type { AccountNicheProfile } from '@/lib/account-niche-profile'
 import { generateAudienceInsights } from '@/lib/audience-insights'
 import type { AudienceSnapshot } from '@/lib/audience-types'
+import {
+  effectiveZeitraum,
+  type ProfilAnalyticsWithGrowth,
+} from './utils'
 import AudienceInsightSummary from './AudienceInsightSummary'
 import AudienceInterestsTable from './AudienceInterestsTable'
 import {
@@ -29,9 +33,12 @@ import AudienceSnapshotList from './AudienceSnapshotList'
 export default function AudienceTab({
   snapshots,
   nicheProfile,
+  profilAnalytics,
 }: {
   snapshots: AudienceSnapshot[]
   nicheProfile: AccountNicheProfile
+  // DESC nach datum (withGrowth). [0] = neuester Performance-Datensatz.
+  profilAnalytics: ProfilAnalyticsWithGrowth[]
 }) {
   // Leerer State: kein Snapshot bisher importiert.
   if (snapshots.length === 0) {
@@ -48,7 +55,11 @@ export default function AudienceTab({
   }
 
   return (
-    <AudienceTabBody snapshots={snapshots} nicheProfile={nicheProfile} />
+    <AudienceTabBody
+      snapshots={snapshots}
+      nicheProfile={nicheProfile}
+      profilAnalytics={profilAnalytics}
+    />
   )
 }
 
@@ -57,11 +68,30 @@ export default function AudienceTab({
 function AudienceTabBody({
   snapshots,
   nicheProfile,
+  profilAnalytics,
 }: {
   snapshots: AudienceSnapshot[]
   nicheProfile: AccountNicheProfile
+  profilAnalytics: ProfilAnalyticsWithGrowth[]
 }) {
   const [selectedId, setSelectedId] = useState<string>(snapshots[0].id)
+
+  // V3.0.8 — die angezeigte Zielgruppen-Größe stammt jetzt aus den
+  // Performance-Daten („Interagierende Zielgruppe"), NICHT mehr aus der
+  // gerundeten CSV-Audience-Size. Immer der neueste Performance-Datensatz,
+  // unabhängig vom selektierten Snapshot (andere Datenquelle).
+  const profilLatest = profilAnalytics[0] ?? null
+  const profilPrev = profilAnalytics[1] ?? null
+  const engaged = profilLatest
+    ? {
+        value: profilLatest.interagierende_zielgruppe,
+        dateIso: effectiveZeitraum(profilLatest).bis,
+        growthPct: profilLatest.interagierend_growth,
+        previousValue: profilPrev
+          ? profilPrev.interagierende_zielgruppe
+          : null,
+      }
+    : null
 
   const selected =
     snapshots.find((s) => s.id === selectedId) ?? snapshots[0]
@@ -75,8 +105,18 @@ function AudienceTabBody({
         previousSnapshot: previous,
         nicheId: nicheProfile.primaryNiche?.id ?? null,
         nicheLabel: nicheProfile.primaryNiche?.label ?? null,
+        // V3.0.9 — Größen-Satz/Trend basieren auf der echten
+        // interagierenden Zielgruppe aus den Performance-Daten.
+        engagedSize: engaged?.value ?? null,
+        engagedPreviousSize: engaged?.previousValue ?? null,
       }),
-    [selected, previous, nicheProfile]
+    [
+      selected,
+      previous,
+      nicheProfile,
+      engaged?.value,
+      engaged?.previousValue,
+    ]
   )
 
   // V3.0 Phase 2d: Pillen vom Dashboard-Widget linken auf
@@ -108,10 +148,7 @@ function AudienceTabBody({
         />
       )}
       <AudienceInsightSummary insight={insight} />
-      <AudienceSizeBlock
-        snapshot={selected}
-        previousSnapshot={previous}
-      />
+      <AudienceSizeBlock engaged={engaged} />
       <AudienceDemographics snapshot={selected} />
       <AudienceInterestsTable interests={selected.data.interests} />
     </div>

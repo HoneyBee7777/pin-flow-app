@@ -13,6 +13,7 @@ import type {
   AudienceInsight,
   AudienceInterest,
   AudienceSnapshot,
+  CoachingBlock,
 } from './audience-types'
 import { getExpectedAudienceCategories } from './audience-niche-mapping'
 import { germanCategoryName } from './audience-translations'
@@ -142,26 +143,103 @@ function buildNicheGapHint(
   return `Deine Hauptnische ist ${nicheLabel}, aber deine Zielgruppe zeigt die höchste Affinität zu ${germanCategoryName(topCategory.category)}. Schau, ob du Brücken zwischen den Themen bauen kannst.`
 }
 
+// Verbindet Kategorienamen zu einer deutschen Aufzählung
+// („A, B und C"). Wird vom Summary und vom Dashboard-Widget genutzt.
+function joinGermanList(names: string[]): string {
+  if (names.length === 1) return names[0]
+  if (names.length === 2) return `${names[0]} und ${names[1]}`
+  return `${names.slice(0, -1).join(', ')} und ${names[names.length - 1]}`
+}
+
+// V3.0.9 — strukturierter 3-Absatz-Coaching-Text (Beobachtung → Warum →
+// Reflexion). Nutzt dieselbe Match/Mismatch/Fallback-Heuristik wie
+// `buildNicheGapHint` (Hauptnische × Top-Affinitäten). Liefert null, wenn
+// keine Top-Affinität vorliegt (dann fällt das UI auf `summary` zurück).
+//
+// Drei Varianten:
+//   A Match    — Hauptnische passt zu einer Top-Affinität
+//   B Mismatch — Hauptnische gemappt, aber nicht unter Top-Affinitäten
+//   C Fallback — keine/ungemappte Hauptnische
+//
+// Sparsame **fett**-Marker (1 pro Variante) werden vom gemeinsamen
+// Renderer (components/CoachingParagraphs) zu <strong> aufgelöst.
+export function buildCoachingBlock(
+  nicheId: string | null,
+  nicheLabel: string | null,
+  topAffinities: AudienceInterest[]
+): CoachingBlock | null {
+  if (topAffinities.length === 0) return null
+
+  const list = joinGermanList(
+    topAffinities.map((c) => germanCategoryName(c.category))
+  )
+  const expected = getExpectedAudienceCategories(nicheId)
+  const topCategoryNames = new Set(topAffinities.map((c) => c.category))
+
+  const explanationBase =
+    'Pinterest spielt deine Pins primär an Menschen aus, deren Interessen zu deinen Pin-Themen passen.'
+
+  // Variante A — Match
+  if (
+    nicheId &&
+    nicheLabel &&
+    expected.length > 0 &&
+    expected.some((cat) => topCategoryNames.has(cat))
+  ) {
+    return {
+      variant: 'A',
+      observation: `Deine Zielgruppe interessiert sich besonders stark für ${list} — Themen, die direkt zu deiner Hauptnische ${nicheLabel} passen. Du bist also richtig positioniert.`,
+      explanation: `${explanationBase} Da deine Zielgruppe genau für deine Kernthemen brennt, hast du **maximale Algorithmus-Unterstützung** — jeder zusätzliche Pin in diesen Themen verstärkt deine Sichtbarkeit überproportional.`,
+      reflection:
+        'Überlege: In welchem dieser Themen kannst du dein Profil noch tiefer ausbauen, um deinen Vorteil zu festigen?',
+    }
+  }
+
+  // Variante B — Mismatch (Hauptnische gemappt, aber nicht unter Top)
+  if (nicheId && nicheLabel && expected.length > 0) {
+    return {
+      variant: 'B',
+      observation: `Deine Zielgruppe interessiert sich besonders stark für ${list} — Themen, die du noch wenig bedienst. Deine Hauptnische ist ${nicheLabel}.`,
+      explanation: `${explanationBase} Wenn du Brücken-Themen bedienst — also Inhalte, die deine Nische mit den Interessen deiner Zielgruppe verbinden — erreichst du mehrere Zielgruppen gleichzeitig: **mehr Reichweite, mehr Saves, weniger Konkurrenz** in der Pinterest-Suche.`,
+      reflection:
+        'Überlege: Welche zwei oder drei Brücken-Themen passen authentisch zu deiner Marke?',
+    }
+  }
+
+  // Variante C — keine Nische oder Nische nicht im Mapping
+  return {
+    variant: 'C',
+    observation: `Deine Zielgruppe interessiert sich besonders stark für ${list} — überdurchschnittlich im Vergleich zum Pinterest-Schnitt.`,
+    explanation: `${explanationBase} Themen mit hoher Affinität sind dein **Algorithmus-Hebel** — sie werden bevorzugt verteilt und haben in der Pinterest-Suche weniger Konkurrenz.`,
+    reflection:
+      'Überlege: Bedient deine aktuelle Pin-Strategie diese drei Themen schon ausreichend? Wo könntest du nachschärfen?',
+  }
+}
+
 // Trend-Hint: vergleicht den aktuellen Snapshot mit dem nächstälteren
 // (Index 1 in einer absteigend nach Datum sortierten Liste). Liefert
 // null, wenn nur ein Snapshot existiert oder die Differenz im Toleranz-
 // Bereich liegt.
+// `vergleichLabel` ist die komplette Präpositionalphrase, damit die
+// Grammatik je nach Quelle stimmt: „zum Vormonat" (CSV-Snapshots) bzw.
+// „zur Vorperiode" (Performance-Daten / interagierende Zielgruppe).
 function buildTrendHint(
-  current: AudienceSnapshot,
-  previous: AudienceSnapshot | null
+  currentSize: number,
+  previousSize: number | null,
+  vergleichLabel: string
 ): string | null {
-  if (!previous) return null
-  if (previous.audienceSize <= 0) return null
+  if (previousSize === null) return null
+  if (previousSize <= 0) return null
 
-  const diff = current.audienceSize - previous.audienceSize
-  const relative = diff / previous.audienceSize
+  const diff = currentSize - previousSize
+  const relative = diff / previousSize
   if (Math.abs(relative) < TREND_STABILITY_THRESHOLD) {
-    return 'Größe der Zielgruppe ist zum Vormonat stabil.'
+    return `Größe der Zielgruppe ist ${vergleichLabel} stabil.`
   }
   const direction = diff > 0 ? 'gewachsen' : 'geschrumpft'
   const absPercent = formatPercent(Math.abs(relative))
   const absCount = formatCount(Math.abs(diff))
-  return `Zielgruppe ist zum Vormonat um ${absPercent} ${direction} (${diff > 0 ? '+' : '−'}${absCount} Personen).`
+  return `Zielgruppe ist ${vergleichLabel} um ${absPercent} ${direction} (${diff > 0 ? '+' : '−'}${absCount} Personen).`
 }
 
 // Setzt den Summary-Volltext zusammen. Drei Sätze sind Pflicht
@@ -173,12 +251,19 @@ function buildSummary(
   weakAffinities: AudienceInterest[],
   demographicHighlight: string,
   nicheGapHint: string | null,
-  trendHint: string | null
+  trendHint: string | null,
+  // V3.0.9 — echte interagierende Zielgruppe aus den Performance-Daten.
+  // Wenn gesetzt, ersetzt sie die gerundete CSV-Audience-Size (z. B. die
+  // irreführende „10.000"-Größenklasse).
+  engagedSize: number | null
 ): string {
   const sentences: string[] = []
 
   // Satz 1: Größe + Demografie
-  const sizeText = `Deine Zielgruppe hat ${formatCount(snapshot.audienceSize)} Personen`
+  const sizeText =
+    engagedSize !== null
+      ? `Deine interagierende Zielgruppe liegt bei ${formatCount(engagedSize)} Personen`
+      : `Deine Zielgruppe hat ${formatCount(snapshot.audienceSize)} Personen`
   sentences.push(
     demographicHighlight
       ? `${sizeText}, ${demographicHighlight}.`
@@ -239,11 +324,18 @@ export function generateAudienceInsights({
   previousSnapshot = null,
   nicheId = null,
   nicheLabel = null,
+  engagedSize = null,
+  engagedPreviousSize = null,
 }: {
   snapshot: AudienceSnapshot
   previousSnapshot?: AudienceSnapshot | null
   nicheId?: string | null
   nicheLabel?: string | null
+  // V3.0.9 — interagierende Zielgruppe + Vorperioden-Wert aus den
+  // Performance-Daten. Wenn gesetzt, basieren Größen-Satz UND Trend
+  // darauf statt auf der gerundeten CSV-Audience-Size.
+  engagedSize?: number | null
+  engagedPreviousSize?: number | null
 }): AudienceInsight {
   const topAffinities = pickTopAffinities(
     snapshot.data.interests,
@@ -257,14 +349,27 @@ export function generateAudienceInsights({
   )
   const demographicHighlight = buildDemographicHighlight(snapshot)
   const nicheGapHint = buildNicheGapHint(nicheId, nicheLabel, topAffinities)
-  const trendHint = buildTrendHint(snapshot, previousSnapshot)
+  const usingEngaged = engagedSize !== null
+  const trendHint = usingEngaged
+    ? buildTrendHint(engagedSize, engagedPreviousSize, 'zur Vorperiode')
+    : buildTrendHint(
+        snapshot.audienceSize,
+        previousSnapshot ? previousSnapshot.audienceSize : null,
+        'zum Vormonat'
+      )
   const summary = buildSummary(
     snapshot,
     topAffinities,
     weakAffinities,
     demographicHighlight,
     nicheGapHint,
-    trendHint
+    trendHint,
+    engagedSize
+  )
+  const coachingBlock = buildCoachingBlock(
+    nicheId,
+    nicheLabel,
+    topAffinities
   )
 
   return {
@@ -274,5 +379,6 @@ export function generateAudienceInsights({
     demographicHighlight,
     nicheGapHint,
     trendHint,
+    coachingBlock,
   }
 }

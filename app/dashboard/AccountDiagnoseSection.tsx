@@ -1,22 +1,18 @@
 'use client'
 
-// Dashboard-Sektion „Account-Diagnose" — zeigt automatisch erkannte Muster
-// im Account und konkrete Handlungsempfehlungen. Position: oberhalb von
-// „Bestehende Pins optimieren", unterhalb von „Keywords & SEO".
+// V3.2.1 — „Befunde" als Sub-Sektion innerhalb des Profil-Status-Blocks
+// (früher eigenständige Sektion „Profil-Diagnose"). Dieses Modul ist jetzt
+// rein präsentational: Hydration, Dismiss-State und Filterung liegen im
+// ProfilGesundheitBlock (eine Quelle für Status + Liste), hier nur das
+// Rendering der Liste und der einzelnen Befund-Toggles.
 //
-// Coaching-Logik liegt in lib/account-coaching.ts. Hier nur Rendering +
-// Dismissal-Verwaltung über localStorage.
+// Coaching-Logik: lib/account-coaching.ts.
 
-import { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import {
-  shouldShowDespiteDismissal,
   type CoachingDiagnosis,
   type CoachingSeverity,
-  type DismissedMap,
-  type DismissedRecord,
 } from '@/lib/account-coaching'
-
-const STORAGE_KEY = 'pin_flow_diagnosis_dismissed'
 
 const SEVERITY_BORDER: Record<CoachingSeverity, string> = {
   kritisch: 'border-red-300',
@@ -36,147 +32,72 @@ const SEVERITY_LABEL: Record<CoachingSeverity, string> = {
   hinweis: 'Hinweis',
 }
 
-// Liest die gespeicherten Dismiss-Records. Korrupte JSON-Daten werden
-// stillschweigend verworfen — das Coaching bleibt funktional, der User sieht
-// die Diagnosen wieder.
-function readDismissedMap(): DismissedMap {
-  if (typeof window === 'undefined') return {}
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY)
-    if (!raw) return {}
-    const parsed = JSON.parse(raw) as unknown
-    if (parsed && typeof parsed === 'object') {
-      return parsed as DismissedMap
-    }
-  } catch {
-    // ignore
-  }
-  return {}
-}
-
-function writeDismissedMap(map: DismissedMap): void {
-  if (typeof window === 'undefined') return
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(map))
-  } catch {
-    // localStorage voll oder Privacy-Mode — Dismiss greift dann nicht,
-    // ist aber kein Crash-Grund.
-  }
-}
-
-export default function AccountDiagnoseSection({
+// Befund-Liste inkl. Sub-Überschrift. `diagnoses` ist die server-seitig
+// berechnete Liste — V3.2.2: keine Dismiss-Filterung mehr, Befunde sind
+// rein datengetrieben und verschwinden nur, wenn sich die Werte bessern.
+export function BefundeListe({
   diagnoses,
 }: {
-  diagnoses: CoachingDiagnosis[]
+  diagnoses: ReadonlyArray<CoachingDiagnosis>
 }) {
-  // Hydration: erst auf dem Client lesen, sonst Mismatch zwischen SSR
-  // (kein localStorage) und Client.
-  const [dismissedMap, setDismissedMap] = useState<DismissedMap>({})
-  const [hydrated, setHydrated] = useState(false)
-
-  useEffect(() => {
-    setDismissedMap(readDismissedMap())
-    setHydrated(true)
-  }, [])
-
-  // Filter: Diagnose anzeigen wenn entweder noch nicht dismissed, ODER
-  // Dismiss ist abgelaufen / Werte haben sich signifikant geändert.
-  const visibleDiagnoses = useMemo(() => {
-    if (!hydrated) {
-      // Vor Hydration nichts anzeigen — vermeidet Flackern, falls der User
-      // in der Vergangenheit alle dismissed hat.
-      return [] as CoachingDiagnosis[]
-    }
-    return diagnoses.filter((d) =>
-      shouldShowDespiteDismissal(d, dismissedMap[d.id])
-    )
-  }, [diagnoses, dismissedMap, hydrated])
-
-  function dismiss(d: CoachingDiagnosis) {
-    const record: DismissedRecord = {
-      dismissedAt: new Date().toISOString(),
-      snapshot: d.snapshot,
-    }
-    const next: DismissedMap = { ...dismissedMap, [d.id]: record }
-    setDismissedMap(next)
-    writeDismissedMap(next)
-  }
-
   return (
-    <section className="scroll-mt-4">
-      <header className="mb-3">
-        <h2 className="text-lg font-semibold text-gray-900">
-          Profil-Diagnose
-        </h2>
-        <p className="text-sm text-gray-600">
-          Automatisch erkannte Muster in deinem Profil.
-        </p>
-      </header>
+    <div>
+      <h3 className="text-base font-semibold text-gray-900">Befunde</h3>
+      <p className="text-sm text-gray-600">
+        Automatisch erkannte Muster in deinem Profil.
+      </p>
 
-      {!hydrated ? (
-        <div className="rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-500">
-          Diagnose wird geladen…
-        </div>
-      ) : visibleDiagnoses.length === 0 ? (
-        <div className="rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-700">
-          ✓ Keine kritischen Probleme erkannt. Dein Account zeigt eine solide
-          Grundstruktur — fokussiere dich auf die individuellen
-          Pin-Empfehlungen unten.
-        </div>
-      ) : (
-        <ul className="space-y-3">
-          {visibleDiagnoses.map((d) => (
-            <DiagnoseCard
-              key={d.id}
-              diagnose={d}
-              onDismiss={() => dismiss(d)}
-            />
-          ))}
-        </ul>
-      )}
-    </section>
+      <div className="mt-3">
+        {diagnoses.length === 0 ? (
+          <div className="rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-700">
+            ✓ Keine kritischen Probleme erkannt. Dein Profil zeigt eine
+            solide Grundstruktur — fokussiere dich auf die individuellen
+            Pin-Empfehlungen unten.
+          </div>
+        ) : (
+          <ul className="space-y-3">
+            {diagnoses.map((d) => (
+              <DiagnoseCard key={d.id} diagnose={d} />
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
   )
 }
 
-function DiagnoseCard({
+// V3.2.1 Fix 3 — Toggle-Layout konsistent zu den anderen App-Toggles
+// (vgl. „Zielgruppe verstehen", AudienceWissen.tsx): natives
+// <details>/<summary>, ▸/▾-Pfeil ganz links, ganze Zeile klickbar,
+// Hover-Highlight. Aufgeklappter Inhalt (Problem/Ursache/Handlung)
+// unverändert.
+export function DiagnoseCard({
   diagnose: d,
-  onDismiss,
 }: {
   diagnose: CoachingDiagnosis
-  onDismiss: () => void
 }) {
-  const [expanded, setExpanded] = useState(false)
   return (
     <li
       className={`rounded-lg border-2 bg-white shadow-sm ${SEVERITY_BORDER[d.severity]}`}
     >
-      <button
-        type="button"
-        onClick={() => setExpanded((v) => !v)}
-        aria-expanded={expanded}
-        className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-gray-50"
-      >
-        <span
-          className={`mt-0.5 inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-semibold ${SEVERITY_BADGE[d.severity]}`}
-        >
-          {SEVERITY_LABEL[d.severity]}
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-gray-900">{d.titel}</p>
-          {!expanded && (
-            <p className="mt-0.5 text-xs text-gray-600 line-clamp-2">
-              {d.problem}
-            </p>
-          )}
-        </div>
-        <span
-          className="mt-0.5 shrink-0 text-gray-400"
-          aria-hidden
-        >
-          {expanded ? '▾' : '▸'}
-        </span>
-      </button>
-      {expanded && (
+      <details className="group">
+        <summary className="flex cursor-pointer list-none items-start gap-3 px-4 py-3 hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
+          <span
+            aria-hidden
+            className="mt-0.5 text-lg leading-none text-gray-400 transition-transform"
+          >
+            <span className="inline group-open:hidden">▸</span>
+            <span className="hidden group-open:inline">▾</span>
+          </span>
+          <span
+            className={`mt-0.5 inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-semibold ${SEVERITY_BADGE[d.severity]}`}
+          >
+            {SEVERITY_LABEL[d.severity]}
+          </span>
+          <span className="min-w-0 flex-1 text-sm font-semibold text-gray-900">
+            {d.titel}
+          </span>
+        </summary>
         <div className="space-y-3 border-t border-gray-100 px-4 py-3 text-sm text-gray-700">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
@@ -197,24 +118,23 @@ function DiagnoseCard({
             <p className="mt-1 whitespace-pre-line">{d.handlung}</p>
           </div>
           {d.weiterführend && (
-            <p className="text-xs italic text-gray-500">
-              Mehr dazu: {d.weiterführend}
+            // Pfeil → bleibt außerhalb des verlinkten Bereichs — nur das
+            // Label ist klickbar (App-Konvention).
+            <p className="text-xs text-gray-500">
+              Mehr dazu: →{' '}
+              <Link
+                href={d.weiterführend.href}
+                className="font-medium text-red-600 hover:underline"
+              >
+                {d.weiterführend.label}
+              </Link>{' '}
+              <span className="text-gray-400">
+                (in {d.weiterführend.parent})
+              </span>
             </p>
           )}
-          <div className="pt-1">
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation()
-                onDismiss()
-              }}
-              className="rounded-md border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50"
-            >
-              Verstanden, nicht mehr anzeigen
-            </button>
-          </div>
         </div>
-      )}
+      </details>
     </li>
   )
 }

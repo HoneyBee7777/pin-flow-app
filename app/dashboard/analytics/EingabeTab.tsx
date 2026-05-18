@@ -288,6 +288,28 @@ function CombinedHowToToggle({
             Export nötig.
           </p>
         </div>
+        <div>
+          <p className="font-semibold text-gray-900">
+            Zielgruppe (1× pro Monat empfohlen)
+          </p>
+          <ol className="mt-1 list-decimal space-y-1 pl-5">
+            <li>
+              Pinterest öffnen → Analytics → links in der Seitenleiste auf
+              „Audience Insights"
+            </li>
+            <li>
+              Reiter „Interagierende Zielgruppe" auswählen (nicht „Gesamte
+              Zielgruppe" — die Interagierende ist strategisch wertvoller)
+            </li>
+            <li>
+              Rechts oben auf das Export-Symbol klicken → CSV speichern
+            </li>
+            <li>
+              CSV unter Schritt 2 (rechte Spalte „Zielgruppe importieren")
+              hochladen
+            </li>
+          </ol>
+        </div>
         <div className="border-l-4 border-amber-400 bg-amber-50 px-3 py-2 text-[13px] text-amber-800">
           ⚠️ Pinterest speichert Analytics nur max. 6 Monate. Dieses System
           speichert deine historischen Daten dauerhaft — trage monatlich ein

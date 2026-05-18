@@ -24,9 +24,6 @@ function formatDateDe(iso: string): string {
   return `${d}.${m}.${y}`
 }
 
-// Trend-Schwelle ≙ V3.0-Heuristik-Schwelle: < 0,5 % gilt als „stabil".
-const TREND_STABILITY = 0.005
-
 // Englische Pinterest-Labels → deutscher Anzeigetext fürs Gender-Block.
 // V3.0.3: „Unspecified & custom" und „Custom" zusätzlich gemappt — Pinterest
 // liefert je nach Audience-Größe verschiedene Schreibweisen aus, die alle
@@ -50,58 +47,73 @@ function sortByPercentDesc<T extends { percent: number }>(
   return items.slice().sort((a, b) => acc(b) - acc(a))
 }
 
-type TrendInfo = { kind: 'up' | 'down' | 'flat'; text: string }
+// V3.0.8 — die angezeigte Zielgruppen-Größe kommt aus den Performance-Daten
+// („Interagierende Zielgruppe"), nicht mehr aus der gerundeten CSV-Audience-
+// Size (die war ein irreführender Platzhalter, z. B. „10.000" für < 10k).
+export type EngagedAudience = {
+  // Tatsächliche interagierende Personen aus der Performance-Übersicht.
+  value: number
+  // Ende des Performance-Zeitraums (letztes Analytics-Update).
+  dateIso: string
+  // Prozentuales Wachstum zur Vorperiode (bereits in %, z. B. 128.6).
+  growthPct: number | null
+  // Absolutwert der Vorperiode, für „(84 Personen)" im Trend-Text.
+  previousValue: number | null
+}
 
-function computeTrend(
-  current: AudienceSnapshot,
-  previous: AudienceSnapshot | null
-): TrendInfo | null {
-  if (!previous || previous.audienceSize <= 0) return null
-  const delta = current.audienceSize - previous.audienceSize
-  const relative = delta / previous.audienceSize
-  if (Math.abs(relative) < TREND_STABILITY) {
-    return { kind: 'flat', text: 'Audience-Größe ist zum Vormonat stabil.' }
-  }
-  const sign = delta > 0 ? '+' : '−'
-  const absCount = formatCount(Math.abs(delta))
-  const absPct = formatPercent(Math.abs(relative))
-  return {
-    kind: delta > 0 ? 'up' : 'down',
-    text:
-      delta > 0
-        ? `↑ ${sign}${absCount} Personen seit Vormonat (+${absPct})`
-        : `↓ ${sign}${absCount} Personen seit Vormonat (−${absPct})`,
-  }
+function formatGrowthPercent(pct: number): string {
+  return `${pct.toFixed(1).replace('.', ',')} %`
 }
 
 export function AudienceSizeBlock({
-  snapshot,
-  previousSnapshot,
+  engaged,
 }: {
-  snapshot: AudienceSnapshot
-  previousSnapshot: AudienceSnapshot | null
+  engaged: EngagedAudience | null
 }) {
-  const trend = computeTrend(snapshot, previousSnapshot)
+  if (!engaged) {
+    return (
+      <div className="rounded-lg border border-gray-200 bg-white p-5">
+        <p className="text-sm font-medium text-gray-500">
+          Deine interagierende Zielgruppe
+        </p>
+        <p className="mt-1 text-3xl font-bold text-gray-400">—</p>
+        <p className="mt-1 text-sm text-gray-500">
+          Noch kein Analytics-Update mit Performance-Daten erfasst.
+        </p>
+      </div>
+    )
+  }
+
+  const showTrend =
+    engaged.growthPct !== null && Number.isFinite(engaged.growthPct)
+  const up = showTrend && (engaged.growthPct as number) > 0
+  const down = showTrend && (engaged.growthPct as number) < 0
+  const sign = up ? '+' : down ? '−' : ''
+  const arrow = up ? '↑' : down ? '↓' : '·'
+
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-5">
-      <p className="text-sm font-medium text-gray-500">Deine Zielgruppe</p>
+      <p className="text-sm font-medium text-gray-500">
+        Deine interagierende Zielgruppe
+      </p>
       <p className="mt-1 text-3xl font-bold text-gray-900">
-        {formatCount(snapshot.audienceSize)} Personen
+        {formatCount(engaged.value)} Personen
       </p>
       <p className="mt-1 text-sm text-gray-500">
-        Stand: {formatDateDe(snapshot.audienceDate)} (Monatswert)
+        Stand: {formatDateDe(engaged.dateIso)} (letztes Analytics-Update)
       </p>
-      {trend && (
+      {showTrend && (
         <p
           className={`mt-2 text-sm font-medium ${
-            trend.kind === 'up'
-              ? 'text-green-700'
-              : trend.kind === 'down'
-                ? 'text-red-700'
-                : 'text-gray-600'
+            up ? 'text-green-700' : down ? 'text-red-700' : 'text-gray-600'
           }`}
         >
-          {trend.text}
+          {arrow} {sign}
+          {formatGrowthPercent(Math.abs(engaged.growthPct as number))} zur
+          Vorperiode
+          {engaged.previousValue !== null && (
+            <> ({formatCount(engaged.previousValue)} Personen)</>
+          )}
         </p>
       )}
     </div>

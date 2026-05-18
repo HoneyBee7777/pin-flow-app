@@ -38,9 +38,10 @@ import {
 import { loadUserBenchmark } from './analytics/benchmark'
 import { loadAccountNicheProfile } from './analytics/account-niche'
 import { calculateCoachingDiagnoses } from '@/lib/account-coaching'
-import AccountDiagnoseSection from './AccountDiagnoseSection'
-import AudienceWidget from './AudienceWidget'
+import ZielgruppeCoachingBlock from './ZielgruppeCoachingBlock'
 import { getAudienceSnapshots } from '@/lib/audience-snapshot'
+import type { AudienceSnapshot } from '@/lib/audience-types'
+import type { AccountNicheProfile } from '@/lib/account-niche-profile'
 import ProfilGesundheitBlock from './ProfilGesundheitBlock'
 import {
   computeStatus,
@@ -1614,9 +1615,10 @@ export default async function DashboardPage() {
       {/* 3. Phasen-Trenner */}
       <PhasenTrenner title="Wo stehst du?" />
 
-      {/* 4. Profil-Gesundheit (Status aus aktiven Coaching-Diagnosen +
-            Profil-Snapshot). Status leitet sich client-seitig aus den
-            Diagnosen ab — Dismiss-State liegt in localStorage. */}
+      {/* 4. Profil-Status (Status aus aktiven Coaching-Diagnosen + Werte).
+            V3.2.1: Die früher eigenständige „Profil-Diagnose" ist jetzt als
+            „Befunde"-Sub-Sektion in dieser Box integriert. Status + Befund-
+            Liste teilen sich denselben localStorage-Dismiss-State. */}
       <ProfilGesundheitBlock
         profilEr={latest?.engagement ?? null}
         profilCtr={latest?.ctr ?? null}
@@ -1625,22 +1627,16 @@ export default async function DashboardPage() {
         totalPins={allPinsRows.length}
       />
 
-      {/* 4b. Profil-Diagnose (Coaching) — Status-Aussage zum Gesamt-Profil,
-          gehört thematisch in "Wo stehst du?" zwischen Profil-Gesundheit und
-          Performance-KPIs. */}
-      <AccountDiagnoseSection diagnoses={coachingDiagnoses} />
-
-      {/* 4c. Zielgruppe-Widget (V3.0 Phase 2d) — kompakte Sicht auf den
-          neuesten Snapshot direkt neben der Profil-Diagnose. Zeigt Größe +
-          Trend + Top-3-Affinitäten und linkt in die Vollansicht im
-          Analytics-Tab „Zielgruppe". */}
-      <AudienceWidget snapshots={audienceSnapshots} />
-
-      {/* 5. Gesamt-Profil-Performance (KPIs + Performance-Verlauf in 3 Spalten) */}
+      {/* 5. Gesamt-Profil-Performance (KPIs + Performance-Verlauf in 3 Spalten).
+          V3.0.8: Das ehemalige Standalone-Zielgruppen-Widget entfällt hier —
+          die Zielgruppe erscheint jetzt als Coaching-Block innerhalb dieser
+          Sektion, direkt unter dem Kontext-Streifen. */}
       <ProfilPerformanceSection
         latest={latest}
         previous={previous}
         chartPoints={chartPoints}
+        audienceSnapshots={audienceSnapshots}
+        nicheProfile={nicheProfile}
       />
 
       {/* 4. Phasen-Trenner */}
@@ -4575,10 +4571,14 @@ function ProfilPerformanceSection({
   latest,
   previous,
   chartPoints,
+  audienceSnapshots,
+  nicheProfile,
 }: {
   latest: ProfilAnalyticsWithGrowth | null
   previous: ProfilAnalyticsWithGrowth | null
   chartPoints: ChartPoint[]
+  audienceSnapshots: AudienceSnapshot[]
+  nicheProfile: AccountNicheProfile
 }) {
   const prevCtr =
     previous && previous.impressionen > 0
@@ -4590,8 +4590,6 @@ function ProfilPerformanceSection({
           previous.impressionen) *
         100
       : null
-  const deltaTage =
-    latest && previous ? diffDays(previous.datum, latest.datum) : null
   const headingTooltip =
     'Pinterest zeigt rollierende Daten der letzten 31 Tage. Wachstum % basiert auf Vergleich zum vorherigen eingetragenen Monat.'
 
@@ -4648,8 +4646,7 @@ function ProfilPerformanceSection({
         />
         {previous && (
           <span className="ml-2 text-sm font-normal text-gray-500">
-            — Vergleich zum {formatDateDe(previous.datum)}
-            {deltaTage !== null && <> ({deltaTage} Tage zuvor)</>}
+            — Vergleich zur Vorperiode
           </span>
         )}
       </h2>
@@ -4750,6 +4747,13 @@ function ProfilPerformanceSection({
 
       {/* Kontext-Zeile in voller Breite unter den 3 Spalten */}
       <KontextZeile latest={latest} previous={previous} prevDateLabel={prevDateLabel} />
+
+      {/* V3.0.8 — Zielgruppe-Coaching-Block direkt unter dem Kontext-Streifen.
+          Der Kontext-Streifen selbst bleibt unverändert. */}
+      <ZielgruppeCoachingBlock
+        snapshots={audienceSnapshots}
+        nicheProfile={nicheProfile}
+      />
     </section>
   )
 }

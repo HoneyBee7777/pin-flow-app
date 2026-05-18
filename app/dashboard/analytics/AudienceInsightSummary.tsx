@@ -1,6 +1,7 @@
 'use client'
 
 import type { AudienceInsight } from '@/lib/audience-types'
+import CoachingParagraphs from '@/components/CoachingParagraphs'
 
 // V3.0 — Sektion D des Audience-Tabs: Heuristik-Volltext + Schnell-Pillen.
 // V3.0.1: visuell als Coaching-Block im bekannten App-Stil — lila Hintergrund,
@@ -20,9 +21,16 @@ export default function AudienceInsightSummary({
         <span aria-hidden>🎯</span>
         Deine Zielgruppe auf einen Blick
       </h3>
-      <p className="mt-3 text-sm leading-relaxed text-purple-900">
-        {insight.summary}
-      </p>
+      <div className="mt-3 text-sm text-purple-900">
+        {insight.coachingBlock ? (
+          // V3.0.9 — identischer 3-Absatz-Coaching-Text wie auf dem
+          // Dashboard (gleiche Heuristik-Quelle, gleicher Renderer).
+          <CoachingParagraphs block={insight.coachingBlock} />
+        ) : (
+          // Edge-Case ohne Top-Affinität: heuristischer Fließtext.
+          <p className="leading-relaxed">{insight.summary}</p>
+        )}
+      </div>
       {insight.topAffinities.length > 0 && (
         <div className="mt-4 flex flex-wrap gap-2">
           {insight.topAffinities.map((c) => (

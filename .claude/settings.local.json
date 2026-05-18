@@ -29,7 +29,11 @@
       "Bash(echo \"EXIT: $?\")",
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
-      "Bash(echo \"TSC=$?\")"
+      "Bash(echo \"TSC=$?\")",
+      "Bash(git rm *)",
+      "Bash(sed -n '1,40p' lib/audience-snapshot.ts)",
+      "Bash(sed -n '1,40p' app/dashboard/analytics/account-niche.ts)",
+      "Bash(grep -v \"//\")"
     ]
   }
 }
