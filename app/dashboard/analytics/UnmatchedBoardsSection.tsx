@@ -253,7 +253,7 @@ function UnmatchedBoardRow({
             onClick={onSkip}
             disabled={isPending}
             className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-            title="Datensatz verwerfen — Analytics-Daten dieses Boards werden NICHT importiert."
+            title="Datensatz verwerfen, Analytics-Daten dieses Boards werden NICHT importiert."
           >
             ⚠️ Überspringen
           </button>

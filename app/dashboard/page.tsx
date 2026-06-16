@@ -1,5 +1,12 @@
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase-server'
+import {
+  loadOnboardingState,
+  shouldShowOnboardingAutomatically,
+  shouldShowOnboardingBanner,
+} from '@/lib/onboarding-state'
+import OnboardingBanner from '@/components/OnboardingBanner'
 import InfoTooltip, { LabelWithTooltip } from '@/components/InfoTooltip'
 import {
   boardThresholdsFromSettings,
@@ -43,6 +50,7 @@ import { getAudienceSnapshots } from '@/lib/audience-snapshot'
 import type { AudienceSnapshot } from '@/lib/audience-types'
 import type { AccountNicheProfile } from '@/lib/account-niche-profile'
 import ProfilGesundheitBlock from './ProfilGesundheitBlock'
+import WinsBlock from './WinsBlock'
 import {
   computeStatus,
   type SaisonEvent,
@@ -62,10 +70,12 @@ import {
   type BriefingItem,
 } from './briefing/lib'
 import {
-  computeStrategieCheck,
-  type StrategiePinRow,
-  type StrategieSettings,
+  computeStrategieCheckV2,
+  type StrategieCheckV2,
+  type StrategieCheckV2Pin,
+  type StrategieCheckV2Settings,
 } from './strategie-check/lib'
+import { parseStrategieRow, type StrategieRow } from './strategie/lib'
 
 // Pin-Pipeline-Defaults — greifen, wenn `einstellungen` für den User
 // (noch) keine Zeile bzw. NULL-Werte enthält. Nutzer-Werte werden in
@@ -218,16 +228,16 @@ const BOARD_CATEGORIES: BoardCatConfig[] = [
     key: 'inaktiv',
     group: 'A',
     emoji: '⏸️',
-    label: 'Inaktive Boards (>60 Tage)',
+    label: 'Inaktive Boards (über 30 Tage)',
     subtitle:
-      'Boards ohne neue Pins seit über 60 Tagen — Pinterest spielt inaktive Boards immer seltener aus.',
+      'Boards ohne neue Pins seit über 30 Tagen: Pinterest spielt inaktive Boards immer seltener aus.',
     tooltip:
-      'Boards, auf denen seit mehr als 60 Tagen kein Pin veröffentlicht wurde. Frequenz wieder hochfahren — Pinterest belohnt regelmäßige Aktivität.',
+      'Boards, auf denen seit mehr als 30 Tagen kein Pin veröffentlicht wurde. Frequenz wieder hochfahren: Pinterest belohnt regelmäßige Aktivität.',
     iconBg: 'bg-orange-100 text-orange-700',
     counterBg: 'bg-orange-100 text-orange-700',
-    hint: 'Inaktive Boards verlieren Reichweite — Pinterest spielt sie immer seltener aus, je länger keine neuen Pins kommen.',
+    hint: 'Inaktive Boards verlieren Reichweite. Pinterest spielt sie immer seltener aus, je länger keine neuen Pins kommen.',
     nextStep:
-      'Mit 2-3 neuen Pins pro Woche reaktivieren — das hält die Sichtbarkeit aufrecht.',
+      'Mit 2-3 neuen Pins pro Woche reaktivieren: das hält die Sichtbarkeit aufrecht.',
     hintTone: 'orange',
     primary: {
       label: 'Pins planen',
@@ -236,18 +246,18 @@ const BOARD_CATEGORIES: BoardCatConfig[] = [
     primaryButtonClass: 'bg-red-600 text-white hover:bg-red-700',
     metrics: ['er', 'impressionen', 'klicks'],
     emptyMessage:
-      'Aktuell keine Boards über 60 Tage ohne neuen Pin — sehr gut!',
+      'Aktuell keine Boards über 30 Tage ohne neuen Pin, sehr gut!',
     prominentLastPin: true,
   },
   {
     key: 'wenig_aktiv',
     group: 'A',
     emoji: '⚠️',
-    label: 'Wenig aktive Boards (15-60 Tage)',
+    label: 'Wenig aktive Boards (14 bis 30 Tage)',
     subtitle:
-      'Boards ohne neue Pins seit über 14 Tagen — Frequenz wieder hochfahren bevor Pinterest die Sichtbarkeit reduziert.',
+      'Boards ohne neue Pins ab 14 Tagen: Frequenz wieder hochfahren bevor Pinterest die Sichtbarkeit reduziert.',
     tooltip:
-      'Boards, auf denen seit 15-60 Tagen kein Pin veröffentlicht wurde. Frühe Warnstufe — jetzt ist der richtige Zeitpunkt zum Reaktivieren.',
+      'Boards, auf denen seit 14 bis 30 Tagen kein Pin veröffentlicht wurde. Frühe Warnstufe: jetzt ist der richtige Zeitpunkt zum Reaktivieren.',
     iconBg: 'bg-amber-100 text-amber-700',
     counterBg: 'bg-amber-100 text-amber-700',
     hint: 'Wenn die Aktivität jetzt zurückkommt, lässt sich der Sichtbarkeitsverlust noch leicht verhindern.',
@@ -260,7 +270,7 @@ const BOARD_CATEGORIES: BoardCatConfig[] = [
     primaryButtonClass: 'bg-red-600 text-white hover:bg-red-700',
     metrics: ['er', 'impressionen', 'klicks'],
     emptyMessage:
-      'Aktuell keine wenig aktiven Boards — alle bekommen entweder regelmäßig Pins oder sind länger inaktiv.',
+      'Aktuell keine wenig aktiven Boards: alle bekommen entweder regelmäßig Pins oder sind länger inaktiv.',
     prominentLastPin: true,
   },
   {
@@ -269,12 +279,12 @@ const BOARD_CATEGORIES: BoardCatConfig[] = [
     emoji: '📥',
     label: 'Boards mit vorbereiteten Pins ohne Veröffentlichung',
     subtitle:
-      'Pins liegen in der Datenbank, aber noch keiner ist veröffentlicht — auf Pinterest sichtbar machen.',
+      'Pins liegen in der Datenbank, aber noch keiner ist veröffentlicht. Auf Pinterest sichtbar machen.',
     tooltip:
       'Boards mit Entwürfen oder geplanten Pins, aber noch keinem veröffentlichten Pin. Solange nichts live ist, sieht Pinterest dieses Board nicht.',
     iconBg: 'bg-orange-50 text-orange-700',
     counterBg: 'bg-orange-50 text-orange-700',
-    hint: 'Vorbereitete Pins helfen erst, wenn sie veröffentlicht sind — Pinterest beurteilt nur was live ist.',
+    hint: 'Vorbereitete Pins helfen erst, wenn sie veröffentlicht sind. Pinterest beurteilt nur was live ist.',
     nextStep: 'Vorhandene Entwürfe oder geplante Pins veröffentlichen.',
     hintTone: 'orange',
     primary: {
@@ -292,14 +302,14 @@ const BOARD_CATEGORIES: BoardCatConfig[] = [
     emoji: '✅',
     label: 'Aktive Boards',
     subtitle:
-      'Boards mit neuem Pin in den letzten 14 Tagen — Pinterest sieht regelmäßige Aktivität.',
+      'Boards mit neuem Pin in den letzten 14 Tagen: Pinterest sieht regelmäßige Aktivität.',
     tooltip:
       'Boards mit veröffentlichtem Pin innerhalb der letzten 14 Tage. Genau das Aktivitäts-Niveau, das Pinterest belohnt.',
     iconBg: 'bg-emerald-100 text-emerald-700',
     counterBg: 'bg-emerald-100 text-emerald-700',
-    hint: 'Aktive Boards bauen thematische Autorität auf — dranbleiben.',
+    hint: 'Pinterest belohnt Konstanz: Wer regelmäßig pinnt, wird bevorzugt ausgespielt. Dranbleiben.',
     nextStep:
-      'Frequenz halten — mindestens 2-3 neue Pins pro Woche pro Board.',
+      'Frequenz halten: mindestens 2-3 neue Pins pro Woche pro Board.',
     hintTone: 'green',
     primary: {
       label: 'Pins planen',
@@ -308,7 +318,7 @@ const BOARD_CATEGORIES: BoardCatConfig[] = [
     primaryButtonClass: 'bg-red-600 text-white hover:bg-red-700',
     metrics: ['er', 'impressionen', 'klicks'],
     emptyMessage:
-      'Aktuell keine aktiv bepinnten Boards. Pinterest belohnt Frequenz — mit 2-3 neuen Pins pro Woche pro Board kommen die Boards in Bewegung.',
+      'Aktuell keine aktiv bepinnten Boards. Pinterest belohnt Frequenz. Mit 2-3 neuen Pins pro Woche pro Board kommen die Boards in Bewegung.',
   },
 ]
 
@@ -363,7 +373,7 @@ const HANDLUNGS_CATEGORIES: HandlungsCategory[] = [
     },
     metrics: ['klicks', 'ctr', 'impressionen', 'saves', 'alter', 'push'],
     metricLabels: {
-      klicks: 'Klicks',
+      klicks: 'Ausg. Klicks',
       ctr: 'CTR',
       impressionen: 'Impressionen',
       saves: 'Saves',
@@ -385,7 +395,7 @@ const HANDLUNGS_CATEGORIES: HandlungsCategory[] = [
     metricLabels: {
       ctr: 'CTR',
       impressionen: 'Impressionen',
-      klicks: 'Klicks',
+      klicks: 'Ausg. Klicks',
       saves: 'Saves',
     },
   },
@@ -407,7 +417,7 @@ const HANDLUNGS_CATEGORIES: HandlungsCategory[] = [
     metricLabels: {
       impressionen: 'Impressionen',
       ctr: 'CTR',
-      klicks: 'Klicks',
+      klicks: 'Ausg. Klicks',
       saves: 'Saves',
     },
   },
@@ -441,6 +451,15 @@ export default async function DashboardPage() {
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) return null
+
+  // V3.5 — Auto-Redirect-Gate: beim allerersten Login (weder
+  // abgeschlossen noch übersprungen) direkt ins Onboarding. Vor dem
+  // teuren Daten-Load, damit kein Dashboard unnötig gerendert wird.
+  const onboardingState = await loadOnboardingState(supabase, user.id)
+  if (shouldShowOnboardingAutomatically(onboardingState)) {
+    redirect('/dashboard/onboarding')
+  }
+  const showOnboardingBanner = shouldShowOnboardingBanner(onboardingState)
 
   const [
     profilRes,
@@ -483,10 +502,11 @@ export default async function DashboardPage() {
          schwellwert_board_schwach_er, schwellwert_board_wachstum_trend,
          cp_min_pins_gesamt, cp_min_pins_ohne_aktuell, cp_tage_ohne_pin,
          cp_min_ctr_goldnugget, cp_max_pins_goldnugget,
-         strategie_soll_blog, strategie_soll_affiliate, strategie_soll_produkt,
-         ziel_soll_traffic, ziel_soll_lead, ziel_soll_sales,
-         format_soll_standard, format_soll_video, format_soll_collage, format_soll_carousel,
-         strategie_onboarding_abgeschlossen,
+         strategie_business_modell, strategie_hauptnische,
+         ziel_soll_blog, ziel_soll_shop, ziel_soll_etsy, ziel_soll_affiliate,
+         ziel_soll_landingpage, ziel_soll_newsletter, ziel_soll_buchung,
+         strategie_content_saeulen, strategie_pinning_frequenz,
+         strategie_letzte_aenderung, strategie_onboarding_abgeschlossen,
          strategie_check_schwelle_gelb, strategie_check_schwelle_rot,
          status_update_intervall, status_update_vorwarnung`
       )
@@ -514,7 +534,7 @@ export default async function DashboardPage() {
         'id, event_name, event_datum, saison_typ, suchbeginn_tage, notizen, datum_variabel, created_at'
       )
       .order('event_datum', { ascending: true, nullsFirst: false }),
-    supabase.from('ziel_urls').select('id, titel, url'),
+    supabase.from('ziel_urls').select('id, titel, url, zielflaeche'),
     supabase
       .from('aufgaben')
       .select(
@@ -538,7 +558,9 @@ export default async function DashboardPage() {
       console.error('[Dashboard] pins query failed:', err)
       return { data: [], error: err as Error }
     }),
-    supabase.from('boards').select('id, name, pinterest_url, created_at'),
+    supabase
+      .from('boards')
+      .select('id, name, pinterest_url, created_at, kategorie'),
     supabase
       .from('board_analytics')
       .select(
@@ -743,6 +765,12 @@ export default async function DashboardPage() {
     })
   }
   const hasAnyAnalytics = rawPinAnalytics.length > 0
+  // V3.3 — höchste kumulierte Impressionen eines einzelnen Pins.
+  // Kriterium B der Wins-Heuristik (≥ 1 Pin > 1.000 Impressionen).
+  const maxPinImpressionen = actionable.reduce(
+    (m, p) => Math.max(m, p.impressionen),
+    0
+  )
   const groupedActions = new Map<PinDiagnose, ActionablePin[]>()
   for (const p of actionable) {
     if (!HANDLUNGS_CATEGORIES.some((c) => c.diagnose === p.diagnose)) continue
@@ -937,12 +965,54 @@ export default async function DashboardPage() {
     boardsOhneKategorie,
   })
 
-  // ===== Strategie-Check (180 Tage, IST vs. SOLL) =====
-  // Vergleicht IST-Verteilung der Pins der letzten 180 Tage mit den SOLL-Werten
-  // aus den Strategie-Einstellungen. Pure Berechnung in strategie-check/lib.ts.
-  const strategieCheckResult = computeStrategieCheck(
-    allPinsRows as StrategiePinRow[],
-    (settingsRes.data ?? null) as StrategieSettings | null,
+  // ===== Strategie-Check V2 (30-Tage-Fenster, Soll/Ist) =====
+  // Vergleicht die Pin-Arbeit der letzten 30 Tage mit der im Wizard
+  // festgelegten Strategie. Pins werden über ihre verknüpfte Ziel-URL der
+  // Zielfläche und über ihr Board der Content-Säule zugeordnet. Pure
+  // Berechnung in strategie-check/lib.ts.
+  const urlZielflaecheById = new Map<string, string | null>()
+  for (const u of (urlsRes.data ?? []) as Array<{
+    id: string
+    zielflaeche: string | null
+  }>) {
+    urlZielflaecheById.set(u.id, u.zielflaeche ?? null)
+  }
+  const boardKategorieById = new Map<string, string | null>()
+  for (const b of (boardsCountRes.data ?? []) as Array<{
+    id: string
+    kategorie: string | null
+  }>) {
+    boardKategorieById.set(b.id, b.kategorie ?? null)
+  }
+  const strategieSettingsRaw = settingsRes.data as
+    | (StrategieRow & {
+        strategie_check_schwelle_gelb: number | null
+        strategie_check_schwelle_rot: number | null
+      })
+    | null
+  const neueStrategie = parseStrategieRow(strategieSettingsRaw)
+  const strategieCheckSettings: StrategieCheckV2Settings = {
+    zielSoll: neueStrategie.zielflaechen,
+    pinningFrequenz: neueStrategie.pinningFrequenz,
+    contentSaeulen: neueStrategie.contentSaeulen,
+    onboardingAbgeschlossen: neueStrategie.onboardingAbgeschlossen,
+    schwelleGelb: strategieSettingsRaw?.strategie_check_schwelle_gelb ?? null,
+    schwelleRot: strategieSettingsRaw?.strategie_check_schwelle_rot ?? null,
+  }
+  const strategieCheckPins: StrategieCheckV2Pin[] = allPinsRows.map((p) => ({
+    status: p.status,
+    zielflaeche: p.ziel_url_id
+      ? (urlZielflaecheById.get(p.ziel_url_id) ?? null)
+      : null,
+    boardKategorie: p.board_id
+      ? (boardKategorieById.get(p.board_id) ?? null)
+      : null,
+    created_at: p.created_at,
+    geplante_veroeffentlichung: p.geplante_veroeffentlichung,
+  }))
+  const strategieCheckResult: StrategieCheckV2 = computeStrategieCheckV2(
+    strategieCheckSettings,
+    strategieCheckPins,
     today
   )
 
@@ -1296,19 +1366,22 @@ export default async function DashboardPage() {
   // veröffentlichten Pins). Bewusst entkoppelt von ER/Score: Boards
   // ohne board_analytics-Eintrag erscheinen genauso in den Buckets,
   // nur ER zeigt '—'.
-  //   - 0 Pins in der DB         → leeres_board (Footnote)
-  //   - Pins, aber kein veröff.  → ohne_aktivitaet
-  //   - >60 Tage ohne Pin        → inaktiv
-  //   - >14 Tage ohne Pin        → wenig_aktiv
-  //   - sonst (≤14 Tage)         → aktiv
+  //   - 0 Pins in der DB                        → leeres_board (Footnote)
+  //   - Pins, aber kein veröff.                 → ohne_aktivitaet
+  //   - Tage > inaktiv                          → inaktiv
+  //   - wenigAktiv ≤ Tage ≤ inaktiv             → wenig_aktiv
+  //   - Tage < wenigAktiv                       → aktiv
+  // Die Tages-Grenzen (wenigAktiv, inaktiv) kommen aus boardThresholds, also
+  // aus den Einstellungen mit Code-Default (wenigAktiv = 14, inaktiv = 30),
+  // gleiche Grenzsemantik wie diagnoseBoard im Analytics-Tab.
   // Hinweis: anzahl_pins aus board_analytics (CSV) wird hier NICHT mehr
   // benutzt — Pinterest liefert die Zahl oft als 0.
   function assignCategory(b: BoardDashHealth): BoardAssignment {
     if (b.pinsInDb === 0) return 'leeres_board'
     if (!b.lastPinDate) return 'ohne_aktivitaet'
     const tageOhnePins = diffDays(b.lastPinDate, today)
-    if (tageOhnePins > 60) return 'inaktiv'
-    if (tageOhnePins > 14) return 'wenig_aktiv'
+    if (tageOhnePins > boardThresholds.inaktiv) return 'inaktiv'
+    if (tageOhnePins >= boardThresholds.wenigAktiv) return 'wenig_aktiv'
     return 'aktiv'
   }
 
@@ -1348,7 +1421,7 @@ export default async function DashboardPage() {
   const aktivBoardsCount = boardsRows.filter((b) => {
     const lastPin = lastPinDateByBoard.get(b.id)
     if (!lastPin) return false
-    return diffDays(lastPin, today) <= 14
+    return diffDays(lastPin, today) < boardThresholds.wenigAktiv
   }).length
   const aktivitaetsratePct =
     boardsRows.length > 0 ? (aktivBoardsCount / boardsRows.length) * 100 : 0
@@ -1432,15 +1505,9 @@ export default async function DashboardPage() {
     schwacheCount: 0,
     strategieOnboardingDone: strategieCheckResult.onboardingAbgeschlossen,
     strategieSchwelleRot: strategieCheckResult.schwelleRot,
-    strategieTopCoaching: strategieCheckResult.coachingTop3[0]
-      ? {
-          area: strategieCheckResult.coachingTop3[0].area,
-          label: strategieCheckResult.coachingTop3[0].label,
-          diff: strategieCheckResult.coachingTop3[0].diff,
-          recommendation:
-            strategieCheckResult.coachingTop3[0].recommendation,
-        }
-      : null,
+    // Der V2-Strategie-Check liefert (noch) keine Briefing-Coaching-Items;
+    // der Strategie-Status erscheint direkt in der Strategie-Check-Sektion.
+    strategieTopCoaching: null,
     hasAnyAnalytics,
     hiddenGemCount: groupedActions.get('hidden_gem')?.length ?? 0,
     reichweiteOhneWirkungCount:
@@ -1493,8 +1560,9 @@ export default async function DashboardPage() {
   })
 
   // ===== Keywords & SEO Sektion =====
-  // Pro Keyword: Pins-Count, Ø CTR (latest analytics pro Pin), Ø Klicks.
-  // Daraus 4 Buckets: stark, ungenutzt, untergenutzt, beobachten.
+  // Nur noch der „ungenutzte Keywords"-Bucket (Keyword in keinem Pin). Die
+  // CTR-basierten Bewertungs-Buckets wurden entfernt — pro Keyword zählt hier
+  // nur noch die Pin-Anzahl (pinsCount === 0).
   type KeywordRow = {
     id: string
     keyword: string
@@ -1504,21 +1572,6 @@ export default async function DashboardPage() {
   const keywordRows = (keywordsRes.data ?? []) as unknown as KeywordRow[]
   const pinKeywordRows =
     (pinKeywordsRes.data ?? []) as unknown as PinKeywordRow[]
-
-  // Latest analytics row pro Pin — first occurrence wins (rawPinAnalytics
-  // ist DESC sortiert).
-  const latestAnalyticsByPinForKw = new Map<
-    string,
-    { impressionen: number; klicks: number }
-  >()
-  for (const row of rawPinAnalytics) {
-    if (!latestAnalyticsByPinForKw.has(row.pin_id)) {
-      latestAnalyticsByPinForKw.set(row.pin_id, {
-        impressionen: row.impressionen ?? 0,
-        klicks: row.klicks ?? 0,
-      })
-    }
-  }
 
   const pinIdsByKeyword = new Map<string, Set<string>>()
   for (const row of pinKeywordRows) {
@@ -1535,61 +1588,37 @@ export default async function DashboardPage() {
     avgCtr: number | null
     avgKlicks: number | null
   }
-  const keywordsWithStats: KeywordWithStats[] = keywordRows.map((kw) => {
-    const pinIds = pinIdsByKeyword.get(kw.id)
-    if (!pinIds || pinIds.size === 0) {
-      return {
-        id: kw.id,
-        keyword: kw.keyword,
-        typ: kw.typ,
-        pinsCount: 0,
-        avgCtr: null,
-        avgKlicks: null,
-      }
-    }
-    let ctrSum = 0
-    let ctrCount = 0
-    let klicksSum = 0
-    let klicksCount = 0
-    pinIds.forEach((pinId) => {
-      const a = latestAnalyticsByPinForKw.get(pinId)
-      if (!a) return
-      if (a.impressionen > 0) {
-        ctrSum += (a.klicks / a.impressionen) * 100
-        ctrCount += 1
-      }
-      klicksSum += a.klicks
-      klicksCount += 1
-    })
-    return {
-      id: kw.id,
-      keyword: kw.keyword,
-      typ: kw.typ,
-      pinsCount: pinIds.size,
-      avgCtr: ctrCount > 0 ? ctrSum / ctrCount : null,
-      avgKlicks: klicksCount > 0 ? klicksSum / klicksCount : null,
-    }
-  })
+  // Nur die Pin-Anzahl wird gebraucht (unused-Bucket). avgCtr/avgKlicks bleiben
+  // null — sie erfüllen nur noch den KeywordSeoEntry-Typ, werden nicht angezeigt.
+  const keywordsWithStats: KeywordWithStats[] = keywordRows.map((kw) => ({
+    id: kw.id,
+    keyword: kw.keyword,
+    typ: kw.typ,
+    pinsCount: pinIdsByKeyword.get(kw.id)?.size ?? 0,
+    avgCtr: null,
+    avgKlicks: null,
+  }))
 
   const keywordsBuckets = {
-    stark: keywordsWithStats
-      .filter((k) => k.pinsCount >= 3 && (k.avgCtr ?? 0) > 2)
-      .sort((a, b) => (b.avgCtr ?? 0) - (a.avgCtr ?? 0)),
     unused: keywordsWithStats
       .filter((k) => k.pinsCount === 0)
       .sort((a, b) => a.keyword.localeCompare(b.keyword)),
-    underused: keywordsWithStats
-      .filter(
-        (k) => k.pinsCount > 0 && k.pinsCount < 3 && (k.avgCtr ?? 0) > 1
-      )
-      .sort((a, b) => (b.avgCtr ?? 0) - (a.avgCtr ?? 0)),
-    reconsider: keywordsWithStats
-      .filter((k) => k.pinsCount > 0 && (k.avgCtr ?? 0) < 1)
-      .sort((a, b) => (a.avgCtr ?? 0) - (b.avgCtr ?? 0)),
   }
+
+  // ===== Empty-State-Weichen (sektionsweise) =====
+  // Zwei Flags steuern pro Sektion, ob die normale Auswertung oder ein
+  // neutraler Hinweis erscheint. Der bestehende Code für Accounts MIT Daten
+  // bleibt unverändert — die Flags schalten nur bei fehlenden Daten um.
+  //   hatAnalytics = mindestens ein profil_analytics-Eintrag vorhanden
+  //   hatStrategie = Strategie-Onboarding abgeschlossen — gleiche Quelle wie
+  //                  der Strategie-Check (strategie_onboarding_abgeschlossen)
+  const hatAnalytics = rows.length > 0
+  const hatStrategie = strategieCheckResult.onboardingAbgeschlossen
 
   return (
     <div className="space-y-8 p-8">
+      {showOnboardingBanner && <OnboardingBanner />}
+
       <header>
         <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
         <p className="mt-1 text-sm text-gray-600">
@@ -1606,11 +1635,22 @@ export default async function DashboardPage() {
         boardsCount={boardsCount}
       />
 
-      {/* 2. Briefing-Block: Deine Prioritäten + Deine nächsten Schritte */}
-      <BriefingBlock
-        briefingItems={briefingItems}
-        nextStepsItems={nextStepsItems}
-      />
+      {/* 2. Briefing-Block: Deine Prioritäten + Deine nächsten Schritte.
+            Weiche Sektion 1: Ohne Analytics zeigen wir setup-orientierte
+            Prioritäten (Onboarding, erste Pins) statt der analytics-basierten. */}
+      {hatAnalytics ? (
+        <BriefingBlock
+          briefingItems={briefingItems}
+          nextStepsItems={nextStepsItems}
+        />
+      ) : (
+        <BriefingBlockEmpty
+          contentCount={contentInhalteRows.length}
+          pinsCount={allPinsRows.length}
+          saisonProduzierenCount={saisonKanban.jetztProduzieren.length}
+          saisonMinDaysToPinStart={saisonMinDaysToPinStart}
+        />
+      )}
 
       {/* 3. Phasen-Trenner */}
       <PhasenTrenner title="Wo stehst du?" />
@@ -1619,31 +1659,64 @@ export default async function DashboardPage() {
             V3.2.1: Die früher eigenständige „Profil-Diagnose" ist jetzt als
             „Befunde"-Sub-Sektion in dieser Box integriert. Status + Befund-
             Liste teilen sich denselben localStorage-Dismiss-State. */}
-      <ProfilGesundheitBlock
-        profilEr={latest?.engagement ?? null}
-        profilCtr={latest?.ctr ?? null}
+      {/* Weiche Sektion 2: Ohne Analytics keine Ampel-Bewertung — neutrale
+            Info-Box statt Profil-Status, Befunde und Werte-Zeilen. */}
+      {hatAnalytics ? (
+        <ProfilGesundheitBlock
+          profilEr={latest?.engagement ?? null}
+          profilSaveRate={
+            latest && latest.impressionen > 0
+              ? (latest.saves / latest.impressionen) * 100
+              : null
+          }
+          profilCtr={latest?.ctr ?? null}
+          nicheProfile={nicheProfile}
+          coachingDiagnoses={coachingDiagnoses}
+          totalPins={allPinsRows.length}
+        />
+      ) : (
+        <ProfilStatusEmpty />
+      )}
+
+      {/* 4b. V3.3 — „Was hat funktioniert?" (Erfolge der letzten 30 Tage).
+            Emotionaler Übergang vom diagnostischen Profil-Status zur
+            datengetriebenen Performance. Rendert nur bei echten Erfolgen
+            (sonst null — kein Leer-State). */}
+      <WinsBlock
+        latest={latest}
+        previous={previous}
         nicheProfile={nicheProfile}
-        coachingDiagnoses={coachingDiagnoses}
-        totalPins={allPinsRows.length}
+        maxPinImpressionen={maxPinImpressionen}
       />
 
       {/* 5. Gesamt-Profil-Performance (KPIs + Performance-Verlauf in 3 Spalten).
           V3.0.8: Das ehemalige Standalone-Zielgruppen-Widget entfällt hier —
           die Zielgruppe erscheint jetzt als Coaching-Block innerhalb dieser
           Sektion, direkt unter dem Kontext-Streifen. */}
-      <ProfilPerformanceSection
-        latest={latest}
-        previous={previous}
-        chartPoints={chartPoints}
-        audienceSnapshots={audienceSnapshots}
-        nicheProfile={nicheProfile}
-      />
+      {/* Weiche Sektion 3: Ohne Analytics keine KPI-Karten / kein Chart. */}
+      {hatAnalytics ? (
+        <ProfilPerformanceSection
+          latest={latest}
+          previous={previous}
+          chartPoints={chartPoints}
+          audienceSnapshots={audienceSnapshots}
+          nicheProfile={nicheProfile}
+        />
+      ) : (
+        <ProfilPerformanceEmpty />
+      )}
 
       {/* 4. Phasen-Trenner */}
-      <PhasenTrenner title="Pinst du das Richtige?" />
+      <PhasenTrenner title="Pinnst du das Richtige?" />
 
-      {/* 5. Strategie-Check */}
-      <StrategieCheckSection result={strategieCheckResult} />
+      {/* 5. Strategie-Check (V2). Hängt NICHT an Analytics, sondern an der
+            festgelegten Strategie und den erfassten Pins. „Keine Strategie"
+            wird hier abgefangen, „keine Pins im Fenster" innerhalb der Sektion. */}
+      {!hatStrategie ? (
+        <StrategieCheckEmptyKeineStrategie />
+      ) : (
+        <StrategieCheckSection result={strategieCheckResult} />
+      )}
 
       {/* 6. Phasen-Trenner */}
       <PhasenTrenner title="Was steht heute an?" />
@@ -1663,31 +1736,44 @@ export default async function DashboardPage() {
       <KeywordsSeoSection
         buckets={keywordsBuckets}
         hasAnyKeywords={keywordRows.length > 0}
-        hasAnyAnalytics={hasAnyAnalytics}
       />
 
-      {/* 9. Pin-Handlungsbedarf */}
-      <HandlungsbedarfSection
-        grouped={groupedActions}
-        hasAnyAnalytics={hasAnyAnalytics}
-        bearbeitet={bearbeitet}
-        today={today}
-        thresholds={thresholds}
-      />
+      {/* 9. Pin-Handlungsbedarf.
+            Weiche Sektion 8: Ohne Analytics keine Diagnose-Kategorien. */}
+      {hatAnalytics ? (
+        <HandlungsbedarfSection
+          grouped={groupedActions}
+          hasAnyAnalytics={hasAnyAnalytics}
+          bearbeitet={bearbeitet}
+          today={today}
+          thresholds={thresholds}
+        />
+      ) : (
+        <HandlungsbedarfEmpty />
+      )}
 
       {/* 10. Phasen-Trenner */}
       <PhasenTrenner title="Wie gut sind deine Boards aufgestellt?" />
 
-      {/* 11. Board-Gesundheit */}
-      <BoardGesundheitDashboardSection
-        byCategory={boardsByCategory}
-        kpis={boardKpis}
-        thresholds={boardThresholds}
-        hasAnyBoardAnalytics={hasAnyBoardAnalytics}
-        boardsOhneAnalyticsCount={boardsOhneAnalyticsCount}
-        boardsLeerCount={boardsLeerCount}
-        preparedPinsByBoard={preparedPinsByBoard}
-      />
+      {/* 11. Board-Gesundheit.
+            Weiche Sektion 9: Ohne angelegte Boards ein neutraler Hinweis.
+            Mit Boards bleibt die Aktivitäts-Auswertung — die „X% nicht aktiv"-
+            Meldung wird über hasAnyPins unterdrückt, wenn noch kein Pin
+            existiert (siehe BoardKurzanalyse). */}
+      {boardsCount === 0 ? (
+        <BoardGesundheitEmpty />
+      ) : (
+        <BoardGesundheitDashboardSection
+          byCategory={boardsByCategory}
+          kpis={boardKpis}
+          thresholds={boardThresholds}
+          hasAnyBoardAnalytics={hasAnyBoardAnalytics}
+          boardsOhneAnalyticsCount={boardsOhneAnalyticsCount}
+          boardsLeerCount={boardsLeerCount}
+          preparedPinsByBoard={preparedPinsByBoard}
+          hasAnyPins={allPinsRows.length > 0}
+        />
+      )}
 
       {/* 12. Phasen-Trenner */}
       <PhasenTrenner title="Was steht noch an?" />
@@ -1695,6 +1781,243 @@ export default async function DashboardPage() {
       {/* 14. Aufgaben & Erinnerungen — bleibt ganz unten */}
       <AufgabenSection tasks={aufgabenSorted} today={today} />
     </div>
+  )
+}
+
+// ===========================================================
+// Empty-States (sektionsweise) — neutrale Hinweis-Boxen für Accounts ohne
+// Analytics / Strategie / Boards. Einheitlich dezent (bg-gray-50,
+// border-gray-200, text-gray-600), keine Warn-Farben. Links in Rot.
+// ===========================================================
+
+// Lucide „info"-Icon inline (vermeidet eine zusätzliche lucide-react-
+// Abhängigkeit für ein einzelnes Icon). Standardgröße 14px.
+function InfoIcon({ className = '' }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={14}
+      height={14}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={className}
+    >
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 16v-4" />
+      <path d="M12 8h.01" />
+    </svg>
+  )
+}
+
+// Gemeinsame neutrale Hinweis-Box.
+function DashEmptyBox({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="mt-3 rounded-lg border border-gray-200 bg-white p-4 text-sm leading-relaxed text-gray-600">
+      {children}
+    </div>
+  )
+}
+
+// Sektion 1 — „Deine Prioritäten" ohne Analytics: setup-orientierte
+// Prioritäten (Onboarding immer, erste Pins wenn Inhalte da & < 5 Pins,
+// Saison bleibt) + Hinweis statt „Deine nächsten Schritte".
+function BriefingBlockEmpty({
+  contentCount,
+  pinsCount,
+  saisonProduzierenCount,
+  saisonMinDaysToPinStart,
+}: {
+  contentCount: number
+  pinsCount: number
+  saisonProduzierenCount: number
+  saisonMinDaysToPinStart: number | null
+}) {
+  const showContentPrio = contentCount > 0 && pinsCount < 5
+  const saisonDays = saisonMinDaysToPinStart ?? 0
+  const saisonDaysLabel =
+    saisonDays <= 0
+      ? 'jetzt'
+      : `in ${saisonDays} ${saisonDays === 1 ? 'Tag' : 'Tagen'}`
+  const itemCls =
+    'rounded-r bg-white/60 py-1 pl-3 pr-2 text-sm leading-snug text-gray-800'
+  const linkCls =
+    'ml-1 whitespace-nowrap font-medium text-red-600 hover:underline'
+  return (
+    <section className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-900">
+            Deine Prioritäten
+          </h3>
+          <ul className="mt-2 space-y-1.5">
+            <li className={itemCls} style={{ borderLeft: '3px solid #60a5fa' }}>
+              Schließe dein Setup ab und setze dein Profil weiter auf.
+              <Link href="/dashboard/onboarding" className={linkCls}>
+                → Zum Onboarding
+              </Link>
+            </li>
+            {showContentPrio && (
+              <li
+                className={itemCls}
+                style={{ borderLeft: '3px solid #60a5fa' }}
+              >
+                Du hast{' '}
+                <span className="font-semibold text-gray-900">
+                  {contentCount}
+                </span>{' '}
+                {contentCount === 1 ? 'Inhalt' : 'Inhalte'} angelegt. Produziere
+                jetzt erste Pins dazu.
+                <Link href="/dashboard/pin-produktion" className={linkCls}>
+                  → Neue Pins
+                </Link>
+              </li>
+            )}
+            {saisonProduzierenCount > 0 && (
+              <li
+                className={itemCls}
+                style={{ borderLeft: '3px solid #f59e0b' }}
+              >
+                <span className="font-semibold text-gray-900">
+                  {saisonProduzierenCount}
+                </span>{' '}
+                {saisonProduzierenCount === 1
+                  ? 'Event braucht'
+                  : 'Events brauchen'}{' '}
+                <span className="font-semibold text-gray-900">
+                  {saisonDaysLabel}
+                </span>{' '}
+                Material – jetzt mit der Produktion starten.
+                <a href="#saison-kalender" className={linkCls}>
+                  → Saisonkalender
+                </a>
+              </li>
+            )}
+          </ul>
+        </div>
+
+        <div>
+          <h3 className="text-sm font-semibold text-gray-900">
+            Deine nächsten Schritte
+          </h3>
+          <p className="mt-2 text-sm leading-relaxed text-gray-600">
+            Nach deinem ersten Analytics-Update erscheinen hier konkrete
+            Handlungsempfehlungen auf Basis deiner Performance-Daten.
+          </p>
+        </div>
+      </div>
+
+      <p className="mt-4 border-t border-gray-100 pt-3 text-xs text-gray-500">
+        <InfoIcon className="mb-0.5 inline text-gray-400" /> Das Dashboard ist nur so aktuell wie deine
+        zuletzt eingepflegten Daten. Pflege einmal monatlich deine
+        Pinterest-Analytics ein.
+      </p>
+    </section>
+  )
+}
+
+// Sektion 2 — „Profil-Status" ohne Analytics: noch keine Bewertung möglich.
+function ProfilStatusEmpty() {
+  return (
+    <section>
+      <h2 className="text-lg font-semibold text-gray-900">Profil-Status</h2>
+      <div className="mt-3 rounded-lg border border-gray-200 bg-white p-4 text-sm leading-relaxed text-gray-600 shadow-sm">
+        <p className="text-base font-semibold text-gray-700">
+          Noch keine Bewertung möglich
+        </p>
+        <p className="mt-2">
+          Hier siehst du nach deinem ersten Analytics-Update, wie stark dein
+          Profil aufgestellt ist. Bewertet wird anhand automatisch erkannter
+          Muster in deinen Daten: Reichweite, Save-Rate, Klickrate und
+          Board-Aktivität. Deine Hauptnische wird aus den Kategorien deiner
+          Boards erkannt.
+        </p>
+        <Link
+          href="/dashboard/analytics"
+          className="mt-3 inline-flex font-medium text-red-600 hover:underline"
+        >
+          → Analytics einpflegen
+        </Link>
+      </div>
+    </section>
+  )
+}
+
+// Sektion 3 — „Gesamt-Profil-Performance" ohne Analytics.
+function ProfilPerformanceEmpty() {
+  return (
+    <section id="gesamt-profil-performance" className="scroll-mt-4">
+      <h2 className="text-lg font-semibold text-gray-900">
+        Gesamt-Profil-Performance
+      </h2>
+      <DashEmptyBox>
+        Nach deinem ersten Analytics-Update siehst du hier deine
+        Performance-Entwicklung: Klicks, Saves, Impressionen und
+        Engagement-Rate im Verlauf, jeweils im Vergleich zur Vorperiode.
+      </DashEmptyBox>
+    </section>
+  )
+}
+
+// Sektion 4 — „Strategie-Check" ohne festgelegte Strategie.
+function StrategieCheckEmptyKeineStrategie() {
+  return (
+    <section id="strategie-check" className="scroll-mt-4">
+      <h2 className="text-lg font-semibold text-gray-900">Strategie-Check</h2>
+      <DashEmptyBox>
+        Du hast deine Strategie noch nicht festgelegt. Der Strategie-Check
+        vergleicht deine tatsächliche Pin-Verteilung mit deinen Zielen. Dafür
+        braucht er deine Strategie.{' '}
+        <Link
+          href="/dashboard/strategie?tab=meine"
+          className="font-medium text-red-600 hover:underline"
+        >
+          → Strategie festlegen
+        </Link>
+      </DashEmptyBox>
+    </section>
+  )
+}
+
+// Sektion 8 — „Bestehende Pins optimieren" ohne Analytics.
+function HandlungsbedarfEmpty() {
+  return (
+    <section id="pin-handlungsbedarf" className="scroll-mt-4">
+      <h2 className="text-lg font-semibold text-gray-900">
+        Bestehende Pins optimieren
+      </h2>
+      <DashEmptyBox>
+        Diese Auswertung wird aussagekräftig, sobald deine Pins in der Datenbank
+        hinterlegt sind und du dein erstes Analytics-Update gemacht hast. Dann
+        bekommt jeder Pin automatisch eine Diagnose (z.B. Hidden Gem, Top
+        Performer) und eine konkrete Handlungsempfehlung. Ohne Performance-Daten
+        ist keine ehrliche Bewertung möglich.
+      </DashEmptyBox>
+    </section>
+  )
+}
+
+// Sektion 9 — „Board-Gesundheit" ohne angelegte Boards.
+function BoardGesundheitEmpty() {
+  return (
+    <section id="board-gesundheit" className="scroll-mt-4">
+      <h2 className="text-lg font-semibold text-gray-900">Board-Gesundheit</h2>
+      <DashEmptyBox>
+        Sobald du Boards angelegt hast, siehst du hier deren Aktivitäts-Status:
+        Welche Boards sind aktiv, welche brauchen Aufmerksamkeit, wo liegen
+        vorbereitete Pins ohne Veröffentlichung.{' '}
+        <Link
+          href="/dashboard/boards"
+          className="font-medium text-red-600 hover:underline"
+        >
+          → Boards anlegen
+        </Link>
+      </DashEmptyBox>
+    </section>
   )
 }
 
@@ -1750,7 +2073,7 @@ function ProfilPerformanceKpiBar({
           ))}
         </div>
         <p className="mt-2 text-xs text-gray-500">
-          Noch kein Analytics-Update —{' '}
+          Noch kein Analytics-Update:{' '}
           <Link
             href="/dashboard/analytics"
             className="font-medium text-red-600 hover:underline"
@@ -1772,8 +2095,8 @@ function ProfilPerformanceKpiBar({
         />
         {previous && (
           <span className="ml-2 text-sm font-normal text-gray-500">
-            — Vergleich zu {formatDateDe(previous.datum)}
-            {deltaTage !== null && <>, Δ {deltaTage} Tage</>}
+            (Vergleich zu {formatDateDe(previous.datum)}
+            {deltaTage !== null && <>, Δ {deltaTage} Tage</>})
           </span>
         )}
       </h2>
@@ -1791,7 +2114,7 @@ function ProfilPerformanceKpiBar({
             value={formatZahl(latest.ausgehende_klicks)}
             fullValue={latest.ausgehende_klicks}
             growth={latest.klicks_growth}
-            tooltip="Wie oft Nutzer von Pinterest auf deine Website geklickt haben. Das ist deine wichtigste Metrik — sie zeigt echten Traffic."
+            tooltip="Wie oft Nutzer von Pinterest auf deine Website geklickt haben. Das ist deine wichtigste Metrik für echten Traffic."
             previousValue={prevText(
               previous ? formatZahl(previous.ausgehende_klicks) : null
             )}
@@ -1802,7 +2125,7 @@ function ProfilPerformanceKpiBar({
             label="Engagement Rate"
             value={formatPercent(latest.engagement)}
             growth={latest.engagement_growth}
-            tooltip="(Saves + Klicks) ÷ Impressionen. Standard Pins Durchschnitt: 0,15–0,25%. Über 1% ist ausgezeichnet."
+            tooltip="(Saves + Ausgehende Klicks) ÷ Impressionen. Ein Überblickswert: Auf Pinterest sind diese Werte oft klein, das ist normal. Statt auf eine feste Zahl zu schauen, achte darauf, ob er über die Zeit steigt, das siehst du im Tab Profil-Entwicklung."
             previousValue={prevText(
               prevEngagement !== null ? formatPercent(prevEngagement) : null
             )}
@@ -1856,7 +2179,7 @@ function ProfilPerformanceKpiBar({
             value={formatZahl(latest.gesamte_zielgruppe)}
             fullValue={latest.gesamte_zielgruppe}
             growth={latest.zielgruppe_growth}
-            tooltip="Alle Menschen die deinen Content gesehen haben — auf Pinterest und außerhalb."
+            tooltip="Alle Menschen die deinen Content gesehen haben, auf Pinterest und außerhalb."
             previousValue={prevText(
               previous ? formatZahl(previous.gesamte_zielgruppe) : null
             )}
@@ -1868,7 +2191,7 @@ function ProfilPerformanceKpiBar({
             value={formatZahl(latest.interagierende_zielgruppe)}
             fullValue={latest.interagierende_zielgruppe}
             growth={latest.interagierend_growth}
-            tooltip="Menschen die aktiv reagiert haben — geklickt, gespeichert oder kommentiert. Qualitativ wertvoller als Gesamtzielgruppe."
+            tooltip="Menschen die aktiv reagiert haben: geklickt, gespeichert oder kommentiert. Qualitativ wertvoller als Gesamtzielgruppe."
             previousValue={prevText(
               previous ? formatZahl(previous.interagierende_zielgruppe) : null
             )}
@@ -2058,7 +2381,7 @@ function HandlungsbedarfSection({
         Bestehende Pins optimieren
       </h2>
       <p className="mt-1 text-sm text-gray-600">
-        Basierend auf deinen Analytics — welche Pins brauchen eine Reaktion?
+        Basierend auf deinen Analytics: Welche Pins brauchen eine Reaktion?
       </p>
       <div className="achtung-box mt-2">
         ⚠️ Erstelle immer einen neuen Pin – bearbeite nie den bei Pinterest
@@ -2159,7 +2482,7 @@ function HandlungsbedarfSection({
 }
 
 const PUSH_TOOLTIP =
-  'Pinterest pusht neue Pins in den ersten 60-90 Tagen besonders stark – das nennt sich Push-Window oder Honeymoon-Phase. In dieser Zeit reicht der Algorithmus den Pin proaktiv neuen Zielgruppen aus. Danach läuft er nur noch über Saves und natürliche Reichweite. Wenn ein Pin in dieser Phase außergewöhnlich gut läuft hast du ein kurzes Zeitfenster um das Maximum rauszuholen — produziere Varianten während der Algorithmus deinem Profil gerade vertraut. Pinterest lernt dann: Diese Person macht guten Content zu diesem Thema und pusht die nächsten Pins bevorzugt.'
+  'Pinterest pusht neue Pins in den ersten 60-90 Tagen besonders stark. Das nennt sich Push-Window oder Honeymoon-Phase. In dieser Zeit reicht der Algorithmus den Pin proaktiv neuen Zielgruppen aus. Danach läuft er nur noch über Saves und natürliche Reichweite. Wenn ein Pin in dieser Phase außergewöhnlich gut läuft hast du ein kurzes Zeitfenster um das Maximum rauszuholen. Produziere Varianten während der Algorithmus deinem Profil gerade vertraut. Pinterest lernt dann: Diese Person macht guten Content zu diesem Thema und pusht die nächsten Pins bevorzugt.'
 
 function buildPinData(p: ActionablePin): HandlungsbedarfPin {
   return {
@@ -2347,7 +2670,7 @@ function SaisonKalenderSection({ columns }: { columns: SaisonKanbanColumns }) {
           <InfoTooltip text="Pinterest-Nutzer:innen suchen 6–12 Wochen vor einem Event. Wer zu spät pinnt, verpasst die Welle. Der Saisonkalender zeigt dir auf einen Blick in welcher Phase jedes Event gerade ist." />
         </h2>
         <p className="mt-1 text-sm text-gray-600">
-          Saisonale Themen brauchen 6–12 Wochen Vorlauf — hier siehst du,
+          Saisonale Themen brauchen 6-12 Wochen Vorlauf. Hier siehst du,
           was wann zu tun ist.
         </p>
         <p className="mt-1 text-[13px]">
@@ -2578,7 +2901,7 @@ function PinPipelineSection({
         />
       </h2>
       <p className="mt-1 text-sm text-gray-600">
-        Basierend auf deinen Inhalten und URLs — was braucht frisches
+        Basierend auf deinen Inhalten und URLs: Was braucht frisches
         Pin-Material?
       </p>
       <div className="mt-3 space-y-3">
@@ -2619,10 +2942,7 @@ type KeywordSeoEntry = {
 }
 
 type KeywordsSeoBuckets = {
-  stark: KeywordSeoEntry[]
   unused: KeywordSeoEntry[]
-  underused: KeywordSeoEntry[]
-  reconsider: KeywordSeoEntry[]
 }
 
 const KEYWORD_TYP_LABEL: Record<KeywordSeoTyp, string> = {
@@ -2637,18 +2957,6 @@ const KEYWORD_TYP_BADGE: Record<KeywordSeoTyp, string> = {
   longtail: 'bg-green-100 text-green-700',
 }
 
-function fmtPercent(v: number | null): string {
-  if (v === null) return '—'
-  return `${v.toFixed(2)}%`
-}
-
-function fmtAvgKlicks(v: number | null): string {
-  if (v === null) return '—'
-  return v >= 10
-    ? Math.round(v).toLocaleString('de-DE')
-    : v.toFixed(1).replace('.', ',')
-}
-
 function buildKeywordPinHref(keyword: string): string {
   return `/dashboard/pin-produktion?keyword=${encodeURIComponent(keyword)}`
 }
@@ -2656,53 +2964,28 @@ function buildKeywordPinHref(keyword: string): string {
 function KeywordsSeoSection({
   buckets,
   hasAnyKeywords,
-  hasAnyAnalytics,
 }: {
   buckets: KeywordsSeoBuckets
   hasAnyKeywords: boolean
-  hasAnyAnalytics: boolean
 }) {
   const heading = (
-    <>
-      <h2 className="text-lg font-semibold text-gray-900">Keywords & SEO</h2>
-      <p className="mt-1 text-sm text-gray-600">
-        Basierend auf deiner Keyword-Datenbank und Analytics — wo steckt das
-        größte Potenzial?
-      </p>
-    </>
+    <h2 className="text-lg font-semibold text-gray-900">Keyword-Einsatz</h2>
   )
 
   if (!hasAnyKeywords) {
     return (
       <section id="keywords-seo" className="scroll-mt-4">
         {heading}
-        <div className="achtung-box mt-3">
+        <DashEmptyBox>
           →{' '}
           <Link
             href="/dashboard/keywords"
-            className="font-medium underline hover:opacity-80"
+            className="font-medium text-red-600 hover:underline"
           >
             Zuerst Keywords in der Keyword-Datenbank anlegen
           </Link>
           .
-        </div>
-      </section>
-    )
-  }
-
-  if (!hasAnyAnalytics) {
-    return (
-      <section id="keywords-seo" className="scroll-mt-4">
-        {heading}
-        <div className="achtung-box mt-3">
-          ⚠️ Füge Analytics-Daten hinzu um Keyword-Performance zu sehen.{' '}
-          <Link
-            href="/dashboard/analytics"
-            className="font-medium underline hover:opacity-80"
-          >
-            → Zum Analytics-Tab
-          </Link>
-        </div>
+        </DashEmptyBox>
       </section>
     )
   }
@@ -2710,49 +2993,18 @@ function KeywordsSeoSection({
   return (
     <section id="keywords-seo" className="scroll-mt-4">
       {heading}
+      <p className="mt-1 text-sm text-gray-600">
+        Hol mehr aus deiner Keyword-Datenbank heraus.
+      </p>
       <div className="mt-3 space-y-3">
         <KeywordsSeoCard
-          icon="🔑"
-          title="Stark performende Keywords — mehr davon produzieren"
-          subtitle="Keywords mit Ø CTR über 2% in mindestens 3 Pins."
-          counterClass="bg-green-100 text-green-800"
-          entries={buckets.stark}
-          emptyText="Noch keine stark performenden Keywords — füge Analytics-Daten hinzu um Signale zu sehen."
-          renderEntry={(kw) => (
-            <KeywordRowStark key={kw.id} kw={kw} />
-          )}
-        />
-        <KeywordsSeoCard
-          icon="🌱"
-          title="Verstecktes Potenzial — ungenutzte Keywords"
-          subtitle="Keywords aus deiner Datenbank die noch in keinem Pin verwendet wurden."
+          title="Ungenutzte Keywords"
+          subtitle="Diese Keywords stecken noch in keinem Pin."
           counterClass="bg-gray-100 text-gray-700"
           entries={buckets.unused}
-          emptyText="✅ Alle Keywords sind bereits in Pins eingesetzt."
+          emptyText="Alle Keywords sind bereits in Pins eingesetzt."
           renderEntry={(kw) => (
             <KeywordRowUnused key={kw.id} kw={kw} />
-          )}
-        />
-        <KeywordsSeoCard
-          icon="🚀"
-          title="Quick Wins — untergenutzte Keywords"
-          subtitle="Keywords mit Ø CTR über 1%, aber nur in 1–2 Pins."
-          counterClass="bg-blue-100 text-blue-800"
-          entries={buckets.underused}
-          emptyText="Keine untergenutzten Keywords — alles im grünen Bereich."
-          renderEntry={(kw) => (
-            <KeywordRowUnderused key={kw.id} kw={kw} />
-          )}
-        />
-        <KeywordsSeoCard
-          icon="🔍"
-          title="Keywords überdenken"
-          subtitle="Keywords in Pins, aber Ø CTR unter 1%."
-          counterClass="bg-yellow-100 text-yellow-800"
-          entries={buckets.reconsider}
-          emptyText="Keine schwach performenden Keywords — alles im grünen Bereich."
-          renderEntry={(kw) => (
-            <KeywordRowReconsider key={kw.id} kw={kw} />
           )}
         />
       </div>
@@ -2770,7 +3022,6 @@ function KeywordsSeoSection({
 }
 
 function KeywordsSeoCard({
-  icon,
   title,
   subtitle,
   counterClass,
@@ -2778,7 +3029,6 @@ function KeywordsSeoCard({
   emptyText,
   renderEntry,
 }: {
-  icon: string
   title: string
   subtitle: string
   counterClass: string
@@ -2794,12 +3044,6 @@ function KeywordsSeoCard({
         <span className="text-2xl leading-none text-gray-400" aria-hidden>
           <span className="inline group-open:hidden">▸</span>
           <span className="hidden group-open:inline">▾</span>
-        </span>
-        <span
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-gray-300 bg-white text-base"
-          aria-hidden
-        >
-          {icon}
         </span>
         <div className="min-w-0 flex-1">
           <div className="text-sm font-medium text-gray-900">{title}</div>
@@ -2824,7 +3068,7 @@ function KeywordsSeoCard({
         )}
         {remaining > 0 && (
           <p className="px-1 pb-2 pt-3 text-xs text-gray-500">
-            + {remaining} weitere — siehe{' '}
+            + {remaining} weitere, siehe{' '}
             <Link
               href="/dashboard/keywords"
               className="font-medium text-red-600 hover:underline"
@@ -2835,37 +3079,6 @@ function KeywordsSeoCard({
         )}
       </div>
     </details>
-  )
-}
-
-function KeywordRowStark({ kw }: { kw: KeywordSeoEntry }) {
-  const fewPins = kw.pinsCount < 5
-  return (
-    <li className="px-1 py-3">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <div className="text-sm font-semibold text-gray-900">
-            {kw.keyword}
-          </div>
-          <div className="mt-0.5 text-xs text-gray-500">
-            {kw.pinsCount} Pin{kw.pinsCount === 1 ? '' : 's'} · Ø CTR:{' '}
-            {fmtPercent(kw.avgCtr)} · Ø Klicks: {fmtAvgKlicks(kw.avgKlicks)}
-          </div>
-          {fewPins && (
-            <div className="achtung-box mt-2 !px-2 !py-1.5 text-xs">
-              ⚠️ Nur {kw.pinsCount} Pin{kw.pinsCount === 1 ? '' : 's'} mit
-              diesem Keyword — mehr Pins würden die Reichweite steigern.
-            </div>
-          )}
-        </div>
-        <Link
-          href={buildKeywordPinHref(kw.keyword)}
-          className="inline-flex shrink-0 items-center justify-center rounded-md bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700"
-        >
-          Pin erstellen
-        </Link>
-      </div>
-    </li>
   )
 }
 
@@ -2885,7 +3098,7 @@ function KeywordRowUnused({ kw }: { kw: KeywordSeoEntry }) {
             </span>
           </div>
           <div className="mt-0.5 text-xs text-gray-500">
-            0 Pins — noch in keinem Pin verwendet
+            0 Pins, noch in keinem Pin verwendet
           </div>
         </div>
         <Link
@@ -2893,62 +3106,6 @@ function KeywordRowUnused({ kw }: { kw: KeywordSeoEntry }) {
           className="inline-flex shrink-0 items-center justify-center rounded-md bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700"
         >
           Pin erstellen
-        </Link>
-      </div>
-    </li>
-  )
-}
-
-function KeywordRowUnderused({ kw }: { kw: KeywordSeoEntry }) {
-  return (
-    <li className="px-1 py-3">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <div className="text-sm font-semibold text-gray-900">
-            {kw.keyword}
-          </div>
-          <div className="mt-0.5 text-xs text-gray-500">
-            {kw.pinsCount} Pin{kw.pinsCount === 1 ? '' : 's'} · Ø CTR:{' '}
-            {fmtPercent(kw.avgCtr)}
-          </div>
-          <div className="mt-2 rounded-md border border-green-200 bg-green-50 px-2 py-1.5 text-xs text-green-800">
-            ✅ Dieses Keyword performt gut — mehr Pins würden die Reichweite
-            deutlich steigern.
-          </div>
-        </div>
-        <Link
-          href={buildKeywordPinHref(kw.keyword)}
-          className="inline-flex shrink-0 items-center justify-center rounded-md bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700"
-        >
-          Pin erstellen
-        </Link>
-      </div>
-    </li>
-  )
-}
-
-function KeywordRowReconsider({ kw }: { kw: KeywordSeoEntry }) {
-  return (
-    <li className="px-1 py-3">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <div className="text-sm font-semibold text-gray-900">
-            {kw.keyword}
-          </div>
-          <div className="mt-0.5 text-xs text-gray-500">
-            {kw.pinsCount} Pin{kw.pinsCount === 1 ? '' : 's'} · Ø CTR:{' '}
-            {fmtPercent(kw.avgCtr)}
-          </div>
-          <div className="achtung-box mt-2 !px-2 !py-1.5 text-xs">
-            ⚠️ Dieses Keyword wird verwendet aber erzielt kaum Klicks —
-            entweder das Keyword oder den Hook der Pins optimieren.
-          </div>
-        </div>
-        <Link
-          href="/dashboard/keywords"
-          className="shrink-0 rounded-md border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
-        >
-          Keywords optimieren →
         </Link>
       </div>
     </li>
@@ -3418,6 +3575,7 @@ function BoardGesundheitDashboardSection({
   boardsOhneAnalyticsCount,
   boardsLeerCount,
   preparedPinsByBoard,
+  hasAnyPins,
 }: {
   byCategory: Record<BoardCat, BoardDashHealth[]>
   kpis: {
@@ -3432,9 +3590,13 @@ function BoardGesundheitDashboardSection({
   boardsOhneAnalyticsCount: number
   boardsLeerCount: number
   preparedPinsByBoard: Map<string, { entwurf: number; geplant: number }>
+  // false → noch kein einziger Pin in der DB. Unterdrückt die
+  // Aktivitäts-Bausteine in BoardKurzanalyse („X% nicht aktiv"), die ohne
+  // Pins absurd wären.
+  hasAnyPins: boolean
 }) {
   const headingTooltip =
-    'Pinterest ist eine Suchmaschine — Keywords bestimmen wer dich findet, Boards bestimmen ob Pinterest dir vertraut. Inaktive Boards bremsen alle Pins darauf und schaden deiner thematischen Autorität. Top Boards signalisieren thematische Expertise und geben neuen Pins automatisch mehr Reichweite.'
+    'Pinterest ist eine Suchmaschine. Keywords bestimmen wer dich findet, Boards bestimmen ob Pinterest dir vertraut. Inaktive Boards bremsen alle Pins darauf und schaden deiner thematischen Autorität. Top Boards signalisieren thematische Expertise und geben neuen Pins automatisch mehr Reichweite.'
 
   const heading = (
     <>
@@ -3445,9 +3607,11 @@ function BoardGesundheitDashboardSection({
         />
       </h2>
       <p className="mt-1 text-sm text-gray-600">
-        Boards zeigen Pinterest, für welche Themen du stehst. Wichtiger
-        als ausgehende Klicks ist hier wie oft Nutzer:innen deine Pins
-        speichern oder anklicken (Engagement Rate).
+        Boards zeigen Pinterest, für welche Themen du stehst. Wie oft deine
+        Pins gespeichert werden, ist Pinterests stärkstes Signal, dass deine
+        Inhalte wertvoll sind, und das hilft, deinen ganzen Account besser
+        auszuspielen. Die Engagement Rate gibt dir hier einen Überblick über
+        die Gesamtwirkung eines Boards.
       </p>
     </>
   )
@@ -3465,7 +3629,7 @@ function BoardGesundheitDashboardSection({
         <BoardKpiCell
           label="Ø Engagement Rate"
           value={formatPercent(kpis.profilEr)}
-          tooltip="Bei Boards die wichtigste Erfolgs-Metrik. Zeigt, ob Pinterest-Nutzer:innen mit deinen Themen interagieren – das signalisiert dem Algorithmus thematische Autorität. Berechnung: Engagement Rate = (Saves + Pin-Klicks + ausgehende Klicks) ÷ Impressionen × 100. Beispiel: 50 Interaktionen bei 1.000 Impressionen = 5% Engagement Rate."
+          tooltip="Zeigt, wie aktiv Pinterest-Nutzer mit den Pins eines Boards insgesamt interagieren, also ein guter Überblickswert für die Gesamtwirkung. Pinterest fasst dafür Saves, Pin-Klicks und ausgehende Klicks zu den Interaktionen zusammen: Engagement Rate = Interaktionen ÷ Impressionen × 100. Beispiel: 50 Interaktionen bei 1.000 Impressionen ergeben 5 % Engagement Rate. Welche Pins wirklich Traffic bringen, zeigen die ausgehenden Klicks. Was Pinterest für die Ausspielung belohnt, ist die Save-Rate."
           highlight
         />
         <BoardKpiCell
@@ -3479,7 +3643,7 @@ function BoardGesundheitDashboardSection({
           label="Ø Letzter Pin"
           value={
             kpis.avgLastPinDays === null
-              ? '—'
+              ? '-'
               : kpis.avgLastPinDays === 0
                 ? 'heute'
                 : kpis.avgLastPinDays === 1
@@ -3494,9 +3658,9 @@ function BoardGesundheitDashboardSection({
       <BoardKurzanalyse
         aktivitaetsratePct={kpis.aktivitaetsratePct}
         avgLastPinDays={kpis.avgLastPinDays}
-        profilEr={kpis.profilEr}
         boardsTotal={kpis.boardsTotal}
         aktivBoardsCount={kpis.aktivBoardsCount}
+        hasAnyPins={hasAnyPins}
       />
 
       {(() => {
@@ -3561,13 +3725,13 @@ function BoardGesundheitDashboardSection({
           </Link>
           {boardsOhneAnalyticsCount > 0 && (
             <span className="inline-flex items-center gap-1 text-gray-500">
-              <span aria-hidden>ⓘ</span>
+              <InfoIcon className="shrink-0 text-gray-400" />
               <span>
                 {boardsOhneAnalyticsCount}{' '}
                 {boardsOhneAnalyticsCount === 1
                   ? 'Board ohne'
                   : 'Boards ohne'}{' '}
-                Analytics-Einträge —{' '}
+                Analytics-Einträge:{' '}
                 <Link
                   href="/dashboard/analytics?tab=boards"
                   className="font-medium text-red-600 hover:underline"
@@ -3579,11 +3743,11 @@ function BoardGesundheitDashboardSection({
           )}
           {boardsLeerCount > 0 && (
             <span className="inline-flex items-center gap-1 text-gray-500">
-              <span aria-hidden>ⓘ</span>
+              <InfoIcon className="shrink-0 text-gray-400" />
               <span>
                 {boardsLeerCount}{' '}
                 {boardsLeerCount === 1 ? 'leeres Board' : 'leere Boards'} ohne
-                Pins — erste Pins veröffentlichen um Daten zu sehen
+                Pins. Erste Pins veröffentlichen um Daten zu sehen
               </span>
             </span>
           )}
@@ -3652,34 +3816,39 @@ function BoardGruppeHeader({
 function BoardKurzanalyse({
   aktivitaetsratePct,
   avgLastPinDays,
-  profilEr,
   boardsTotal,
   aktivBoardsCount,
+  hasAnyPins = true,
 }: {
   aktivitaetsratePct: number
   avgLastPinDays: number | null
-  profilEr: number | null
   boardsTotal: number
   aktivBoardsCount: number
+  // false → noch kein Pin in der DB. Die Aktivitäts-Bausteine („X% nicht
+  // aktiv" / „Keines deiner Boards …") werden dann übersprungen, da sie ohne
+  // einen einzigen Pin nur absurd wirken.
+  hasAnyPins?: boolean
 }) {
   const lines: string[] = []
 
-  // Baustein 1 — Aktivitätsrate
-  if (aktivitaetsratePct >= 70) {
-    lines.push('Deine Boards sind aktiv – das ist eine starke Basis.')
-  } else if (aktivitaetsratePct >= 40) {
-    lines.push(
-      'Etwa die Hälfte deiner Boards wird aktiv bepinnt – hier ist Luft nach oben.'
-    )
-  } else {
-    const inaktivPct = Math.round(100 - aktivitaetsratePct)
-    lines.push(
-      `${inaktivPct}% deiner Boards sind nicht aktiv – das bremst dein Pinterest-Wachstum.`
-    )
+  // Baustein 1 — Aktivitätsrate (nur sinnvoll, wenn Pins existieren)
+  if (hasAnyPins) {
+    if (aktivitaetsratePct >= 70) {
+      lines.push('Deine Boards sind aktiv – das ist eine starke Basis.')
+    } else if (aktivitaetsratePct >= 40) {
+      lines.push(
+        'Etwa die Hälfte deiner Boards wird aktiv bepinnt – hier ist Luft nach oben.'
+      )
+    } else {
+      const inaktivPct = Math.round(100 - aktivitaetsratePct)
+      lines.push(
+        `${inaktivPct}% deiner Boards sind nicht aktiv – das bremst dein Pinterest-Wachstum.`
+      )
+    }
   }
 
   // Baustein 2 — Boards ohne neuen Pin in den letzten 14 Tagen
-  if (boardsTotal > 0) {
+  if (hasAnyPins && boardsTotal > 0) {
     const inaktivCount = boardsTotal - aktivBoardsCount
     if (inaktivCount === 0) {
       lines.push('Alle deine Boards werden regelmäßig bepinnt – starke Basis.')
@@ -3694,50 +3863,25 @@ function BoardKurzanalyse({
     }
   }
 
-  // Baustein 3 — Ø Engagement Rate
-  if (profilEr !== null) {
-    let bewertung: string
-    if (profilEr < 0.8) {
-      bewertung = 'unter dem Pinterest-Schnitt'
-    } else if (profilEr < 1.5) {
-      bewertung = 'im Pinterest-Schnitt'
-    } else if (profilEr < 3) {
-      bewertung = 'über dem Pinterest-Schnitt – gut optimiert'
-    } else {
-      bewertung = 'deutlich über dem Pinterest-Schnitt – Top-Performer-Niveau'
-    }
-    lines.push(
-      `Deine Engagement Rate ist ${fmtErDe(profilEr)} – das ist ${bewertung}. (Pinterest-Schnitt: 0,3–0,8% · gut optimiert: 1,5–3% · Top-Performer: 3%+)`
-    )
-  }
-
   // Baustein 4 — Handlungsempfehlung. Reihenfolge = Priorität: erste passende
-  // Regel gewinnt. Wenn keine kritische Bedingung greift und alle Werte im
-  // grünen Bereich sind → „Weiter so". Sonst keine Empfehlung (40-69% mit
-  // grüner ER bekommt z.B. keine, da kein klarer Hebel sichtbar).
+  // Regel gewinnt. Greift keine kritische Bedingung (z.B. 40-69%
+  // Aktivitätsrate), gibt es keine Empfehlung, da kein klarer Hebel sichtbar.
   const r = aktivitaetsratePct
   const d = avgLastPinDays
-  const er = profilEr
   let recHeading: string | null = null
   let recText: string | null = null
   if (r < 40 && d !== null && d > 14) {
-    recHeading = '🎯 Größter Hebel'
+    recHeading = 'Größter Hebel'
     recText =
       'Pinning-Frequenz erhöhen – mindestens 3 neue Pins pro Woche pro aktivem Board.'
   } else if (r < 40 && d !== null && d <= 14) {
-    recHeading = '🎯 Größter Hebel'
+    recHeading = 'Größter Hebel'
     recText =
       'Inaktive Boards reaktivieren – das Pinning auf mehr Boards verteilen.'
-  } else if (r >= 70 && er !== null && er < 3) {
-    recHeading = '🎯 Größter Hebel'
+  } else if (r >= 70 && (d === null || d <= 14)) {
+    recHeading = 'Größter Hebel'
     recText =
-      'Pin-Designs und Hooks optimieren – die Aktivität stimmt, aber das Engagement bleibt zurück.'
-  } else if (
-    r >= 70 &&
-    (d === null || d <= 14) &&
-    (er === null || er >= 3)
-  ) {
-    recText = '🎯 Weiter so – Dranbleiben ist der wichtigste Hebel.'
+      'Die Aktivität stimmt. Jetzt zählen frische Pins, starke Hooks und die richtigen Keywords: Pins, die so überzeugen, dass Menschen sie speichern und auf deine Website klicken.'
   }
 
   if (lines.length === 0 && !recText) return null
@@ -3941,7 +4085,7 @@ function BoardKategorieCard({
 
 // Deutsche ER-Formatierung mit Komma als Dezimaltrenner.
 function fmtErDe(n: number | null, digits = 1): string {
-  if (n === null || !Number.isFinite(n)) return '—'
+  if (n === null || !Number.isFinite(n)) return '-'
   return `${n.toFixed(digits).replace('.', ',')}%`
 }
 
@@ -3980,36 +4124,6 @@ function ErWithTrend({ board }: { board: BoardDashHealth }) {
   )
 }
 
-// Solide-Schwellwerte für „Was fehlt"-Hinweis (später in Einstellungen
-// konfigurierbar — vorerst Konstanten).
-const SOLIDE_PINS_MIN = 10
-const SOLIDE_IMPRESSIONS_MIN = 1000
-const SOLIDE_ER_TARGET = 5.0
-
-// Liefert die Lücke des Solide-Boards als „[Defizit] – [Aktion]"-Phrase
-// (ohne führendes „Was fehlt:"). Wird im warum-Text als Anschluss an
-// „Stabile ER (X%), aber …" eingebaut. null = keine erkennbare Lücke.
-function buildWasFehltText(b: BoardDashHealth): string | null {
-  const pins = b.anzahlPins ?? 0
-  const imp = b.impressionen
-  const er = b.engagementRate
-  if (pins < SOLIDE_PINS_MIN && imp < SOLIDE_IMPRESSIONS_MIN) {
-    return 'wenig Pin-Volumen – mehr Material für Pinterest erstellen.'
-  }
-  if (pins >= SOLIDE_PINS_MIN && imp < SOLIDE_IMPRESSIONS_MIN) {
-    return 'niedrige Reichweite – Keywords optimieren.'
-  }
-  if (
-    pins >= SOLIDE_PINS_MIN &&
-    imp >= SOLIDE_IMPRESSIONS_MIN &&
-    er !== null &&
-    er < SOLIDE_ER_TARGET
-  ) {
-    return 'niedriges Engagement – Pin-Designs und Hooks überarbeiten.'
-  }
-  return null
-}
-
 // Hinweis „vorbereitete Pins in der Datenbank" — nur dort, wo
 // Reaktivierungs-Potenzial besteht. Für aktive Boards uninteressant.
 // Die Box wird nur gezeigt, wenn mindestens einer der beiden Counts > 0 ist.
@@ -4029,12 +4143,12 @@ function buildWarumText(cat: BoardCat, b: BoardDashHealth): string | null {
     case 'aktiv':
       return null
     case 'inaktiv': {
-      const tage = b.lastPinAlterTage !== null ? `${b.lastPinAlterTage}` : '—'
-      return `⚠️ Seit ${tage} Tagen kein neuer Pin. Pinterest spielt inaktive Boards seltener aus — du verschenkst Reichweite.`
+      const tage = b.lastPinAlterTage !== null ? `${b.lastPinAlterTage}` : '-'
+      return `⚠️ Seit ${tage} Tagen kein neuer Pin. Pinterest spielt inaktive Boards seltener aus. Du verschenkst Reichweite.`
     }
     case 'wenig_aktiv': {
-      const tage = b.lastPinAlterTage !== null ? `${b.lastPinAlterTage}` : '—'
-      return `⚠️ Seit ${tage} Tagen kein neuer Pin. Frühe Warnstufe — jetzt reaktivieren bevor die Sichtbarkeit fällt.`
+      const tage = b.lastPinAlterTage !== null ? `${b.lastPinAlterTage}` : '-'
+      return `⚠️ Seit ${tage} Tagen kein neuer Pin. Frühe Warnstufe: jetzt reaktivieren bevor die Sichtbarkeit fällt.`
     }
     case 'ohne_aktivitaet': {
       const pins = b.pinsInDb
@@ -4098,7 +4212,7 @@ function BoardRow({
         case 'klicks':
           return (
             <span key={kind}>
-              Klicks{' '}
+              Ausg. Klicks{' '}
               <strong className="text-gray-900">
                 {formatZahl(board.klicks)}
               </strong>
@@ -4376,7 +4490,7 @@ function BriefingBlock({
     <section className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
       <BriefingSection items={briefingItems} nextSteps={nextStepsItems} />
       <p className="mt-4 border-t border-gray-100 pt-3 text-xs text-gray-500">
-        <span aria-hidden>ⓘ</span> Das Dashboard ist nur so aktuell wie deine
+        <InfoIcon className="mb-0.5 inline text-gray-400" /> Das Dashboard ist nur so aktuell wie deine
         zuletzt eingepflegten Daten. Pflege einmal monatlich deine
         Pinterest-Analytics ein.
       </p>
@@ -4402,28 +4516,25 @@ function HeroSection({
   // statt Status/Profil-Gesundheit.
   if (statusTri.state === 'leer') {
     return (
-      <section className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-4 shadow-sm">
-        <div className="flex flex-wrap items-start gap-3 text-sm text-blue-900">
-          <span className="text-lg leading-tight" aria-hidden>
-            🔵
-          </span>
+      <section className="rounded-lg bg-slate-800 px-4 py-4 text-white shadow-md">
+        <div className="flex flex-wrap items-start gap-3 text-sm">
           <div className="min-w-0 flex-1">
             <p className="font-semibold">Willkommen!</p>
-            <p className="mt-0.5">
+            <p className="mt-0.5 text-slate-300">
               Bevor das Dashboard aussagekräftig wird, pflege einmal monatlich
               deine Pinterest-Analytics ein. Erst dann zeigen KPIs,
               Strategie-Check und Coaching-Empfehlungen verlässliche Werte.
             </p>
             <Link
               href="/dashboard/analytics"
-              className="mt-3 inline-flex items-center rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+              className="mt-3 inline-flex items-center rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700"
             >
               → Analytics jetzt einpflegen
             </Link>
           </div>
-          <span className="ml-auto flex shrink-0 items-center gap-3 border-l border-blue-200 pl-3 text-xs text-blue-900">
+          <span className="ml-auto flex shrink-0 items-center gap-3 border-l border-slate-600 pl-3 text-xs text-slate-300">
             <span>📌 {formatZahl(pinsCount)} Pins</span>
-            <span className="text-blue-300" aria-hidden>
+            <span className="text-slate-500" aria-hidden>
               ·
             </span>
             <span>📋 {formatZahl(boardsCount)} Boards</span>
@@ -4472,7 +4583,7 @@ function HeroSection({
         ? `🟡 Analytics-Status: Update fällig in ${
             statusTri.daysUntilDue !== null
               ? Math.max(0, statusTri.daysUntilDue)
-              : '—'
+              : '-'
           } Tagen`
         : statusTri.state === 'gruen'
           ? '🟢 Analytics-Status: Aktuell'
@@ -4624,7 +4735,7 @@ function ProfilPerformanceSection({
           ))}
         </div>
         <p className="mt-2 text-xs text-gray-500">
-          Noch kein Analytics-Update —{' '}
+          Noch kein Analytics-Update:{' '}
           <Link
             href="/dashboard/analytics"
             className="font-medium text-red-600 hover:underline"
@@ -4646,7 +4757,7 @@ function ProfilPerformanceSection({
         />
         {previous && (
           <span className="ml-2 text-sm font-normal text-gray-500">
-            — Vergleich zur Vorperiode
+            (Vergleich zur Vorperiode)
           </span>
         )}
       </h2>
@@ -4672,7 +4783,7 @@ function ProfilPerformanceSection({
               value={formatZahl(latest.ausgehende_klicks)}
               fullValue={latest.ausgehende_klicks}
               growth={latest.klicks_growth}
-              tooltip="Wie oft Nutzer von Pinterest auf deine Website geklickt haben. Das ist deine wichtigste Metrik — sie zeigt echten Traffic."
+              tooltip="Wie oft Nutzer von Pinterest auf deine Website geklickt haben. Das ist deine wichtigste Metrik für echten Traffic."
               previousValue={prevText(
                 previous ? formatZahl(previous.ausgehende_klicks) : null
               )}
@@ -4682,7 +4793,7 @@ function ProfilPerformanceSection({
               label="Engagement Rate"
               value={formatPercent(latest.engagement)}
               growth={latest.engagement_growth}
-              tooltip="(Saves + Klicks) ÷ Impressionen. Standard Pins Durchschnitt: 0,15–0,25%. Über 1% ist ausgezeichnet."
+              tooltip="(Saves + Ausgehende Klicks) ÷ Impressionen. Ein Überblickswert: Auf Pinterest sind diese Werte oft klein, das ist normal. Statt auf eine feste Zahl zu schauen, achte darauf, ob er über die Zeit steigt, das siehst du im Tab Profil-Entwicklung."
               previousValue={prevText(
                 prevEngagement !== null ? formatPercent(prevEngagement) : null
               )}
@@ -4806,7 +4917,7 @@ function KontextZeile({
         label="Gesamte Zielgruppe"
         value={formatZahl(latest.gesamte_zielgruppe)}
         growth={latest.zielgruppe_growth}
-        tooltip="Alle Menschen die deinen Content gesehen haben — auf Pinterest und außerhalb."
+        tooltip="Alle Menschen die deinen Content gesehen haben, auf Pinterest und außerhalb."
         previousValue={
           previous
             ? `Vorperiode: ${formatZahl(previous.gesamte_zielgruppe)}${prevDateLabel}`
@@ -4820,7 +4931,7 @@ function KontextZeile({
         label="Interagierende Zielgruppe"
         value={formatZahl(latest.interagierende_zielgruppe)}
         growth={latest.interagierend_growth}
-        tooltip="Menschen die aktiv reagiert haben — geklickt, gespeichert oder kommentiert. Qualitativ wertvoller als Gesamtzielgruppe."
+        tooltip="Menschen die aktiv reagiert haben: geklickt, gespeichert oder kommentiert. Qualitativ wertvoller als Gesamtzielgruppe."
         previousValue={
           previous
             ? `Vorperiode: ${formatZahl(previous.interagierende_zielgruppe)}${prevDateLabel}`

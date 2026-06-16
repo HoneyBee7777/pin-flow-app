@@ -235,9 +235,9 @@ export function calculateCoachingDiagnoses(
         titel: 'Pinterest-Algorithmus traut deinen Pins nicht',
         problem: `Deine durchschnittliche Save-Rate von ${fmtPct(sr!)}% liegt deutlich unter dem Branchenschnitt für die Save-Rate (${fmtPct(niche.save_rate.schwach, 1)}–${fmtPct(niche.save_rate.durchschnitt, 1)}%). Pinterest bekommt zu wenig Bestätigung, dass deine Inhalte wertvoll sind, und spielt sie deshalb sparsam aus.`,
         ursache:
-          'In den meisten Fällen drei mögliche Ursachen: (1) Themen treffen die Zielgruppe nicht, (2) Pin-Cover sind nicht emotional genug aufgeladen, oder (3) Keywords passen nicht zum Bild — Pinterest spielt den Pin falschen Nutzern aus.',
+          'In den meisten Fällen drei mögliche Ursachen: (1) Themen treffen die Zielgruppe nicht, (2) Pin-Cover sind nicht emotional genug aufgeladen, oder (3) Keywords passen nicht zum Bild. Pinterest spielt den Pin falschen Nutzern aus.',
         handlung:
-          'Identifiziere deine 3 Pins mit der höchsten Save-Rate (in der Pin-Tabelle nach Save-Rate sortieren). Was haben sie gemeinsam? Mehr von diesen Themen produzieren — und für die anderen Themen bewusst andere Bildkonzepte testen.',
+          'Identifiziere deine 3 Pins mit der höchsten Save-Rate (in der Pin-Tabelle nach Save-Rate sortieren). Was haben sie gemeinsam? Mehr von diesen Themen produzieren und für die anderen Themen bewusst andere Bildkonzepte testen.',
         weiterführend: null,
         snapshot: { saveRate: sr!, primaryNicheId: niche.id },
       })
@@ -261,9 +261,9 @@ export function calculateCoachingDiagnoses(
         id,
         severity: 'wichtig',
         titel: 'Pinterest spielt aus, aber niemand klickt durch',
-        problem: `${reichweiteOhneWirkungCount} deiner Pins haben gute Reichweite und werden gespeichert — aber kaum jemand klickt zur Website. Das ist ein Cover-/Hook-Problem, kein SEO-Problem.`,
+        problem: `${reichweiteOhneWirkungCount} deiner Pins haben gute Reichweite und werden gespeichert, aber kaum jemand klickt zur Website. Das ist ein Cover-/Hook-Problem, kein SEO-Problem.`,
         ursache:
-          'Pinterest spielt den richtigen Nutzern den Pin aus, sie finden das Thema interessant — aber das Cover macht nicht genug Lust auf den Klick. Häufig: zu kleine Schrift, zu vager Hook, oder der Pin verspricht etwas anderes als die Landingpage.',
+          'Pinterest spielt den richtigen Nutzern den Pin aus, sie finden das Thema interessant, aber das Cover macht nicht genug Lust auf den Klick. Häufig: zu kleine Schrift, zu vager Hook, oder der Pin verspricht etwas anderes als die Landingpage.',
         handlung:
           'Diese Pins sind dein größter aktueller Hebel. Erstelle für jeden einen neuen Pin mit anderem Cover: stärkerer Hook (eine konkrete Zahl, ein klares Versprechen), größere Schrift, andere Bildkomposition. Link bleibt gleich.',
         weiterführend: null,
@@ -305,14 +305,14 @@ export function calculateCoachingDiagnoses(
         severity: 'kritisch',
         titel: 'Deine Pins werden kaum ausgespielt',
         problem:
-          'Mehr als 70 % deiner Pins haben weniger als 200 Impressionen. Pinterest gibt deinem Profil aktuell wenig Reichweite — das ist meist ein SEO- oder Board-Strukturproblem.',
+          'Mehr als 70 % deiner Pins haben weniger als 200 Impressionen. Pinterest gibt deinem Profil aktuell wenig Reichweite, das ist meist ein SEO- oder Board-Strukturproblem.',
         ursache:
           'Häufige Gründe: (1) Pins ohne klare Keywords in Titel und Beschreibung, (2) Boards mit schlechten Namen oder leerer Beschreibung, (3) zu breit gestreute Themen ohne klare Nischen-Konsistenz.',
         handlung:
-          'Erste Schritte: Prüfe deine 5 wichtigsten Boards — haben sie aussagekräftige Namen mit Keywords ganz vorn? Beschreibungen mit 2-3 Sätzen? Wenn nicht: erst Boards optimieren, dann mit der Pin-Produktion fortfahren.',
+          'Erste Schritte: Prüfe deine 5 wichtigsten Boards. Haben sie aussagekräftige Namen mit Keywords ganz vorn? Beschreibungen mit 2-3 Sätzen? Wenn nicht: erst Boards optimieren, dann mit der Pin-Produktion fortfahren.',
         weiterführend: {
           label: 'Erfolg messen',
-          parent: 'Strategie & Ausrichtung',
+          parent: 'Pinterest-Wissen',
           href: '/dashboard/strategie?tab=analytics',
         },
         snapshot: { pinsAeltAls60Tage, medianImpressionen: medianImp },
@@ -358,7 +358,7 @@ export function calculateCoachingDiagnoses(
         ursache:
           'Pinterest funktioniert nach Themen-Konsistenz. Ein Profil, das zu 60 %+ aus einer Nische besteht, wird vom Algorithmus klar zugeordnet.',
         handlung:
-          'Definiere eine Hauptnische und 1-2 Nebennischen. Ziel: 60-70 % deiner Pins in der Hauptnische. Boards außerhalb entweder löschen oder geheim setzen.',
+          'Definiere eine Hauptnische und 1-2 Nebennischen. Ziel: 60-70 % deiner Pins in der Hauptnische. Boards außerhalb deiner Nische entweder löschen oder auf Pinterest auf geheim stellen.',
         weiterführend: null,
         snapshot: {
           nichesCount: nicheProfile.niches.length,
@@ -402,7 +402,7 @@ export function calculateCoachingDiagnoses(
         ursache:
           'Bei der Board-Anlage wurde das Kategorie-Feld nicht ausgefüllt.',
         handlung:
-          'Geh in den Boards-Tab und ergänze die Kategorie für deine wichtigsten Boards. Das dauert pro Board ~30 Sekunden — und schaltet gezielte Branchen-Vergleiche frei.',
+          'Geh in den Boards-Tab und ergänze die Kategorie für deine wichtigsten Boards. Das dauert pro Board ~30 Sekunden und schaltet gezielte Branchen-Vergleiche frei.',
         weiterführend: null,
         snapshot: { kategorisierungQuote },
       })
@@ -437,7 +437,7 @@ export function calculateCoachingDiagnoses(
         ursache:
           'Typischer Verlauf bei Profilen, die ohne klare Strategie und Keyword-Recherche gestartet sind.',
         handlung:
-          'Schwache alte Pins auf private Boards verschieben. Bei Pins zu strategisch wichtigen Themen: Recyceln mit neuem Cover und überarbeiteten Keywords. Nicht löschen — du verlierst eingehende Backlinks.',
+          'Schwache alte Pins auf private Boards verschieben. Bei Pins zu strategisch wichtigen Themen: Recyceln mit neuem Cover und überarbeiteten Keywords. Nicht löschen, du verlierst eingehende Backlinks.',
         weiterführend: null,
         snapshot: { alteSchlechtePin },
       })

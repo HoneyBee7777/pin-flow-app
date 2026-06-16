@@ -1,394 +1,456 @@
-// Server-Komponente: rendert die Strategie-Check-Sektion auf dem Dashboard.
-// Logik / Berechnung kommt aus lib.ts (rein, testbar).
+// Phase B — Anzeige des neuen Strategie-Checks (V2).
+// Reine Darstellung des von computeStrategieCheckV2 berechneten Ergebnisses.
+// Drei Bereiche: Zielflächen-Vergleich, Pinning-Frequenz, Content-Säulen.
 
 import Link from 'next/link'
-import InfoTooltip from '@/components/InfoTooltip'
+import type { ReactNode } from 'react'
+import { PINNING_FREQUENZ_OPTIONS } from '../strategie/lib'
 import type {
-  CheckArea,
-  CheckItem,
-  CoachingItem,
-  DiffColor,
-  StrategieCheckResult,
+  AbweichungStatus,
+  FrequenzCheck,
+  SaeulenCheck,
+  StrategieCheckV2,
+  StrategieGesamtStatus,
+  ZielflaecheCheckItem,
+  ZielflaechenCheck,
 } from './lib'
 
-// =====================================================
-// Farb-Mapping pro Bereich+Kanal (matcht /dashboard/strategie)
-// =====================================================
-const BAR_HEX: Record<string, string> = {
-  // Strategie-Mix
-  'mix:blog': '#3b82f6', // blue-500
-  'mix:affiliate': '#a855f7', // purple-500
-  'mix:produkt': '#22c55e', // green-500
-  // Conversion-Ziele
-  'ziel:traffic': '#3b82f6',
-  'ziel:lead': '#f97316', // orange-500
-  'ziel:sales': '#22c55e',
-  // Format-Mix
-  'format:standard': '#000000',
-  'format:video': '#ef4444', // red-500
-  'format:collage': '#facc15', // yellow-400
-  'format:carousel': '#ec4899', // pink-500
+const STATUS_META: Record<
+  StrategieGesamtStatus,
+  { label: string; cls: string }
+> = {
+  auf_kurs: { label: 'Auf Kurs', cls: 'bg-green-100 text-green-800' },
+  leicht_daneben: {
+    label: 'Kleine Abweichung',
+    cls: 'bg-amber-100 text-amber-800',
+  },
+  deutlich_daneben: {
+    label: 'Größere Abweichung',
+    cls: 'bg-red-100 text-red-700',
+  },
+  unbekannt: { label: 'Noch keine Daten', cls: 'bg-gray-100 text-gray-600' },
 }
 
-const DIFF_TEXT_CLASS: Record<DiffColor, string> = {
-  green: 'text-green-600',
-  yellow: 'text-yellow-600',
-  red: 'text-red-600',
+const ABWEICHUNG_TEXT_CLS: Record<AbweichungStatus, string> = {
+  im_plan: 'text-green-700',
+  leicht_daneben: 'text-amber-700',
+  deutlich_daneben: 'text-red-700',
 }
 
-const AREA_LABEL: Record<CheckArea['key'], string> = {
-  mix: 'Strategie-Mix',
-  ziel: 'Conversion-Ziele',
-  format: 'Pin-Format-Mix',
+const ABWEICHUNG_BAR_HEX: Record<AbweichungStatus, string> = {
+  im_plan: '#22c55e', // green-500
+  leicht_daneben: '#facc15', // yellow-400
+  deutlich_daneben: '#ef4444', // red-500
 }
 
-// Pin-Datenbank-Filter-URL für die jeweilige Area: zeigt alle Pins, denen
-// das zugehörige Feld fehlt (Strategie / Conversion-Ziel / Format).
-function ohneAngabeFilterHref(areaKey: CheckArea['key']): string {
-  const param =
-    areaKey === 'mix'
-      ? 'strategie'
-      : areaKey === 'ziel'
-        ? 'conversion_ziel'
-        : 'format'
-  return `/dashboard/pin-produktion?filter[${param}]=keine-angabe`
+// Ampel-System: Signalfarbe je Bereich, konsistent mit dem Balken-Schema
+// (green-500 / yellow-400 / red-500), grau für „noch keine Daten".
+type Ampel = 'gruen' | 'gelb' | 'rot' | 'grau'
+
+const AMPEL_DOT: Record<Ampel, string> = {
+  gruen: 'bg-green-500',
+  gelb: 'bg-yellow-400',
+  rot: 'bg-red-500',
+  grau: 'bg-gray-300',
 }
 
-// =====================================================
-// Hauptkomponente
-// =====================================================
+// Kräftiger linker Kartenrand in der Status-Farbe.
+const AMPEL_BORDER: Record<Ampel, string> = {
+  gruen: 'border-l-green-500',
+  gelb: 'border-l-yellow-400',
+  rot: 'border-l-red-500',
+  grau: 'border-l-gray-300',
+}
+
+// Farbe des Status-Satzes unter der Bereichsüberschrift.
+const AMPEL_TEXT: Record<Ampel, string> = {
+  gruen: 'text-green-700',
+  gelb: 'text-amber-700',
+  rot: 'text-red-700',
+  grau: 'text-gray-500',
+}
+
+const GESAMT_AMPEL: Record<StrategieGesamtStatus, Ampel> = {
+  auf_kurs: 'gruen',
+  leicht_daneben: 'gelb',
+  deutlich_daneben: 'rot',
+  unbekannt: 'grau',
+}
+
+// Pin-Ziel-Verteilung: die schlimmste Einzelabweichung bestimmt die Farbe.
+// Ohne zugeordnete Pins oder ohne festgelegte Verteilung: grau.
+function zielflaechenAmpel(z: ZielflaechenCheck): Ampel {
+  if (!z.hatSoll || !z.hatDaten) return 'grau'
+  if (z.items.some((i) => i.status === 'deutlich_daneben')) return 'rot'
+  if (z.items.some((i) => i.status === 'leicht_daneben')) return 'gelb'
+  return 'gruen'
+}
+
+// Pinning-Rhythmus: im Rhythmus grün, knapp drüber/drunter gelb, deutlich
+// drüber/drunter rot, ohne festgelegten Rhythmus grau. Die „weit daneben"-
+// Schwelle entspricht der Logik in ableitenGesamtStatus.
+function frequenzAmpel(f: FrequenzCheck): Ampel {
+  if (f.lage === 'unbekannt' || f.sollFrequenz === null) return 'grau'
+  if (f.lage === 'im_korridor') return 'gruen'
+  const weitDaneben =
+    (f.sollMinProMonat !== null && f.istProMonat < f.sollMinProMonat / 2) ||
+    (f.sollMaxProMonat !== null && f.istProMonat > f.sollMaxProMonat * 1.5)
+  return weitDaneben ? 'rot' : 'gelb'
+}
+
+// Content-Säulen: alle aktiv grün, einige vernachlässigt gelb, die meisten
+// oder alle vernachlässigt rot, ohne Säulen grau.
+function saeulenAmpel(s: SaeulenCheck): Ampel {
+  if (!s.hatSaeulen) return 'grau'
+  if (s.vernachlaessigtAnzahl === 0) return 'gruen'
+  if (s.aktiveAnzahl === 0 || s.vernachlaessigtAnzahl > s.aktiveAnzahl)
+    return 'rot'
+  return 'gelb'
+}
+
+function StatusPunkt({ ampel }: { ampel: Ampel }) {
+  return (
+    <span
+      className={`h-2.5 w-2.5 shrink-0 rounded-full ${AMPEL_DOT[ampel]}`}
+      aria-hidden
+    />
+  )
+}
+
+// Kurzer Status-Satz in der jeweiligen Signalfarbe. Spacing steuert der
+// jeweilige Eltern-Container (kein eigener Außenabstand).
+function StatusSatz({
+  ampel,
+  children,
+}: {
+  ampel: Ampel
+  children: ReactNode
+}) {
+  return (
+    <p className={`text-sm font-medium ${AMPEL_TEXT[ampel]}`}>{children}</p>
+  )
+}
+
+function clamp(n: number): number {
+  return Math.max(0, Math.min(100, n))
+}
+
+function abweichungText(item: ZielflaecheCheckItem): string {
+  if (item.status === 'im_plan') return 'Im Plan'
+  const richtung = item.diff > 0 ? 'über Plan' : 'unter Plan'
+  const abs = Math.abs(Math.round(item.diff))
+  return item.status === 'deutlich_daneben'
+    ? `${abs} Prozentpunkte deutlich ${richtung}`
+    : `${abs} Prozentpunkte ${richtung}`
+}
+
 export default function StrategieCheckSection({
   result,
 }: {
-  result: StrategieCheckResult
+  result: StrategieCheckV2
 }) {
-  const {
-    totalPinsImFenster,
-    pinsOhneStrategie,
-    pinsOhneConversion,
-    pinsOhneFormat,
-    onboardingAbgeschlossen,
-    fensterTage,
-    areas,
-    coachingTop3,
-    allInPlan,
-  } = result
-
-  const hasOhneAngabe =
-    pinsOhneStrategie > 0 || pinsOhneConversion > 0 || pinsOhneFormat > 0
-
-  // Empty-State: keine Pins der letzten 180 Tage
-  if (totalPinsImFenster === 0) {
-    return (
-      <section id="strategie-check" className="scroll-mt-4">
-        <SectionHeader />
-        <div className="rounded-lg border border-gray-200 bg-white p-6 text-sm text-gray-600 shadow-sm">
-          Noch keine Pin-Daten der letzten {fensterTage} Tage vorhanden. Trage
-          deine Pins in die Pin-Datenbank ein, um den Strategie-Check zu sehen.
-        </div>
-      </section>
-    )
-  }
+  const status = STATUS_META[result.gesamtStatus]
 
   return (
     <section id="strategie-check" className="scroll-mt-4">
-      <SectionHeader />
-
-      <div className="space-y-4 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-        {!onboardingAbgeschlossen && <OnboardingHinweis />}
-
-        <div className="grid gap-6 lg:grid-cols-3">
-          {areas.map((area) => (
-            <AreaBlock
-              key={area.key}
-              area={area}
-              showSoll={onboardingAbgeschlossen}
-            />
-          ))}
-        </div>
-
-        {hasOhneAngabe && (
-          <HinweisOhneDaten
-            ohneStrategie={pinsOhneStrategie}
-            ohneConversion={pinsOhneConversion}
-            ohneFormat={pinsOhneFormat}
-            fensterTage={fensterTage}
-          />
-        )}
-
-        {onboardingAbgeschlossen && allInPlan && <AllInPlanBlock />}
-
-        {onboardingAbgeschlossen && coachingTop3.length > 0 && (
-          <CoachingBlock items={coachingTop3} />
-        )}
+      <div className="mb-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+        <h2 className="text-lg font-semibold text-gray-900">Strategie-Check</h2>
+        <span className="inline-flex items-center gap-1.5">
+          <StatusPunkt ampel={GESAMT_AMPEL[result.gesamtStatus]} />
+          <span
+            title="Zeigt, wie stark deine tatsächliche Pin-Verteilung von deiner geplanten Strategie abweicht."
+            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${status.cls}`}
+          >
+            {status.label}
+          </span>
+        </span>
       </div>
+      <p className="mb-3 text-sm text-gray-600">
+        Vergleicht deine Pin-Arbeit der letzten {result.fensterTage} Tage mit
+        deiner festgelegten Strategie. Der Status zeigt, wie stark deine
+        tatsächliche Pin-Verteilung von deiner geplanten Strategie abweicht.
+      </p>
+
+      {result.pinsImFenster === 0 ? (
+        <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm leading-relaxed text-gray-600">
+          Noch keine Pins im Auswertungszeitraum. Sobald du Pins erstellst,
+          siehst du hier, ob deine Arbeit zu deiner Strategie passt.
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <ZielflaechenCard result={result} />
+          <FrequenzCard result={result} />
+          <SaeulenCard result={result} />
+        </div>
+      )}
     </section>
   )
 }
 
 // =====================================================
-// Header
+// Bereich 1: Zielflächen-Vergleich
 // =====================================================
-function SectionHeader() {
+function ZielflaechenCard({ result }: { result: StrategieCheckV2 }) {
+  const z = result.zielflaechen
+  const amp = zielflaechenAmpel(z)
   return (
-    <div className="mb-3">
-      <h2 className="text-xl font-semibold text-gray-900">
-        Strategie-Check
-        <InfoTooltip text="Vergleicht deine in den letzten 180 Tagen erstellten Pins mit deiner hinterlegten Soll-Strategie. So siehst du, ob du tatsächlich das pinnst, was du dir vorgenommen hast." />
-      </h2>
-      <p className="mt-1 text-sm text-gray-600">
-        Stimmt deine Pin-Verteilung mit deiner geplanten Strategie überein?
-      </p>
-    </div>
-  )
-}
-
-// =====================================================
-// Hinweise
-// =====================================================
-function OnboardingHinweis() {
-  return (
-    <div className="achtung-box">
-      ⚠️ Du hast noch keine Strategie hinterlegt. Hinterlege deine Soll-Strategie
-      auf der Strategie-Seite, um einen Soll-Ist-Vergleich zu sehen.{' '}
-      <Link
-        href="/dashboard/strategie"
-        className="font-medium underline hover:opacity-80"
-      >
-        Strategie hinterlegen ↗
-      </Link>
-    </div>
-  )
-}
-
-function HinweisOhneDaten({
-  ohneStrategie,
-  ohneConversion,
-  ohneFormat,
-  fensterTage,
-}: {
-  ohneStrategie: number
-  ohneConversion: number
-  ohneFormat: number
-  fensterTage: number
-}) {
-  const rows: Array<{ count: number; label: string; href: string }> = []
-  if (ohneStrategie > 0) {
-    rows.push({
-      count: ohneStrategie,
-      label: 'Pins ohne Strategie-Angabe',
-      href: '/dashboard/pin-produktion?filter[strategie]=keine-angabe',
-    })
-  }
-  if (ohneConversion > 0) {
-    rows.push({
-      count: ohneConversion,
-      label: 'Pins ohne Conversion-Ziel-Angabe',
-      href: '/dashboard/pin-produktion?filter[conversion_ziel]=keine-angabe',
-    })
-  }
-  if (ohneFormat > 0) {
-    rows.push({
-      count: ohneFormat,
-      label: 'Pins ohne Format-Angabe',
-      href: '/dashboard/pin-produktion?filter[format]=keine-angabe',
-    })
-  }
-  return (
-    <div className="achtung-box">
-      <p className="text-[13px] leading-relaxed">
-        ⚠️ Folgende Pins aus den letzten {fensterTage} Tagen haben noch keine
-        Angaben. Du kannst die Pins bearbeiten und die Angaben nachtragen.
-      </p>
-      <ul className="mt-2 space-y-1.5">
-        {rows.map((row) => (
-          <li key={row.label} className="text-[13px] leading-relaxed">
-            <span aria-hidden className="mr-1">
-              •
-            </span>
-            <span className="font-medium">{row.count}</span> {row.label}{' '}
-            <span aria-hidden>→ </span>
-            <Link href={row.href} className="underline hover:opacity-80">
-              Fehlende Angaben nachtragen
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </div>
-  )
-}
-
-// =====================================================
-// Bereich (Header + Items)
-// =====================================================
-function AreaBlock({
-  area,
-  showSoll,
-}: {
-  area: CheckArea
-  showSoll: boolean
-}) {
-  return (
-    <div>
-      <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-900">
-        {AREA_LABEL[area.key]}
-      </h3>
-      <p className="mt-0.5 text-xs leading-snug text-gray-500">
-        {area.header}
-      </p>
-
-      {!area.hasData ? (
-        <div className="mt-3 text-xs text-gray-500">
-          <p>Noch keine Pins mit dieser Angabe in den letzten 180 Tagen.</p>
-          <p className="mt-0.5">
-            <span aria-hidden>→ </span>
-            <Link
-              href={ohneAngabeFilterHref(area.key)}
-              className="font-medium text-red-600 underline hover:opacity-80"
-            >
-              Fehlende Angaben nachtragen
-            </Link>
-          </p>
-        </div>
+    <Card
+      title="Pin-Ziel-Verteilung"
+      subtitle="Wohin deine Pins die Menschen führen"
+      ampel={amp}
+    >
+      {!z.hatSoll ? (
+        <Hinweis>
+          Du hast noch keine Pin-Ziel-Verteilung festgelegt.{' '}
+          <Link
+            href="/dashboard/strategie?tab=meine"
+            className="font-medium text-red-600 hover:underline"
+          >
+            Strategie festlegen
+          </Link>
+        </Hinweis>
+      ) : !z.hatDaten ? (
+        <StatusSatz ampel="grau">
+          Noch keine Daten. Ordne deinen Pins ein Pin-Ziel zu, damit dieser
+          Vergleich entsteht.
+        </StatusSatz>
       ) : (
-        <div className="mt-4 space-y-4">
-          {area.items.map((item) => (
-            <CheckRow
-              key={item.key}
-              areaKey={area.key}
-              item={item}
-              showSoll={showSoll}
-            />
+        <div className="space-y-4">
+          <StatusSatz ampel={amp}>
+            {amp === 'gruen'
+              ? 'Im Plan. Deine Pins verteilen sich wie geplant auf deine Pin-Ziele.'
+              : 'Abweichung vom Plan. Einige Pin-Ziele bekommen mehr oder weniger Pins als geplant. Prüfe die markierten Flächen unten.'}
+          </StatusSatz>
+          {z.items.map((item) => (
+            <div key={item.flaeche}>
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3 text-sm">
+                <span className="font-medium text-gray-700">{item.label}</span>
+                <span className="tabular-nums text-gray-900">
+                  Ist {item.ist}% · Soll {item.soll}%
+                </span>
+              </div>
+              <div className="relative mt-1 h-2.5 w-full overflow-visible rounded-full bg-gray-200">
+                <div
+                  className="absolute inset-y-0 left-0 rounded-full"
+                  style={{
+                    width: `${clamp(item.ist)}%`,
+                    backgroundColor: ABWEICHUNG_BAR_HEX[item.status],
+                  }}
+                />
+                <div
+                  className="absolute -bottom-1 -top-1 w-0.5 rounded-sm bg-gray-900"
+                  style={{ left: `calc(${clamp(item.soll)}% - 1px)` }}
+                  aria-label={`Soll: ${item.soll}%`}
+                />
+              </div>
+              <p
+                className={`mt-1 text-xs font-medium ${ABWEICHUNG_TEXT_CLS[item.status]}`}
+              >
+                {abweichungText(item)}
+              </p>
+            </div>
           ))}
         </div>
       )}
-    </div>
-  )
-}
 
-// =====================================================
-// Eine Zeile: Label + Werte + Balken + Diff-Hinweis
-// =====================================================
-function CheckRow({
-  areaKey,
-  item,
-  showSoll,
-}: {
-  areaKey: CheckArea['key']
-  item: CheckItem
-  showSoll: boolean
-}) {
-  const fillHex = BAR_HEX[`${areaKey}:${item.key}`] ?? '#3b82f6'
-  return (
-    <div>
-      <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
-        <span className="font-medium text-gray-700">{item.label}</span>
-        <span className="tabular-nums text-gray-900">
-          Ist: <span className="font-semibold">{formatPct(item.ist)}</span>
-          {showSoll && (
-            <>
-              {' '}
-              · Soll:{' '}
-              <span className="font-semibold">{formatPct(item.soll)}</span>
-            </>
-          )}
-        </span>
-      </div>
-
-      <Bar ist={item.ist} soll={showSoll ? item.soll : null} fillHex={fillHex} />
-
-      {showSoll && (
-        <p
-          className={`mt-1.5 break-words text-xs font-medium leading-snug ${DIFF_TEXT_CLASS[item.color]}`}
-        >
-          ↳ {item.message}
-        </p>
+      {result.pinsGesamtOhneZuordnung > 0 && (
+        <div className="mt-4">
+          <Hinweis>
+            Von deinen insgesamt {result.pinsGesamtAlle} Pins haben erst{' '}
+            {result.pinsGesamtAlle - result.pinsGesamtOhneZuordnung} ein
+            Pin-Ziel.
+            {z.pinsOhneZuordnung > 0
+              ? ` In den letzten ${result.fensterTage} Tagen sind ${z.pinsOhneZuordnung} ${
+                  z.pinsOhneZuordnung === 1 ? 'Pin' : 'Pins'
+                } ohne Zuordnung.`
+              : ''}{' '}
+            Verknüpfe deine Pins in der{' '}
+            <Link
+              href="/dashboard/pin-produktion?filter=ohne-url"
+              className="font-medium text-red-600 hover:underline"
+            >
+              Pin-Produktion
+            </Link>{' '}
+            mit einer Ziel-URL, damit dein Strategie-Bild vollständig wird.
+            Pins, deren URL noch kein Pin-Ziel hat, ergänzt du in der{' '}
+            <Link
+              href="/dashboard/ziel-urls?filter=ohne-zielflaeche"
+              className="font-medium text-red-600 hover:underline"
+            >
+              Ziel-URL-Datenbank
+            </Link>
+            .
+          </Hinweis>
+        </div>
       )}
-    </div>
+    </Card>
   )
 }
 
 // =====================================================
-// Balken mit gefülltem Ist und vertikaler Soll-Markierung
+// Bereich 2: Pinning-Frequenz
 // =====================================================
-function Bar({
-  ist,
-  soll,
-  fillHex,
-}: {
-  ist: number
-  soll: number | null
-  fillHex: string
-}) {
-  const istClamped = Math.max(0, Math.min(100, ist))
-  const sollClamped =
-    soll === null ? null : Math.max(0, Math.min(100, soll))
+function FrequenzCard({ result }: { result: StrategieCheckV2 }) {
+  const f = result.frequenz
+  const amp = frequenzAmpel(f)
+  const beschreibung = f.sollFrequenz
+    ? (PINNING_FREQUENZ_OPTIONS.find((o) => o.value === f.sollFrequenz)
+        ?.beschreibung ?? null)
+    : null
+
+  // Ist-Tagesschnitt: Pins der letzten 30 Tage auf den Tag normiert, eine
+  // Nachkommastelle, deutsches Dezimalkomma.
+  const istProTag = (f.istProMonat / 30).toFixed(1).replace('.', ',')
+
+  let statusSatz: string
+  if (f.lage === 'ueber') {
+    statusSatz =
+      'Über deinem Plan. Du pinnst mehr als vorgenommen, das ist in Ordnung solange die Qualität stimmt.'
+  } else if (f.lage === 'unter') {
+    statusSatz = `Unter deinem Plan. Du hast ${f.istProMonat} Pins pro Monat erstellt, geplant waren ${f.sollMinProMonat} bis ${f.sollMaxProMonat} pro Monat. Plane mehr Pins ein, um auf deinen Rhythmus zu kommen.`
+  } else {
+    statusSatz = 'Im Plan. Du pinnst so regelmäßig wie vorgenommen.'
+  }
 
   return (
-    <div className="relative mt-1 h-2.5 w-full overflow-visible rounded-full bg-gray-200">
-      <div
-        className="absolute inset-y-0 left-0 rounded-full"
-        style={{ width: `${istClamped}%`, backgroundColor: fillHex }}
-      />
-      {sollClamped !== null && (
-        <div
-          className="absolute -top-1 -bottom-1 w-0.5 rounded-sm bg-gray-900"
-          style={{ left: `calc(${sollClamped}% - 1px)` }}
-          aria-label={`Soll: ${formatPct(sollClamped)}`}
-        />
-      )}
-    </div>
-  )
-}
-
-// =====================================================
-// Coaching „Größter Hebel"
-// =====================================================
-function CoachingBlock({ items }: { items: CoachingItem[] }) {
-  return (
-    <div className="coaching-box">
-      <p className="font-medium leading-relaxed">🎯 Größter Hebel</p>
-      <p className="mt-1.5 leading-relaxed">
-        Diese {items.length === 1 ? 'Anpassung hat' : 'Anpassungen haben'} den
-        größten Einfluss auf deine Pinterest-Strategie:
-      </p>
-      <ol className="mt-2 list-decimal space-y-1.5 pl-5">
-        {items.map((item, i) => (
-          <li key={i}>
-            {item.recommendation}{' '}
-            <span className="text-xs opacity-75">
-              (
-              {item.label}: {formatDiff(item.diff)}{' '}
-              {item.diff > 0 ? 'über' : 'unter'} Plan)
+    <Card
+      title="Pinning-Frequenz"
+      subtitle="Wie regelmäßig du neue Pins erstellst"
+      ampel={amp}
+    >
+      {f.sollFrequenz === null ? (
+        <Hinweis>
+          Du hast noch keinen Pinning-Rhythmus festgelegt.{' '}
+          <Link
+            href="/dashboard/strategie?tab=meine"
+            className="font-medium text-red-600 hover:underline"
+          >
+            Strategie festlegen
+          </Link>
+        </Hinweis>
+      ) : (
+        <div className="space-y-3 text-sm">
+          <StatusSatz ampel={amp}>{statusSatz}</StatusSatz>
+          <p className="text-gray-700">
+            Geplant:{' '}
+            <span className="font-semibold text-gray-900">
+              {beschreibung ?? `${f.sollLabel}`}
+            </span>{' '}
+            <span className="text-gray-500">
+              ({f.sollMinProMonat} bis {f.sollMaxProMonat} pro Monat)
             </span>
-          </li>
-        ))}
-      </ol>
+          </p>
+          <p className="text-gray-700">
+            Tatsächlich:{' '}
+            <span className="font-semibold text-gray-900">
+              {istProTag} Pins pro Tag
+            </span>{' '}
+            <span className="text-gray-500">
+              ({f.istProMonat} Pins pro Monat)
+            </span>
+          </p>
+        </div>
+      )}
+
+      <p className="mt-3 text-xs leading-relaxed text-gray-500">
+        Gezählt werden die in Pin-Flow erfassten Pins der letzten{' '}
+        {result.fensterTage} Tage. Wenn du Pins extern planst, erfasse sie hier,
+        damit die Auswertung stimmt.
+      </p>
+    </Card>
+  )
+}
+
+// =====================================================
+// Bereich 3: Content-Säulen
+// =====================================================
+function SaeulenCard({ result }: { result: StrategieCheckV2 }) {
+  const s = result.saeulen
+  const amp = saeulenAmpel(s)
+  const gesamt = s.aktiveAnzahl + s.vernachlaessigtAnzahl
+  return (
+    <Card
+      title="Content-Säulen"
+      subtitle="Welche deiner Themen-Schwerpunkte neue Pins bekommen"
+      ampel={amp}
+    >
+      {!s.hatSaeulen ? (
+        <Hinweis>
+          Deine Content-Säulen entstehen aus den Kategorien deiner Boards und
+          werden im Strategie-Setup bestätigt.{' '}
+          <Link
+            href="/dashboard/strategie?tab=meine"
+            className="font-medium text-red-600 hover:underline"
+          >
+            Strategie festlegen
+          </Link>
+        </Hinweis>
+      ) : (
+        <div className="space-y-3">
+          <StatusSatz ampel={amp}>
+            {amp === 'gruen'
+              ? 'Im Plan. Alle deine Themen-Schwerpunkte bekommen neue Pins.'
+              : `${s.aktiveAnzahl} von ${gesamt} Schwerpunkten bekommen neue Pins. Bespiele auch die übrigen, damit Pinterest dein Profil klar einordnet.`}
+          </StatusSatz>
+          <ul className="space-y-2 text-sm">
+          {s.items.map((item) => (
+            <li key={item.saeule} className="flex items-center gap-3">
+              <span
+                className={`h-2.5 w-2.5 shrink-0 rounded-full ${
+                  item.aktiv ? 'bg-green-500' : 'bg-gray-300'
+                }`}
+                aria-hidden
+              />
+              <span className="flex-1 text-gray-900">{item.saeule}</span>
+              <span
+                className={`text-xs ${
+                  item.aktiv ? 'text-gray-500' : 'text-gray-400'
+                }`}
+              >
+                {item.aktiv
+                  ? `${item.pins} ${item.pins === 1 ? 'neuer Pin' : 'neue Pins'}`
+                  : 'keine neuen Pins'}
+              </span>
+            </li>
+          ))}
+          </ul>
+        </div>
+      )}
+    </Card>
+  )
+}
+
+// =====================================================
+// Hilfs-Komponenten
+// =====================================================
+function Card({
+  title,
+  subtitle,
+  ampel,
+  children,
+}: {
+  title: string
+  subtitle?: string
+  ampel?: Ampel
+  children: ReactNode
+}) {
+  return (
+    <div
+      className={`rounded-lg border border-gray-200 border-l-4 bg-white p-5 shadow-sm ${
+        ampel ? AMPEL_BORDER[ampel] : 'border-l-gray-300'
+      }`}
+    >
+      <h3 className="text-base font-semibold text-gray-900">{title}</h3>
+      {subtitle && <p className="mt-0.5 text-xs text-gray-500">{subtitle}</p>}
+      <div className="mt-3">{children}</div>
     </div>
   )
 }
 
-function AllInPlanBlock() {
+function Hinweis({ children }: { children: ReactNode }) {
   return (
-    <p className="text-sm text-green-600">
-      ✓ Strategie im Plan – aktuell keine Anpassungen nötig.
-    </p>
+    <div className="rounded-md border border-gray-200 bg-gray-50 p-3 text-sm leading-relaxed text-gray-600">
+      {children}
+    </div>
   )
-}
-
-// =====================================================
-// Format-Helfer
-// =====================================================
-function formatPct(n: number): string {
-  // Eine Nachkommastelle nur wenn nötig.
-  const rounded = Math.round(n * 10) / 10
-  if (Number.isInteger(rounded)) return `${rounded}%`
-  return `${rounded.toFixed(1)}%`
-}
-
-function formatDiff(diff: number): string {
-  const abs = Math.abs(diff)
-  const rounded = Math.round(abs)
-  const sign = diff > 0 ? '+' : '−'
-  return `${sign}${rounded}%`
 }

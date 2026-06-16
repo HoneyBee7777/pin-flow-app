@@ -9,8 +9,6 @@ import ContentClient, {
 type RawContentRow = {
   id: string
   titel: string
-  typ: ContentItem['typ']
-  strategie_typ: ContentItem['strategie_typ']
   notizen: string | null
   created_at: string
   content_keywords: Array<{
@@ -36,7 +34,7 @@ export default async function ContentInhaltePage() {
       .from('content_inhalte')
       .select(
         `
-        id, titel, typ, strategie_typ, notizen, created_at,
+        id, titel, notizen, created_at,
         content_keywords ( keyword_id, keywords ( id, keyword ) ),
         content_urls ( url_id, ziel_urls ( id, titel, url ) ),
         content_boards ( board_id, boards ( id, name ) ),
@@ -62,8 +60,6 @@ export default async function ContentInhaltePage() {
   const items: ContentItem[] = rawRows.map((row) => ({
     id: row.id,
     titel: row.titel,
-    typ: row.typ,
-    strategie_typ: row.strategie_typ,
     notizen: row.notizen,
     created_at: row.created_at,
     keywords: row.content_keywords
@@ -96,9 +92,21 @@ export default async function ContentInhaltePage() {
   return (
     <div className="p-8">
       <header className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Content-Inhalte</h1>
-        <p className="mt-1 text-sm text-gray-600">
-          Verknüpfe deine Inhalte mit Keywords, Ziel-URLs und Boards.
+        <h1 className="text-3xl font-bold text-gray-900">Dein Content</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-relaxed text-gray-600">
+          Hier legst du deine Inhalte an: jeden Blogartikel, jedes Produkt,
+          jeden Lead-Magneten, für den du auf Pinterest sichtbar werden willst.
+          Ein Inhalt ist die thematische Klammer, unter der du Keywords,
+          Ziel-URLs und Boards bündelst. Ein Beispiel: Dein Blogartikel
+          „10 Ideen für kleine Wohnzimmer“ ist ein Inhalt, dem du die passenden
+          Keywords, die Ziel-URL des Artikels und die thematisch passenden
+          Boards zuordnest.
+        </p>
+        <p className="mt-2 max-w-3xl text-sm leading-relaxed text-gray-600">
+          Wenn du später Pins erstellst, ordnest du sie einem Inhalt zu und hast
+          damit alles Zusammengehörige an einem Ort. So behältst du den
+          Überblick, welche Pins, Keywords und Boards zu welchem Thema gehören,
+          statt einzelne Pins lose nebeneinander zu verwalten.
         </p>
       </header>
 

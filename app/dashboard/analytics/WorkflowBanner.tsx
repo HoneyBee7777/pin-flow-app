@@ -25,7 +25,7 @@ export default function WorkflowBanner({
         →
       </span>
       <p className="text-[15px] font-semibold text-gray-700">
-        Zahlen eintragen — gehe die Tabs Profil, Pins und Boards durch und
+        Zahlen eintragen, gehe die Tabs Profil, Pins und Boards durch und
         trage deine Analytics ein.
       </p>
     </div>

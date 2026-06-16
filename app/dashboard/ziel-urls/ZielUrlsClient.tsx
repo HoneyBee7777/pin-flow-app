@@ -1,6 +1,8 @@
 'use client'
 
 import { useMemo, useState, useTransition, type FormEvent } from 'react'
+import { useSearchParams } from 'next/navigation'
+import SortableTh from '@/components/SortableTh'
 import {
   addZielUrl,
   deleteZielUrl,
@@ -8,16 +10,14 @@ import {
   updateZielUrl,
 } from './actions'
 
-export type ZielUrlTyp =
-  | 'blogpost'
-  | 'produkt'
+export type Zielflaeche =
+  | 'blog'
+  | 'shop'
+  | 'etsy'
   | 'affiliate'
   | 'landingpage'
-  | 'leadmagnet'
-  | 'kategorie'
-  | 'startseite'
-
-export type Prioritaet = 'hoch' | 'mittel' | 'niedrig'
+  | 'newsletter'
+  | 'buchung'
 
 export type ContentOption = {
   id: string
@@ -33,8 +33,7 @@ export type ZielUrl = {
   id: string
   url: string
   titel: string
-  typ: ZielUrlTyp
-  prioritaet: Prioritaet
+  zielflaeche: Zielflaeche | null
   notizen: string | null
   created_at: string
   contents: Array<{ id: string; titel: string }>
@@ -42,53 +41,21 @@ export type ZielUrl = {
   pinCount: number
 }
 
-const TYP_OPTIONS: Array<{ value: ZielUrlTyp; label: string }> = [
-  { value: 'blogpost', label: 'Blogpost' },
-  { value: 'produkt', label: 'Produkt' },
-  { value: 'affiliate', label: 'Affiliate' },
+type SortKey = 'url' | 'zielflaeche' | 'pins' | 'inhalte' | 'boards'
+
+const ZIELFLAECHE_OPTIONS: Array<{ value: Zielflaeche; label: string }> = [
+  { value: 'blog', label: 'Blog' },
+  { value: 'shop', label: 'Shop auf eigener Website' },
+  { value: 'etsy', label: 'Etsy-Shop' },
+  { value: 'affiliate', label: 'Affiliate-Seite' },
   { value: 'landingpage', label: 'Landingpage' },
-  { value: 'leadmagnet', label: 'Lead-Magnet' },
-  { value: 'kategorie', label: 'Kategorie' },
-  { value: 'startseite', label: 'Startseite' },
+  { value: 'newsletter', label: 'Newsletter oder Lead-Magnet' },
+  { value: 'buchung', label: 'Buchungs- oder Angebotsseite' },
 ]
 
-const TYP_LABEL: Record<ZielUrlTyp, string> = Object.fromEntries(
-  TYP_OPTIONS.map((o) => [o.value, o.label])
-) as Record<ZielUrlTyp, string>
-
-const TYP_BADGE: Record<ZielUrlTyp, string> = {
-  blogpost: 'bg-blue-100 text-blue-700',
-  produkt: 'bg-purple-100 text-purple-700',
-  affiliate: 'bg-pink-100 text-pink-700',
-  landingpage: 'bg-indigo-100 text-indigo-700',
-  leadmagnet: 'bg-amber-100 text-amber-800',
-  kategorie: 'bg-teal-100 text-teal-700',
-  startseite: 'bg-gray-100 text-gray-700',
-}
-
-const PRIO_OPTIONS: Array<{ value: Prioritaet; label: string }> = [
-  { value: 'hoch', label: 'Hoch' },
-  { value: 'mittel', label: 'Mittel' },
-  { value: 'niedrig', label: 'Niedrig' },
-]
-
-const PRIO_LABEL: Record<Prioritaet, string> = {
-  hoch: 'Hoch',
-  mittel: 'Mittel',
-  niedrig: 'Niedrig',
-}
-
-const PRIO_BADGE: Record<Prioritaet, string> = {
-  hoch: 'bg-red-100 text-red-700',
-  mittel: 'bg-yellow-100 text-yellow-800',
-  niedrig: 'bg-green-100 text-green-700',
-}
-
-const PRIO_DOT: Record<Prioritaet, string> = {
-  hoch: 'bg-red-500',
-  mittel: 'bg-yellow-500',
-  niedrig: 'bg-green-500',
-}
+const ZIELFLAECHE_LABEL: Record<Zielflaeche, string> = Object.fromEntries(
+  ZIELFLAECHE_OPTIONS.map((o) => [o.value, o.label])
+) as Record<Zielflaeche, string>
 
 function PencilIcon() {
   return (
@@ -133,8 +100,66 @@ export default function ZielUrlsClient({
     new Set()
   )
   const [isPending, startTransition] = useTransition()
+  const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' } | null>(
+    null
+  )
+  // Deep-Link aus dem Strategie-Check: ?filter=ohne-zielflaeche zeigt direkt
+  // nur Ziel-URLs ohne zugeordnetes Pin-Ziel.
+  const searchParams = useSearchParams()
+  const [nurOhneZiel, setNurOhneZiel] = useState(
+    () => searchParams?.get('filter') === 'ohne-zielflaeche'
+  )
 
   const formOpen = showAddForm || editing !== null
+
+  function toggleSort(key: SortKey) {
+    setSort((cur) => {
+      if (!cur || cur.key !== key) return { key, dir: 'asc' }
+      if (cur.dir === 'asc') return { key, dir: 'desc' }
+      return null
+    })
+  }
+
+  function dirOf(key: SortKey): 'asc' | 'desc' | null {
+    return sort && sort.key === key ? sort.dir : null
+  }
+
+  const sortedUrls = useMemo(() => {
+    if (!sort) return urls
+    const dir = sort.dir === 'asc' ? 1 : -1
+    const arr = [...urls]
+    arr.sort((a, b) => {
+      switch (sort.key) {
+        case 'url':
+          return a.url.localeCompare(b.url, 'de') * dir
+        case 'zielflaeche': {
+          const aN = a.zielflaeche ? ZIELFLAECHE_LABEL[a.zielflaeche] : ''
+          const bN = b.zielflaeche ? ZIELFLAECHE_LABEL[b.zielflaeche] : ''
+          if (aN === '' && bN !== '') return 1
+          if (bN === '' && aN !== '') return -1
+          return aN.localeCompare(bN, 'de') * dir
+        }
+        case 'pins':
+          return (a.pinCount - b.pinCount) * dir
+        case 'inhalte':
+          return (a.contents.length - b.contents.length) * dir
+        case 'boards':
+          return (a.boards.length - b.boards.length) * dir
+        default:
+          return 0
+      }
+    })
+    return arr
+  }, [urls, sort])
+
+  const displayedUrls = useMemo(
+    () => (nurOhneZiel ? sortedUrls.filter((u) => !u.zielflaeche) : sortedUrls),
+    [nurOhneZiel, sortedUrls]
+  )
+  const ohneZielCount = useMemo(
+    () => urls.filter((u) => !u.zielflaeche).length,
+    [urls]
+  )
 
   const filteredContents = useMemo(() => {
     const q = contentFilter.trim().toLowerCase()
@@ -293,7 +318,8 @@ export default function ZielUrlsClient({
             <input
               id="url"
               name="url"
-              type="url"
+              type="text"
+              inputMode="url"
               required
               placeholder="https://www.meinewebsite.de"
               defaultValue={editing?.url ?? ''}
@@ -316,61 +342,39 @@ export default function ZielUrlsClient({
               name="titel"
               type="text"
               required
+              placeholder="Landingpage, Angebotsseite, Blogthema"
               defaultValue={editing?.titel ?? ''}
               className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
             />
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label
-                htmlFor="typ"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Typ <span className="text-red-600">*</span>
-              </label>
-              <select
-                id="typ"
-                name="typ"
-                required
-                defaultValue={editing?.typ ?? ''}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-              >
-                <option value="" disabled>
-                  Bitte wählen…
+          <div>
+            <label
+              htmlFor="zielflaeche"
+              className="block text-sm font-medium text-gray-700"
+            >
+              Pin-Ziel{!editing && <span className="text-red-600"> *</span>}
+            </label>
+            <select
+              id="zielflaeche"
+              name="zielflaeche"
+              required={!editing}
+              defaultValue={editing?.zielflaeche ?? ''}
+              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+            >
+              <option value="" disabled={!editing}>
+                {editing ? 'Nicht zugeordnet' : 'Bitte wählen…'}
+              </option>
+              {ZIELFLAECHE_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
                 </option>
-                {TYP_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label
-                htmlFor="prioritaet"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Priorität <span className="text-red-600">*</span>
-              </label>
-              <select
-                id="prioritaet"
-                name="prioritaet"
-                required
-                defaultValue={editing?.prioritaet ?? ''}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-              >
-                <option value="" disabled>
-                  Bitte wählen…
-                </option>
-                {PRIO_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-gray-500">
+              Wohin führt diese URL? Pin-Flow nutzt das später, um zu prüfen, ob
+              deine Pins zu deiner Strategie-Verteilung passen.
+            </p>
           </div>
 
           <div>
@@ -511,58 +515,6 @@ export default function ZielUrlsClient({
             Duplikate und Leerzeilen werden ignoriert.
           </p>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label
-                htmlFor="import-typ"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Typ für alle <span className="text-red-600">*</span>
-              </label>
-              <select
-                id="import-typ"
-                name="typ"
-                required
-                defaultValue=""
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-              >
-                <option value="" disabled>
-                  Bitte wählen…
-                </option>
-                {TYP_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label
-                htmlFor="import-prio"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Priorität für alle <span className="text-red-600">*</span>
-              </label>
-              <select
-                id="import-prio"
-                name="prioritaet"
-                required
-                defaultValue=""
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-              >
-                <option value="" disabled>
-                  Bitte wählen…
-                </option>
-                {PRIO_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
           <div>
             <label
               htmlFor="text"
@@ -604,6 +556,22 @@ export default function ZielUrlsClient({
         </form>
       )}
 
+      <div className="flex flex-wrap items-center gap-3 text-sm">
+        <label className="inline-flex cursor-pointer items-center gap-2 text-gray-700">
+          <input
+            type="checkbox"
+            checked={nurOhneZiel}
+            onChange={(e) => setNurOhneZiel(e.target.checked)}
+            className="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
+          />
+          Nur ohne Pin-Ziel
+          <span className="text-gray-400">({ohneZielCount})</span>
+        </label>
+        <span className="text-gray-500">
+          {displayedUrls.length} von {urls.length} URLs
+        </span>
+      </div>
+
       <div className="max-h-[600px] overflow-auto rounded-lg border border-gray-200 bg-white shadow-sm">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="sticky top-0 z-10 bg-gray-50">
@@ -611,24 +579,37 @@ export default function ZielUrlsClient({
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Titel
               </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+              <SortableTh
+                dir={dirOf('url')}
+                onClick={() => toggleSort('url')}
+              >
                 URL
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Typ
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Priorität
-              </th>
-              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">
+              </SortableTh>
+              <SortableTh
+                dir={dirOf('zielflaeche')}
+                onClick={() => toggleSort('zielflaeche')}
+              >
+                Pin-Ziel
+              </SortableTh>
+              <SortableTh
+                dir={dirOf('pins')}
+                onClick={() => toggleSort('pins')}
+                align="right"
+              >
                 Pins
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+              </SortableTh>
+              <SortableTh
+                dir={dirOf('inhalte')}
+                onClick={() => toggleSort('inhalte')}
+              >
                 Inhalte
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+              </SortableTh>
+              <SortableTh
+                dir={dirOf('boards')}
+                onClick={() => toggleSort('boards')}
+              >
                 Boards
-              </th>
+              </SortableTh>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Notizen
               </th>
@@ -638,17 +619,19 @@ export default function ZielUrlsClient({
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {urls.length === 0 ? (
+            {displayedUrls.length === 0 ? (
               <tr>
                 <td
-                  colSpan={9}
+                  colSpan={8}
                   className="px-4 py-8 text-center text-sm text-gray-500"
                 >
-                  Noch keine URLs. Füge eine hinzu oder importiere mehrere.
+                  {urls.length === 0
+                    ? 'Noch keine URLs. Füge eine hinzu oder importiere mehrere.'
+                    : 'Alle deine URLs haben ein Pin-Ziel. Schalte den Filter aus, um alle zu sehen.'}
                 </td>
               </tr>
             ) : (
-              urls.map((u) => (
+              displayedUrls.map((u) => (
                 <tr key={u.id} className="align-top hover:bg-gray-50">
                   <td className="px-4 py-3 text-sm font-medium text-gray-900">
                     {u.titel}
@@ -665,22 +648,15 @@ export default function ZielUrlsClient({
                     </a>
                   </td>
                   <td className="px-4 py-3 text-sm">
-                    <span
-                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${TYP_BADGE[u.typ]}`}
-                    >
-                      {TYP_LABEL[u.typ]}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-sm">
-                    <span
-                      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${PRIO_BADGE[u.prioritaet]}`}
-                    >
-                      <span
-                        className={`h-2 w-2 rounded-full ${PRIO_DOT[u.prioritaet]}`}
-                        aria-hidden
-                      />
-                      {PRIO_LABEL[u.prioritaet]}
-                    </span>
+                    {u.zielflaeche ? (
+                      <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700">
+                        {ZIELFLAECHE_LABEL[u.zielflaeche]}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-gray-400">
+                        nicht zugeordnet
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-right text-sm font-medium tabular-nums text-gray-900">
                     {u.pinCount}

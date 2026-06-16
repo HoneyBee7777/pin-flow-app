@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import {
   useEffect,
@@ -20,9 +21,6 @@ import {
 } from './actions'
 import {
   buildPrompt,
-  CONVERSION_BADGE,
-  CONVERSION_LABEL,
-  CONVERSION_ZIELE,
   countWords,
   formatDateDe,
   HOOK_ART_LABEL,
@@ -34,6 +32,7 @@ import {
   PIN_FORMAT_BADGE,
   PIN_FORMAT_LABEL,
   PIN_FORMATE,
+  PIN_TYP_AUSWAHL,
   STATUS,
   STATUS_BADGE,
   STATUS_LABEL,
@@ -43,10 +42,8 @@ import {
   type BoardOption,
   type CanvaVorlageOption,
   type ContentOption,
-  type ConversionZiel,
   type HookArt,
   type KeywordOption,
-  type KeywordSignal,
   type PinFormat,
   type PinKeywordMatchSource,
   type PinKeywordWithSource,
@@ -56,6 +53,13 @@ import {
   type StrategieTyp,
   type ZielUrlOption,
 } from './utils'
+import { ZIELFLAECHEN, type Zielflaeche } from '../strategie/lib'
+
+// Menschenlesbares Label je Zielfläche, abgeleitet aus der zentralen
+// Definition in strategie/lib.ts, damit der Text nur einmal gepflegt wird.
+const ZIELFLAECHE_LABEL: Record<Zielflaeche, string> = Object.fromEntries(
+  ZIELFLAECHEN.map((z) => [z.value, z.label])
+) as Record<Zielflaeche, string>
 
 type Props = {
   pins: PinWithRelations[]
@@ -67,7 +71,7 @@ type Props = {
   saisonEvents: SaisonEventOption[]
   comboCount: Record<string, number>
   customSignalwoerter: string | null
-  keywordSignalById?: Record<string, KeywordSignal>
+  deaktivierteSignalwoerter: string | null
 }
 
 const MATCH_SOURCE_LABEL: Record<Exclude<PinKeywordMatchSource, null>, string> = {
@@ -80,18 +84,6 @@ const MATCH_SOURCE_LABEL: Record<Exclude<PinKeywordMatchSource, null>, string> =
 function matchSourceTooltip(source: PinKeywordMatchSource): string {
   if (!source) return 'Quelle unbekannt'
   return `Gefunden in: ${MATCH_SOURCE_LABEL[source]}`
-}
-
-// Chip-Farbe nach Signal: Stark grün, Beobachten amber, sonst dezent grau
-// (matched „grauer Chip wie Board-Chips" für Gut, Ungenutzt und unbekannt).
-function chipClassForSignal(signal: KeywordSignal | undefined): string {
-  if (signal === 'stark') {
-    return 'bg-green-100 text-green-800'
-  }
-  if (signal === 'beobachten') {
-    return 'bg-amber-100 text-amber-800'
-  }
-  return 'bg-gray-100 text-gray-700'
 }
 
 // Welche Felder enthalten das Keyword? Wir prüfen direkt am Text statt am
@@ -124,15 +116,51 @@ function fundortEmoji(p: KeywordPresence): string {
   return ''
 }
 
+// Baut aus einer verknüpften Ziel-URL einen kompakten Linktext. Ist der Titel
+// selbst eine volle URL, wird stattdessen der letzte sinnvolle Pfadabschnitt
+// angezeigt, sonst der echte Titel. Der Anker (#abschnitt) wird, falls
+// vorhanden, separat zurückgegeben, damit er in der Anzeige dezent abgesetzt
+// werden kann. Alles robust mit Fallbacks, falls die URL nicht parsbar ist.
+// Gleiche Logik wie auf der Content- und Boards-Seite (dort lokal dupliziert).
+function buildUrlLabel(
+  titel: string,
+  url: string
+): { label: string; anker: string } {
+  const anker = (() => {
+    try {
+      return new URL(url).hash.replace(/^#/, '')
+    } catch {
+      return url.split('#')[1] || ''
+    }
+  })()
+
+  const titelIstUrl = /^https?:\/\//i.test(titel.trim())
+  if (!titelIstUrl) {
+    return { label: titel, anker }
+  }
+
+  const label = (() => {
+    try {
+      const parsed = new URL(url)
+      const segments = parsed.pathname.split('/').filter(Boolean)
+      return segments[segments.length - 1] || parsed.hostname
+    } catch {
+      const ohneAnker = url.split('#')[0].split('?')[0]
+      const segments = ohneAnker.split('/').filter(Boolean)
+      return segments[segments.length - 1] || url
+    }
+  })()
+
+  return { label, anker }
+}
+
 function KeywordChips({
   keywords,
-  signalById,
   titel,
   beschreibung,
   boardName,
 }: {
   keywords: PinKeywordWithSource[]
-  signalById: Record<string, KeywordSignal>
   titel: string | null
   beschreibung: string | null
   boardName: string | null
@@ -167,7 +195,7 @@ function KeywordChips({
           <span
             key={kw.id}
             title={`${kw.keyword} — ${matchSourceTooltip(kw.match_source)}`}
-            className={`inline-flex items-center gap-1 whitespace-nowrap rounded px-2 py-0.5 text-xs ${chipClassForSignal(signalById[kw.id])}`}
+            className="inline-flex items-center gap-1 whitespace-nowrap rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-700"
           >
             <span>{kw.keyword}</span>
             {emoji && <span>{emoji}</span>}
@@ -347,14 +375,14 @@ export default function PinProduktionClient(props: Props) {
           }
           className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
         >
-          {showManualForm ? 'Abbrechen' : '✍️ Pin manuell eintragen'}
+          {showManualForm ? 'Abbrechen' : 'Pin manuell eintragen'}
         </button>
         <button
           type="button"
           onClick={toggleCsvImport}
           className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
         >
-          {showCsvImport ? 'Import schließen' : '📥 Pins importieren'}
+          {showCsvImport ? 'Import schließen' : 'Pins importieren'}
         </button>
       </div>
 
@@ -388,6 +416,7 @@ export default function PinProduktionClient(props: Props) {
           saisonEvents={props.saisonEvents}
           comboCount={props.comboCount}
           customSignalwoerter={props.customSignalwoerter}
+          deaktivierteSignalwoerter={props.deaktivierteSignalwoerter}
           onClose={closeForm}
         />
       )}
@@ -415,7 +444,6 @@ export default function PinProduktionClient(props: Props) {
         onEdit={openEdit}
         onDelete={onDelete}
         deleteDisabled={isPending}
-        keywordSignalById={props.keywordSignalById ?? {}}
       />
     </div>
   )
@@ -451,12 +479,14 @@ type Filters = {
   status: '' | Status
   datum: DatumFilter
   strategie: '' | StrategieTyp | NoneFilter
-  conversion: '' | ConversionZiel | NoneFilter
   format: '' | PinFormat | NoneFilter
   boardId: string
   contentId: string
   vorlageId: string
   urlId: string
+  // Pin-Ziel: 'ohne-url' zeigt nur Pins ohne verknüpfte Ziel-URL, eine
+  // konkrete Zielfläche zeigt nur Pins, deren Ziel-URL diese Zielfläche hat.
+  pinziel: '' | 'ohne-url' | Zielflaeche
   keyword: string
 }
 
@@ -465,18 +495,18 @@ const EMPTY_FILTERS: Filters = {
   status: '',
   datum: '',
   strategie: '',
-  conversion: '',
   format: '',
   boardId: '',
   contentId: '',
   vorlageId: '',
   urlId: '',
+  pinziel: '',
   keyword: '',
 }
 
 // Liest die unterstützten ?filter[…]=… Query-Parameter und liefert ein
 // Filters-Objekt für die initiale Tabellen-Anzeige. Aktuell unterstützt:
-// strategie, conversion_ziel, format, board, content, vorlage, url, status.
+// strategie, format, board, content, vorlage, url, status.
 // Wert „keine-angabe" → NONE-Sentinel (deckt NULL / '' / undefined ab).
 // Sonstige Werte: board / content / vorlage / url werden direkt als ID
 // übernommen; status wird gegen die STATUS-Enum-Werte validiert.
@@ -488,7 +518,6 @@ function filtersFromSearchParams(
   const isNone = (v: string | null) => v === 'keine-angabe'
 
   if (isNone(params.get('filter[strategie]'))) next.strategie = NONE
-  if (isNone(params.get('filter[conversion_ziel]'))) next.conversion = NONE
   if (isNone(params.get('filter[format]'))) next.format = NONE
 
   const board = params.get('filter[board]')
@@ -511,6 +540,12 @@ function filtersFromSearchParams(
   if (status && (STATUS as readonly string[]).includes(status)) {
     next.status = status as Status
   }
+
+  // Pin-Ziel-Lücke: ?filter=ohne-url (Deep-Link aus dem Strategie-Check) zeigt
+  // direkt nur Pins ohne verknüpfte Ziel-URL. Auch ?filter[pinziel]=ohne-url
+  // wird für Symmetrie akzeptiert.
+  const pinziel = params.get('filter') ?? params.get('filter[pinziel]')
+  if (pinziel === 'ohne-url') next.pinziel = 'ohne-url'
 
   // Keyword-Filter: ?keyword=…  (Cross-Page Deep-Link aus der
   // Keyword-Datenbank). Wir akzeptieren auch ?filter[keyword]=… für
@@ -570,7 +605,6 @@ function PinTable({
   onEdit,
   onDelete,
   deleteDisabled,
-  keywordSignalById,
 }: {
   pins: PinWithRelations[]
   boards: BoardOption[]
@@ -582,7 +616,6 @@ function PinTable({
   onEdit: (pin: PinWithRelations) => void
   onDelete: (id: string) => void
   deleteDisabled: boolean
-  keywordSignalById: Record<string, KeywordSignal>
 }) {
   const searchParams = useSearchParams()
   const [filters, setFilters] = useState<Filters>(() =>
@@ -636,7 +669,6 @@ function PinTable({
           p.titel,
           p.hook,
           p.beschreibung,
-          p.call_to_action,
           p.board?.name,
           p.content?.titel,
           p.url?.titel,
@@ -655,13 +687,6 @@ function PinTable({
         if (filters.strategie === NONE) {
           if (p.strategie_typ && p.strategie_typ.trim() !== '') return false
         } else if (p.strategie_typ !== filters.strategie) {
-          return false
-        }
-      }
-      if (filters.conversion) {
-        if (filters.conversion === NONE) {
-          if (p.conversion_ziel && p.conversion_ziel.trim() !== '') return false
-        } else if (p.conversion_ziel !== filters.conversion) {
           return false
         }
       }
@@ -697,6 +722,13 @@ function PinTable({
         if (filters.urlId === NONE) {
           if (p.ziel_url_id) return false
         } else if (p.ziel_url_id !== filters.urlId) {
+          return false
+        }
+      }
+      if (filters.pinziel) {
+        if (filters.pinziel === 'ohne-url') {
+          if (p.ziel_url_id) return false
+        } else if (p.url?.zielflaeche !== filters.pinziel) {
           return false
         }
       }
@@ -825,7 +857,7 @@ function PinTable({
             ]}
           />
           <FilterSelect
-            label="Strategie"
+            label="Angebotsart"
             value={filters.strategie}
             onChange={(v) => setFilter('strategie', v as Filters['strategie'])}
             options={[
@@ -838,28 +870,15 @@ function PinTable({
             ]}
           />
           <FilterSelect
-            label="Conversion Ziel"
-            value={filters.conversion}
-            onChange={(v) => setFilter('conversion', v as Filters['conversion'])}
-            options={[
-              { value: '', label: 'Alle' },
-              { value: NONE, label: 'Keine Angabe' },
-              ...CONVERSION_ZIELE.map((c) => ({
-                value: c,
-                label: CONVERSION_LABEL[c],
-              })),
-            ]}
-          />
-          <FilterSelect
-            label="Pin Format"
+            label="Pin Typ"
             value={filters.format}
             onChange={(v) => setFilter('format', v as Filters['format'])}
             options={[
               { value: '', label: 'Alle' },
               { value: NONE, label: 'Keine Angabe' },
-              ...PIN_FORMATE.map((f) => ({
-                value: f,
-                label: PIN_FORMAT_LABEL[f],
+              ...PIN_TYP_AUSWAHL.map((o) => ({
+                value: o.value,
+                label: o.label,
               })),
             ]}
           />
@@ -901,6 +920,16 @@ function PinTable({
               { value: '', label: 'Alle' },
               { value: NONE, label: 'Keine Angabe' },
               ...urls.map((u) => ({ value: u.id, label: u.titel || u.url })),
+            ]}
+          />
+          <FilterSelect
+            label="Pin-Ziel"
+            value={filters.pinziel}
+            onChange={(v) => setFilter('pinziel', v as Filters['pinziel'])}
+            options={[
+              { value: '', label: 'Alle' },
+              ...ZIELFLAECHEN.map((z) => ({ value: z.value, label: z.label })),
+              { value: 'ohne-url', label: 'Ohne Ziel-URL' },
             ]}
           />
           <FilterKeyword
@@ -952,11 +981,10 @@ function PinTable({
               <Th>Hook</Th>
               <Th>Beschreibung 📝</Th>
               <SortableTh dir={dirOf('strategie')} onClick={() => toggleSort('strategie')}>
-                Strategie
+                Angebotsart
               </SortableTh>
-              <Th>Conversion</Th>
               <SortableTh dir={dirOf('format')} onClick={() => toggleSort('format')}>
-                Format
+                Pin Typ
               </SortableTh>
               <Th>Vorlage</Th>
               <Th>URL</Th>
@@ -968,7 +996,7 @@ function PinTable({
             {sortedPins.length === 0 ? (
               <tr>
                 <td
-                  colSpan={15}
+                  colSpan={14}
                   className="px-4 py-8 text-center text-sm text-gray-500"
                 >
                   {pins.length === 0
@@ -1028,7 +1056,6 @@ function PinTable({
                 <td className="px-4 py-3 text-sm text-gray-700" style={{ minWidth: '200px' }}>
                   <KeywordChips
                     keywords={pin.keywords}
-                    signalById={keywordSignalById}
                     titel={pin.titel}
                     beschreibung={pin.beschreibung}
                     boardName={pin.board?.name ?? null}
@@ -1057,17 +1084,6 @@ function PinTable({
                   )}
                 </td>
                 <td className="px-4 py-3 text-sm">
-                  {pin.conversion_ziel ? (
-                    <span
-                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${CONVERSION_BADGE[pin.conversion_ziel]}`}
-                    >
-                      {CONVERSION_LABEL[pin.conversion_ziel]}
-                    </span>
-                  ) : (
-                    <span className="text-gray-400">—</span>
-                  )}
-                </td>
-                <td className="px-4 py-3 text-sm">
                   {pin.pin_format ? (
                     <span
                       className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${PIN_FORMAT_BADGE[pin.pin_format]}`}
@@ -1083,9 +1099,26 @@ function PinTable({
                 </td>
                 <td className="min-w-[200px] max-w-xs px-4 py-3 text-sm text-gray-700">
                   {pin.url ? (
-                    <span className="block [word-break:break-all]" title={pin.url.titel}>
-                      {pin.url.url}
-                    </span>
+                    (() => {
+                      const { label, anker } = buildUrlLabel(
+                        pin.url.titel,
+                        pin.url.url
+                      )
+                      return (
+                        <a
+                          href={pin.url.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-red-600 hover:text-red-700 hover:underline"
+                          title={pin.url.url}
+                        >
+                          {label}
+                          {anker && (
+                            <span className="text-gray-400"> · {anker}</span>
+                          )}
+                        </a>
+                      )
+                    })()
                   ) : (
                     <span className="text-gray-400">—</span>
                   )}
@@ -1499,6 +1532,7 @@ function PinForm({
   saisonEvents,
   comboCount,
   customSignalwoerter,
+  deaktivierteSignalwoerter,
   onClose,
   defaultSaisonEventId,
   defaultContentId,
@@ -1515,6 +1549,7 @@ function PinForm({
   saisonEvents: SaisonEventOption[]
   comboCount: Record<string, number>
   customSignalwoerter: string | null
+  deaktivierteSignalwoerter: string | null
   onClose: () => void
 }) {
   const isEdit = editing !== null
@@ -1533,9 +1568,6 @@ function PinForm({
   const [strategieTyp, setStrategieTyp] = useState<StrategieTyp | ''>(
     editing?.strategie_typ ?? ''
   )
-  const [conversionZiel, setConversionZiel] = useState<ConversionZiel | ''>(
-    editing?.conversion_ziel ?? ''
-  )
   const [hookArt, setHookArt] = useState<HookArt | ''>(
     editing?.hook_art ?? ''
   )
@@ -1549,9 +1581,6 @@ function PinForm({
   const [titel, setTitel] = useState(editing?.titel ?? '')
   const [hookField, setHookField] = useState(editing?.hook ?? '')
   const [beschreibung, setBeschreibung] = useState(editing?.beschreibung ?? '')
-  const [callToAction, setCallToAction] = useState(
-    editing?.call_to_action ?? ''
-  )
   const [urlId, setUrlId] = useState(editing?.ziel_url_id ?? '')
   const [vorlageId, setVorlageId] = useState(editing?.canva_vorlage_id ?? '')
   const [saisonEventId, setSaisonEventId] = useState(
@@ -1622,15 +1651,13 @@ function PinForm({
     const text = buildPrompt({
       board: board?.name ?? '(kein Board gewählt)',
       thema: themaKontext.trim(),
-      conversionZiel: conversionZiel
-        ? CONVERSION_LABEL[conversionZiel]
-        : '(noch nicht gewählt)',
       strategieTyp: strategieTyp
         ? STRATEGIE_LABEL[strategieTyp]
         : '(noch nicht gewählt)',
       hookArt: hookArt ? HOOK_ART_LABEL[hookArt] : '(noch nicht gewählt)',
       keywords: selectedKeywords,
       customSignalwoerter,
+      deaktivierteSignalwoerter,
     })
 
     setPromptText(text)
@@ -1681,7 +1708,7 @@ function PinForm({
         <p className="mt-1 text-sm text-gray-500">
           {isEdit
             ? 'Alle Felder sind vorausgefüllt. Du kannst beliebige Werte anpassen und neu speichern.'
-            : 'Stufe 1 — wähle Inhalt, Keywords und Strategie. Dann „Prompt generieren" klicken.'}
+            : 'Stufe 1: wähle Inhalt, Keywords und Angebotsart. Dann „Prompt generieren" klicken.'}
         </p>
       </div>
 
@@ -1807,7 +1834,7 @@ function PinForm({
         </Field>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <Field label="Strategie-Typ" htmlFor="strategie_typ">
+          <Field label="Angebotsart" htmlFor="strategie_typ">
             <select
               id="strategie_typ"
               name="strategie_typ"
@@ -1824,25 +1851,7 @@ function PinForm({
                 </option>
               ))}
             </select>
-          </Field>
-
-          <Field label="Conversion-Ziel" htmlFor="conversion_ziel">
-            <select
-              id="conversion_ziel"
-              name="conversion_ziel"
-              value={conversionZiel}
-              onChange={(e) =>
-                setConversionZiel(e.target.value as ConversionZiel | '')
-              }
-              className={inputCls}
-            >
-              <option value="">— wählen —</option>
-              {CONVERSION_ZIELE.map((c) => (
-                <option key={c} value={c}>
-                  {CONVERSION_LABEL[c]}
-                </option>
-              ))}
-            </select>
+            <AngebotZielHinweis />
           </Field>
 
           <Field label="Hook-Art" htmlFor="hook_art">
@@ -1867,9 +1876,9 @@ function PinForm({
           <button
             type="button"
             onClick={generatePrompt}
-            className="rounded-md bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700"
+            className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
           >
-            🪄 Prompt generieren
+            Prompt generieren
           </button>
           {!isEdit && !showStage2 && (
             <span className="text-xs text-gray-500">
@@ -1953,17 +1962,6 @@ function PinForm({
             <Counter current={beschreibung.length} max={500} unit="Zeichen" />
           </Field>
 
-          <Field label="Call-to-Action" htmlFor="call_to_action">
-            <input
-              id="call_to_action"
-              name="call_to_action"
-              type="text"
-              value={callToAction}
-              onChange={(e) => setCallToAction(e.target.value)}
-              className={inputCls}
-            />
-          </Field>
-
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <ZielUrlPicker
               urls={urls}
@@ -2017,7 +2015,7 @@ function PinForm({
               </select>
             </Field>
 
-            <Field label="Pin-Format" htmlFor="pin_format">
+            <Field label="Pin Typ" htmlFor="pin_format">
               <select
                 id="pin_format"
                 name="pin_format"
@@ -2028,9 +2026,9 @@ function PinForm({
                 className={inputCls}
               >
                 <option value="">— wählen —</option>
-                {PIN_FORMATE.map((p) => (
-                  <option key={p} value={p}>
-                    {PIN_FORMAT_LABEL[p]}
+                {PIN_TYP_AUSWAHL.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
                   </option>
                 ))}
               </select>
@@ -2126,11 +2124,9 @@ function ManualPinForm({
   const [titel, setTitel] = useState('')
   const [hookField, setHookField] = useState('')
   const [beschreibung, setBeschreibung] = useState('')
-  const [callToAction, setCallToAction] = useState('')
   const [urlId, setUrlId] = useState('')
   const [boardId, setBoardId] = useState('')
   const [strategieTyp, setStrategieTyp] = useState<StrategieTyp | ''>('')
-  const [conversionZiel, setConversionZiel] = useState<ConversionZiel | ''>('')
   const [pinFormat, setPinFormat] = useState<PinFormat | ''>('')
   const [vorlageId, setVorlageId] = useState('')
   const [saisonEventId, setSaisonEventId] = useState('')
@@ -2233,17 +2229,6 @@ function ManualPinForm({
         <Counter current={beschreibung.length} max={500} unit="Zeichen" />
       </Field>
 
-      <Field label="Call-to-Action" htmlFor="manual_call_to_action">
-        <input
-          id="manual_call_to_action"
-          name="call_to_action"
-          type="text"
-          value={callToAction}
-          onChange={(e) => setCallToAction(e.target.value)}
-          className={inputCls}
-        />
-      </Field>
-
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <ZielUrlPicker
           urls={urls}
@@ -2271,7 +2256,7 @@ function ManualPinForm({
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <Field label="Strategie-Typ" htmlFor="manual_strategie_typ">
+        <Field label="Angebotsart" htmlFor="manual_strategie_typ">
           <select
             id="manual_strategie_typ"
             name="strategie_typ"
@@ -2288,28 +2273,11 @@ function ManualPinForm({
               </option>
             ))}
           </select>
+          <AngebotZielHinweis />
         </Field>
 
-        <Field label="Conversion-Ziel" htmlFor="manual_conversion_ziel">
-          <select
-            id="manual_conversion_ziel"
-            name="conversion_ziel"
-            value={conversionZiel}
-            onChange={(e) =>
-              setConversionZiel(e.target.value as ConversionZiel | '')
-            }
-            className={inputCls}
-          >
-            <option value="">— wählen —</option>
-            {CONVERSION_ZIELE.map((c) => (
-              <option key={c} value={c}>
-                {CONVERSION_LABEL[c]}
-              </option>
-            ))}
-          </select>
-        </Field>
 
-        <Field label="Pin-Format" htmlFor="manual_pin_format">
+        <Field label="Pin Typ" htmlFor="manual_pin_format">
           <select
             id="manual_pin_format"
             name="pin_format"
@@ -2318,9 +2286,9 @@ function ManualPinForm({
             className={inputCls}
           >
             <option value="">— wählen —</option>
-            {PIN_FORMATE.map((p) => (
-              <option key={p} value={p}>
-                {PIN_FORMAT_LABEL[p]}
+            {PIN_TYP_AUSWAHL.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
               </option>
             ))}
           </select>
@@ -2428,6 +2396,13 @@ function ZielUrlPicker({
   const listId = `${idPrefix}_ziel_url_id`
   const directId = `${idPrefix}_ziel_url_direct`
 
+  // Zielfläche der aktuell gewählten URL als Label, oder null wenn keine
+  // URL gewählt ist oder die URL keine Zielfläche hinterlegt hat.
+  const selectedUrl = urls.find((u) => u.id === selectedId)
+  const selectedZielLabel = selectedUrl?.zielflaeche
+    ? ZIELFLAECHE_LABEL[selectedUrl.zielflaeche]
+    : null
+
   function switchTo(next: 'list' | 'direct') {
     if (next === mode) return
     if (next === 'list') {
@@ -2490,9 +2465,7 @@ function ZielUrlPicker({
                 </option>
               ))}
             </select>
-            <CopyUrlButton
-              value={urls.find((u) => u.id === selectedId)?.url ?? ''}
-            />
+            <CopyUrlButton value={selectedUrl?.url ?? ''} />
           </div>
           <input type="hidden" name="ziel_url_direct" value="" />
         </>
@@ -2518,6 +2491,47 @@ function ZielUrlPicker({
           <input type="hidden" name="ziel_url_id" value="" />
         </>
       )}
+
+      {/* Schreibgeschütztes Anzeigefeld: das Pin-Ziel ergibt sich aus der
+          Zielfläche der gewählten Ziel-URL. Rein informativ, nicht editierbar. */}
+      <div className="mt-2">
+        <p className="block text-sm font-medium text-gray-700">Pin-Ziel</p>
+        <div className="mt-1 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm">
+          {selectedUrl && selectedZielLabel ? (
+            <span className="font-medium text-gray-900">
+              {selectedZielLabel}
+            </span>
+          ) : selectedUrl ? (
+            <span className="text-gray-500">
+              Für diese Ziel-URL ist noch kein Pin-Ziel hinterlegt. Du kannst es
+              im Bereich{' '}
+              <Link
+                href="/dashboard/ziel-urls"
+                className="font-medium text-red-600 hover:underline"
+              >
+                Ziel-URLs
+              </Link>{' '}
+              ergänzen.
+            </span>
+          ) : mode === 'direct' && direct.trim() !== '' ? (
+            <span className="text-gray-500">
+              Für eine neu eingegebene Ziel-URL steht noch kein Pin-Ziel fest. Du
+              kannst es nach dem Anlegen im Bereich{' '}
+              <Link
+                href="/dashboard/ziel-urls"
+                className="font-medium text-red-600 hover:underline"
+              >
+                Ziel-URLs
+              </Link>{' '}
+              ergänzen.
+            </span>
+          ) : (
+            <span className="text-gray-500">
+              Pin-Ziel ergibt sich aus der verknüpften Ziel-URL.
+            </span>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
@@ -2575,6 +2589,19 @@ function CopyUrlButton({ value }: { value: string }) {
 const inputCls =
   'mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500'
 
+// Dezenter Hinweis unter dem Angebotsart-Feld: Angebotsart und Pin-Ziel sind
+// frei kombinierbar. Die ausführliche Erklärung steht im Wissens-Tab, hier
+// genügt ein kurzer Stupser. An beiden Erstellpfaden eingebunden.
+function AngebotZielHinweis() {
+  return (
+    <p className="mt-1 text-xs text-gray-500">
+      Angebotsart und Pin-Ziel sind unabhängig voneinander. Ein
+      Affiliate-Blogbeitrag ist zum Beispiel Angebotsart „Affiliate" mit
+      Pin-Ziel „Blog".
+    </p>
+  )
+}
+
 function Field({
   label,
   htmlFor,
@@ -2625,13 +2652,11 @@ type CsvFieldKey =
   | 'titel'
   | 'hook'
   | 'beschreibung'
-  | 'call_to_action'
   | 'pin_format'
   | 'geplante_veroeffentlichung'
   | 'board'
   | 'ziel_url'
   | 'strategie_typ'
-  | 'conversion_ziel'
 
 // In Vorlage und Hinweistext sichtbare Spalten-Namen (Reihenfolge wird so
 // ausgegeben). Status taucht NICHT auf — wird beim Speichern automatisch aus
@@ -2640,13 +2665,11 @@ const CSV_TEMPLATE_COLUMNS: Array<{ key: CsvFieldKey; display: string }> = [
   { key: 'titel', display: 'Titel' },
   { key: 'hook', display: 'Hook' },
   { key: 'beschreibung', display: 'Beschreibung' },
-  { key: 'call_to_action', display: 'Call to Action' },
-  { key: 'pin_format', display: 'Pin Format' },
+  { key: 'pin_format', display: 'Pin Typ' },
   { key: 'geplante_veroeffentlichung', display: 'Geplantes Veröffentlichungsdatum' },
   { key: 'board', display: 'Board' },
   { key: 'ziel_url', display: 'Ziel URL' },
   { key: 'strategie_typ', display: 'Strategie Typ' },
-  { key: 'conversion_ziel', display: 'Conversion Ziel' },
 ]
 
 // Akzeptierte Header-Schreibweisen → CsvFieldKey. Vergleich erfolgt
@@ -2668,8 +2691,6 @@ const CSV_HEADER_ALIASES: Record<string, CsvFieldKey> = {
   hook: 'hook',
   beschreibung: 'beschreibung',
   description: 'beschreibung',
-  calltoaction: 'call_to_action',
-  cta: 'call_to_action',
   pinformat: 'pin_format',
   format: 'pin_format',
   geplantesveroeffentlichungsdatum: 'geplante_veroeffentlichung',
@@ -2681,8 +2702,6 @@ const CSV_HEADER_ALIASES: Record<string, CsvFieldKey> = {
   url: 'ziel_url',
   strategietyp: 'strategie_typ',
   strategie: 'strategie_typ',
-  conversionziel: 'conversion_ziel',
-  conversion: 'conversion_ziel',
 }
 
 function parseCsv(text: string): string[][] {
@@ -2744,15 +2763,7 @@ function normalizeStrategie(v: string): StrategieTyp | null {
   if (lower === 'blog_content' || lower === 'blogcontent') return 'blog_content'
   if (lower === 'affiliate') return 'affiliate'
   if (lower === 'produkt' || lower === 'product') return 'produkt'
-  return null
-}
-
-function normalizeConversion(v: string): ConversionZiel | null {
-  const lower = v.trim().toLowerCase()
-  if (lower === 'traffic') return 'traffic'
-  if (lower === 'lead' || lower === 'leads') return 'lead'
-  if (lower === 'sales' || lower === 'sale' || lower === 'verkauf')
-    return 'sales'
+  if (lower === 'dienstleistung' || lower === 'service') return 'dienstleistung'
   return null
 }
 
@@ -3003,26 +3014,22 @@ function CsvImport({
         const titel = get('titel')
         const hook = get('hook')
         const beschreibung = get('beschreibung')
-        const cta = get('call_to_action')
         const formatRaw = get('pin_format')
         const datumRaw = get('geplante_veroeffentlichung')
         const boardRaw = get('board')
         const urlRaw = get('ziel_url')
         const strategieRaw = get('strategie_typ')
-        const conversionRaw = get('conversion_ziel')
 
         // Komplett leere Zeilen überspringen (kein Fehler).
         if (
           !titel &&
           !hook &&
           !beschreibung &&
-          !cta &&
           !formatRaw &&
           !datumRaw &&
           !boardRaw &&
           !urlRaw &&
-          !strategieRaw &&
-          !conversionRaw
+          !strategieRaw
         )
           continue
 
@@ -3062,7 +3069,7 @@ function CsvImport({
           pin_format = normalizePinFormat(formatRaw)
           if (!pin_format) {
             warns.push(
-              `Zeile ${lineNo}: Pin-Format „${formatRaw}" unbekannt — Feld leer gelassen`
+              `Zeile ${lineNo}: Pin Typ „${formatRaw}" unbekannt, Feld leer gelassen`
             )
           }
         }
@@ -3072,17 +3079,7 @@ function CsvImport({
           strategie_typ = normalizeStrategie(strategieRaw)
           if (!strategie_typ) {
             warns.push(
-              `Zeile ${lineNo}: Strategie-Typ „${strategieRaw}" unbekannt — Feld leer gelassen (erwartet: Blog-Content / Affiliate / Produkt)`
-            )
-          }
-        }
-
-        let conversion_ziel: ConversionZiel | null = null
-        if (conversionRaw) {
-          conversion_ziel = normalizeConversion(conversionRaw)
-          if (!conversion_ziel) {
-            warns.push(
-              `Zeile ${lineNo}: Conversion-Ziel „${conversionRaw}" unbekannt — Feld leer gelassen (erwartet: Traffic / Lead / Sales)`
+              `Zeile ${lineNo}: Strategie-Typ „${strategieRaw}" unbekannt — Feld leer gelassen (erwartet: Blog-Content / Affiliate / Produkt / Dienstleistung)`
             )
           }
         }
@@ -3134,13 +3131,11 @@ function CsvImport({
           titel: titelOut || null,
           hook: hook || null,
           beschreibung: beschreibungOut || null,
-          call_to_action: cta || null,
           pin_format,
           geplante_veroeffentlichung: datum,
           board_id,
           ziel_url_id,
           strategie_typ,
-          conversion_ziel,
         })
         rowsRawDate.push(datumRaw)
       }
@@ -3225,7 +3220,7 @@ function CsvImport({
             onClick={downloadTemplate}
             className="font-medium text-red-600 hover:underline"
           >
-            📥 Leere CSV-Vorlage herunterladen
+            Leere CSV-Vorlage herunterladen
           </button>
         </p>
       </div>
@@ -3308,7 +3303,6 @@ function CsvImport({
           board: parsed.filter((r) => !r.board_id).length,
           ziel_url: parsed.filter((r) => !r.ziel_url_id).length,
           strategie: parsed.filter((r) => !r.strategie_typ).length,
-          conversion: parsed.filter((r) => !r.conversion_ziel).length,
           datum: parsed.filter((r) => !r.geplante_veroeffentlichung).length,
         }
         const emptyEntries: { label: string; count: number; suffix: string }[] = [
@@ -3317,7 +3311,6 @@ function CsvImport({
           { label: 'Board', count: emptyCounts.board, suffix: 'nicht zugeordnet' },
           { label: 'Ziel URL', count: emptyCounts.ziel_url, suffix: 'nicht zugeordnet' },
           { label: 'Strategie Typ', count: emptyCounts.strategie, suffix: 'leer' },
-          { label: 'Conversion Ziel', count: emptyCounts.conversion, suffix: 'leer' },
           { label: 'Veröffentlichungsdatum', count: emptyCounts.datum, suffix: 'leer' },
         ].filter((e) => e.count > 0)
         return (
@@ -3347,15 +3340,13 @@ function CsvImport({
                   <th className="px-2 py-1.5 text-left">Titel</th>
                   <th className="px-2 py-1.5 text-left">Hook</th>
                   <th className="px-2 py-1.5 text-left">Beschreibung</th>
-                  <th className="px-2 py-1.5 text-left">Call to Action</th>
-                  <th className="px-2 py-1.5 text-left">Pin Format</th>
+                  <th className="px-2 py-1.5 text-left">Pin Typ</th>
                   <th className="px-2 py-1.5 text-left">
                     Geplantes Veröffentlichungsdatum
                   </th>
                   <th className="px-2 py-1.5 text-left">Board</th>
                   <th className="px-2 py-1.5 text-left">Ziel URL</th>
                   <th className="px-2 py-1.5 text-left">Strategie Typ</th>
-                  <th className="px-2 py-1.5 text-left">Conversion Ziel</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -3390,9 +3381,6 @@ function CsvImport({
                       <td className="max-w-[260px] truncate px-2 py-1.5">
                         {r.beschreibung ?? '—'}
                       </td>
-                      <td className="max-w-[160px] truncate px-2 py-1.5">
-                        {r.call_to_action ?? '—'}
-                      </td>
                       <td className="px-2 py-1.5">
                         {r.pin_format ? PIN_FORMAT_LABEL[r.pin_format] : '—'}
                       </td>
@@ -3425,11 +3413,6 @@ function CsvImport({
                       <td className="px-2 py-1.5">
                         {r.strategie_typ
                           ? STRATEGIE_LABEL[r.strategie_typ]
-                          : '—'}
-                      </td>
-                      <td className="px-2 py-1.5">
-                        {r.conversion_ziel
-                          ? CONVERSION_LABEL[r.conversion_ziel]
                           : '—'}
                       </td>
                     </tr>

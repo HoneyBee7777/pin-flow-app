@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase-server'
 import BoardsClient, {
   type Board,
@@ -13,24 +14,14 @@ type RawBoardRow = {
   beschreibung: string | null
   kategorie: string | null
   pinterest_url: string | null
-  geheim: boolean
-  strategie_fokus: Board['strategie_fokus']
-  impressionen: number
-  klicks_auf_pins: number
-  ausgehende_klicks: number
-  saves: number
   created_at: string
-  board_keywords: Array<{
-    keyword_id: string
-    keywords: { id: string; keyword: string } | null
-  }>
   content_boards: Array<{
     content_id: string
     content_inhalte: { id: string; titel: string } | null
   }>
   url_boards: Array<{
     url_id: string
-    ziel_urls: { id: string; titel: string } | null
+    ziel_urls: { id: string; titel: string; url: string } | null
   }>
 }
 
@@ -50,12 +41,9 @@ export default async function BoardsPage() {
       .from('boards')
       .select(
         `
-        id, name, beschreibung, kategorie, pinterest_url, geheim,
-        strategie_fokus, impressionen, klicks_auf_pins, ausgehende_klicks,
-        saves, created_at,
-        board_keywords ( keyword_id, keywords ( id, keyword ) ),
+        id, name, beschreibung, kategorie, pinterest_url, created_at,
         content_boards ( content_id, content_inhalte ( id, titel ) ),
-        url_boards ( url_id, ziel_urls ( id, titel ) )
+        url_boards ( url_id, ziel_urls ( id, titel, url ) )
       `
       )
       .order('created_at', { ascending: false }),
@@ -90,25 +78,22 @@ export default async function BoardsPage() {
   ])
 
   const rawRows = (boardsRes.data ?? []) as unknown as RawBoardRow[]
+  const availableKeywords = (keywordsRes.data ?? []) as KeywordOption[]
+  const availableContents = (contentsRes.data ?? []) as ContentOption[]
+  const availableUrls = (urlsRes.data ?? []) as UrlOption[]
+
   const boards: Board[] = rawRows.map((row) => ({
     id: row.id,
     name: row.name,
     beschreibung: row.beschreibung,
     kategorie: row.kategorie,
     pinterest_url: row.pinterest_url,
-    geheim: row.geheim,
-    strategie_fokus: row.strategie_fokus,
-    impressionen: row.impressionen,
-    klicks_auf_pins: row.klicks_auf_pins,
-    ausgehende_klicks: row.ausgehende_klicks,
-    saves: row.saves,
     created_at: row.created_at,
-    keywords: row.board_keywords
-      .filter((bk) => bk.keywords)
-      .map((bk) => ({
-        id: bk.keywords!.id,
-        keyword: bk.keywords!.keyword,
-      })),
+    // Automatisches Screening: zeigt die Keywords aus der Keyword-Datenbank,
+    // die als Teilstring im Board-Namen vorkommen (statt manueller Zuordnung).
+    keywords: availableKeywords
+      .filter((k) => row.name.toLowerCase().includes(k.keyword.toLowerCase()))
+      .map((k) => ({ id: k.id, keyword: k.keyword })),
     contents: row.content_boards
       .filter((cb) => cb.content_inhalte)
       .map((cb) => ({
@@ -120,12 +105,9 @@ export default async function BoardsPage() {
       .map((ub) => ({
         id: ub.ziel_urls!.id,
         titel: ub.ziel_urls!.titel,
+        url: ub.ziel_urls!.url,
       })),
   }))
-
-  const availableKeywords = (keywordsRes.data ?? []) as KeywordOption[]
-  const availableContents = (contentsRes.data ?? []) as ContentOption[]
-  const availableUrls = (urlsRes.data ?? []) as UrlOption[]
 
   // contentKeywordIds: für jeden Content die Liste der zugeordneten Keyword-IDs
   // — wird im KI-Prompt-Modal genutzt, um die Keyword-Auswahl zu filtern.
@@ -196,9 +178,86 @@ export default async function BoardsPage() {
     <div className="p-8">
       <header className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Boards</h1>
-        <p className="mt-1 text-sm text-gray-600">
-          Verwalte deine Pinterest-Boards mit Strategie und Keywords.
+        <p className="mb-4 mt-1 max-w-3xl text-sm leading-relaxed text-gray-600">
+          Boards sind die Pinnwände deines Pinterest-Profils. Jeder Pin liegt in
+          einem Board, und Pinterest nutzt Board-Name und Beschreibung, um
+          einzuordnen, worum es geht. Deshalb sind Keywords hier entscheidend:
+          Der Board-Name ist nach dem Pin-Titel deine wichtigste Stellschraube
+          für Sichtbarkeit, und auch die Board-Beschreibung sollte deine
+          Keywords aufgreifen. Hier legst du deine Boards an und ordnest ihnen
+          Inhalte und Ziel-URLs zu. Wie du Boards richtig benennst und aufbaust,
+          zeigt dir die{' '}
+          <Link
+            href="/dashboard/strategie?tab=keywords&accordion=boards-aufbauen-benennen"
+            className="font-medium text-red-600 hover:underline"
+          >
+            Anleitung dazu
+          </Link>
+          .
         </p>
+        <details className="group max-w-3xl rounded-lg border border-gray-200 bg-white shadow-sm">
+          <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-4 text-base font-semibold text-gray-900 hover:bg-red-50 [&::-webkit-details-marker]:hidden">
+            <span
+              className="text-lg leading-none text-gray-400 transition-transform"
+              aria-hidden
+            >
+              <span className="inline group-open:hidden">▸</span>
+              <span className="hidden group-open:inline">▾</span>
+            </span>
+            <span className="flex-1">So funktioniert diese Seite</span>
+          </summary>
+          <div className="space-y-4 border-t border-gray-100 px-5 py-5 text-sm leading-relaxed text-gray-700">
+            <div>
+              <p className="font-semibold text-gray-900">Was du eingibst</p>
+              <p>
+                Name, Beschreibung, Kategorie und optional die Pinterest-URL
+                deines Boards. Inhalte und Ziel-URLs ordnest du zu.
+              </p>
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900">Keywords</p>
+              <p>
+                Die Keyword-Spalte zeigt automatisch, welche deiner Keywords im
+                Board-Namen vorkommen. So siehst du auf einen Blick, ob dein
+                Board-Name die richtigen Begriffe enthält, denn der Board-Name
+                zählt für deine Sichtbarkeit. Steht in der Spalte nichts,
+                enthält dein Board-Name noch keines deiner Keywords, ein Hinweis,
+                den Namen zu schärfen. Gematcht wird nur, was genauso in deiner
+                Keyword-Liste steht. Pflege dort alle Varianten, nach denen
+                gesucht wird, also etwa „Wellness Hotel“ und einzeln „Wellness“
+                und „Hotel“.
+              </p>
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900">Die Kategorie</p>
+              <p>
+                Die Kategorie ordnet dein Board einer Nische zu. Aus den
+                Kategorien all deiner Boards bestimmt Pin-Flow deine Hauptnische
+                und die passenden Vergleichswerte.
+              </p>
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900">
+                Nur öffentliche Boards
+              </p>
+              <p>
+                Lege hier nur deine öffentlichen Boards an. Private oder geheime
+                Boards, die du auf Pinterest nur zur eigenen Inspiration führst,
+                gehören nicht ins Cockpit, denn Pinterest liefert für sie keine
+                Analytics-Daten.
+              </p>
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900">
+                Board mit KI erstellen
+              </p>
+              <p>
+                Erzeugt aus Thema, Keywords und Zielgruppe einen Vorschlag für
+                Name und Beschreibung, den du auf Pinterest übernehmen kannst.
+              </p>
+            </div>
+          </div>
+        </details>
       </header>
 
       {loadError && (

@@ -20,6 +20,11 @@ export async function saveEinstellungen(
     updates.eigene_signalwoerter = v || null
   }
 
+  if (formData.has('signalwoerter_deaktiviert')) {
+    const v = String(formData.get('signalwoerter_deaktiviert') ?? '').trim()
+    updates.signalwoerter_deaktiviert = v || null
+  }
+
   if (formData.has('profil_name')) {
     const v = String(formData.get('profil_name') ?? '').trim()
     if (v.length > 100)
@@ -43,7 +48,7 @@ export async function saveEinstellungen(
 
   const intFields = [
     ['schwellwert_beobachtung', 'Beobachtungszeitraum'],
-    ['schwellwert_min_klicks', 'Mindest-Klicks für Top Performer'],
+    ['schwellwert_min_klicks', 'Mindestzahl ausgehender Klicks für Top Performer'],
     [
       'schwellwert_min_imp_ctr_urteil',
       'Mindest-Impressionen für CTR-Urteil',
@@ -54,7 +59,7 @@ export async function saveEinstellungen(
     ],
     [
       'schwellwert_min_klicks_nutzer_signal',
-      'Mindest-Klicks für Nutzer-Signal',
+      'Mindestzahl ausgehender Klicks für Nutzer-Signal',
     ],
     ['schwellwert_top_performer_max_alter', 'Top Performer Max-Alter'],
     [
@@ -152,6 +157,40 @@ export async function saveEinstellungen(
     return {
       error:
         '„Update-Vorwarnung" muss kleiner sein als „Update-Intervall".',
+    }
+  }
+
+  // Diff-Schwellen für den Strategie-Check (Dashboard). Bereich 0..100, und
+  // die rote Schwelle muss über der gelben liegen. Beide werden gemeinsam
+  // gesendet, damit die Cross-Validierung greifen kann.
+  const schwelleFields = [
+    ['strategie_check_schwelle_gelb', 'Diff-Schwelle Gelb'],
+    ['strategie_check_schwelle_rot', 'Diff-Schwelle Rot'],
+  ] as const
+  const schwelleValues: Record<string, number> = {}
+  for (const [name, label] of schwelleFields) {
+    if (!formData.has(name)) continue
+    const raw = String(formData.get(name) ?? '').trim()
+    if (!raw) {
+      return { error: `„${label}" darf nicht leer sein.` }
+    }
+    const n = Number(raw)
+    if (!Number.isInteger(n) || n < 0 || n > 100) {
+      return {
+        error: `„${label}" muss eine ganze Zahl zwischen 0 und 100 sein.`,
+      }
+    }
+    schwelleValues[name] = n
+    updates[name] = n
+  }
+  if (
+    schwelleValues.strategie_check_schwelle_gelb !== undefined &&
+    schwelleValues.strategie_check_schwelle_rot !== undefined &&
+    schwelleValues.strategie_check_schwelle_rot <=
+      schwelleValues.strategie_check_schwelle_gelb
+  ) {
+    return {
+      error: '„Diff-Schwelle Rot" muss größer sein als „Diff-Schwelle Gelb".',
     }
   }
 

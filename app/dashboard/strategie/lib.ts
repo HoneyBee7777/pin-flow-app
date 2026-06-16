@@ -1,141 +1,240 @@
-// Domain-Logik für Tab 1 „Meine Strategie": Optionen für Wizard,
-// regelbasierte Empfehlung, Slider-Helfer und (De-)Serialisierung.
-// Reine Funktionen — kein React, kein Supabase. Wird sowohl von der
-// Strategie-Seite als auch von der Einstellungen-Sektion genutzt.
+// Phase B — Domain-Logik für das neue Strategie-Setup (4 Bausteine).
+// Reine Funktionen: kein React, kein Supabase. Wird von der Save-Action
+// (actions.ts), dem Page-Loader und später dem Wizard (Teil 2) genutzt.
+//
+// Die vier Bausteine (siehe STRATEGIE-UMBAU-AUDIT.md):
+//   1. Business-Modell (Mehrfachauswahl) + Hauptnische
+//   2. Zielflächen-Verteilung (Summe 100)
+//   3. Content-Säulen (bestätigte thematische Schwerpunkte)
+//   4. Pinning-Rhythmus (Phase je nach Anzahl Ziel-URLs)
 
-export type BusinessModell =
-  | 'blog_werbung'
-  | 'kurs_anbieter'
-  | 'affiliate'
-  | 'shop'
-  | 'coaching'
-  | 'anderes'
+import { NICHE_BENCHMARKS } from '@/lib/niche-benchmarks'
 
-export type Hauptziel =
-  | 'traffic'
-  | 'leads'
-  | 'eigene_sales'
-  | 'affiliate_sales'
-  | 'bekanntheit'
-
-export type VorhandenItem =
-  | 'blog'
-  | 'digitale_produkte'
-  | 'physische_produkte'
-  | 'affiliate'
-  | 'newsletter'
-  | 'coaching'
-  | 'nichts'
+// =====================================================
+// Baustein 1: Business-Modell
+// =====================================================
+export type BusinessModell = 'blog' | 'shop' | 'dienstleistung' | 'affiliate'
 
 export const BUSINESS_MODELL_OPTIONS: ReadonlyArray<{
   value: BusinessModell
   label: string
-  kurz: string
-  mix: { blog: number; affiliate: number; produkt: number }
 }> = [
-  {
-    value: 'blog_werbung',
-    label: 'Blog mit Werbung und/oder Affiliate-Einnahmen',
-    kurz: 'Blog-Betreiber',
-    mix: { blog: 80, affiliate: 20, produkt: 0 },
-  },
-  {
-    value: 'kurs_anbieter',
-    label: 'Online-Kurs- oder digitales Produkt-Anbieter',
-    kurz: 'Kurs-Anbieter',
-    mix: { blog: 40, affiliate: 0, produkt: 60 },
-  },
-  {
-    value: 'affiliate',
-    label: 'Reines Affiliate-Marketing (über Pinterest oder Blog)',
-    kurz: 'Affiliate-Marketer',
-    mix: { blog: 30, affiliate: 70, produkt: 0 },
-  },
-  {
-    value: 'shop',
-    label: 'Physischer Online-Shop',
-    kurz: 'Shop-Betreiber',
-    mix: { blog: 20, affiliate: 0, produkt: 80 },
-  },
-  {
-    value: 'coaching',
-    label: 'Coaching, Beratung oder Dienstleistungen',
-    kurz: 'Coach/Berater',
-    mix: { blog: 50, affiliate: 0, produkt: 50 },
-  },
-  {
-    value: 'anderes',
-    label: 'Anderes',
-    kurz: 'Pinterest-Nutzer',
-    mix: { blog: 50, affiliate: 30, produkt: 20 },
-  },
+  { value: 'blog', label: 'Blog oder Content-Website' },
+  { value: 'shop', label: 'Eigener Shop' },
+  { value: 'dienstleistung', label: 'Dienstleistung oder Beratung' },
+  { value: 'affiliate', label: 'Affiliate-Marketing' },
 ]
 
-export const HAUPTZIEL_OPTIONS: ReadonlyArray<{
-  value: Hauptziel
-  label: string
-  kurz: string
-  ziele: { traffic: number; lead: number; sales: number }
-}> = [
-  {
-    value: 'traffic',
-    label: 'Mehr Website-Traffic generieren',
-    kurz: 'mehr Website-Traffic',
-    ziele: { traffic: 70, lead: 20, sales: 10 },
-  },
-  {
-    value: 'leads',
-    label: 'Mehr E-Mail-Abonnenten / Leads gewinnen',
-    kurz: 'mehr Leads/Abonnenten',
-    ziele: { traffic: 30, lead: 60, sales: 10 },
-  },
-  {
-    value: 'eigene_sales',
-    label: 'Mehr Verkäufe meiner eigenen Produkte',
-    kurz: 'mehr eigene Verkäufe',
-    ziele: { traffic: 30, lead: 20, sales: 50 },
-  },
-  {
-    value: 'affiliate_sales',
-    label: 'Mehr Affiliate-Provisionen verdienen',
-    kurz: 'mehr Affiliate-Provisionen',
-    ziele: { traffic: 40, lead: 10, sales: 50 },
-  },
-  {
-    value: 'bekanntheit',
-    label: 'Markenbekanntheit aufbauen',
-    kurz: 'mehr Markenbekanntheit',
-    ziele: { traffic: 60, lead: 30, sales: 10 },
-  },
-]
-
-export const VORHANDEN_OPTIONS: ReadonlyArray<{
-  value: VorhandenItem
-  label: string
-}> = [
-  { value: 'blog', label: 'Blog/Website mit Inhalten' },
-  {
-    value: 'digitale_produkte',
-    label: 'Eigene digitale Produkte (E-Book, Kurs, etc.)',
-  },
-  { value: 'physische_produkte', label: 'Eigene physische Produkte' },
-  { value: 'affiliate', label: 'Affiliate-Partnerschaften (Provisionen)' },
-  { value: 'newsletter', label: 'E-Mail-Liste / Newsletter' },
-  { value: 'coaching', label: 'Coaching- oder Beratungs-Angebote' },
-  { value: 'nichts', label: 'Noch nichts davon – ich starte gerade' },
-]
-
-export const STRATEGIE_DEFAULT_FORMAT_MIX = {
-  standard: 60,
-  video: 20,
-  collage: 10,
-  carousel: 10,
-} as const
+export function isBusinessModell(value: string): value is BusinessModell {
+  return BUSINESS_MODELL_OPTIONS.some((o) => o.value === value)
+}
 
 // =====================================================
-// Slider-Helfer
+// Baustein 1: Hauptnische (aus den Benchmark-Nischen oder „sonstige")
 // =====================================================
+// Sentinel für „Meine Nische ist nicht dabei". Bewusst getrennt vom
+// Benchmark-Wert 'sonstiges', damit die Wizard-Auswahl eindeutig bleibt.
+export const HAUPTNISCHE_SONSTIGE = 'sonstige'
 
+export const HAUPTNISCHE_OPTIONS: ReadonlyArray<{
+  value: string
+  label: string
+}> = NICHE_BENCHMARKS.map((n) => ({ value: n.id, label: n.label }))
+
+export function isHauptnische(value: string): boolean {
+  return (
+    value === HAUPTNISCHE_SONSTIGE ||
+    NICHE_BENCHMARKS.some((n) => n.id === value)
+  )
+}
+
+// =====================================================
+// Baustein 2: Zielflächen-Verteilung
+// =====================================================
+export type Zielflaeche =
+  | 'blog'
+  | 'shop'
+  | 'etsy'
+  | 'affiliate'
+  | 'landingpage'
+  | 'newsletter'
+  | 'buchung'
+
+export const ZIELFLAECHEN: ReadonlyArray<{
+  value: Zielflaeche
+  label: string
+}> = [
+  { value: 'blog', label: 'Blog' },
+  { value: 'shop', label: 'Shop auf eigener Website' },
+  { value: 'etsy', label: 'Etsy-Shop' },
+  { value: 'affiliate', label: 'Affiliate-Seite' },
+  { value: 'landingpage', label: 'Landingpage' },
+  { value: 'newsletter', label: 'Newsletter oder Lead-Magnet' },
+  { value: 'buchung', label: 'Buchungs- oder Angebotsseite' },
+]
+
+export type ZielflaechenVerteilung = Record<Zielflaeche, number>
+
+export const ZIELFLAECHEN_SUMME = 100
+
+export function isZielflaeche(value: string): value is Zielflaeche {
+  return ZIELFLAECHEN.some((o) => o.value === value)
+}
+
+export function leereZielflaechen(): ZielflaechenVerteilung {
+  return {
+    blog: 0,
+    shop: 0,
+    etsy: 0,
+    affiliate: 0,
+    landingpage: 0,
+    newsletter: 0,
+    buchung: 0,
+  }
+}
+
+// =====================================================
+// Baustein 4: Pinning-Rhythmus
+// =====================================================
+export type PinningFrequenz = 'einsteiger' | 'wachstum' | 'etabliert'
+
+export const PINNING_FREQUENZ_OPTIONS: ReadonlyArray<{
+  value: PinningFrequenz
+  label: string
+  beschreibung: string
+  minUrls: number
+  maxUrls: number | null
+}> = [
+  {
+    value: 'einsteiger',
+    label: 'Einsteiger',
+    beschreibung: '1 bis 3 Pins pro Tag',
+    minUrls: 0,
+    maxUrls: 19,
+  },
+  {
+    value: 'wachstum',
+    label: 'Wachstum',
+    beschreibung: '3 bis 5 Pins pro Tag',
+    minUrls: 20,
+    maxUrls: 100,
+  },
+  {
+    value: 'etabliert',
+    label: 'Etabliert',
+    beschreibung: '5 bis 10 Pins pro Tag',
+    minUrls: 101,
+    maxUrls: null,
+  },
+]
+
+export function isPinningFrequenz(value: string): value is PinningFrequenz {
+  return PINNING_FREQUENZ_OPTIONS.some((o) => o.value === value)
+}
+
+// Leitet aus der Anzahl der Ziel-URLs die empfohlene Frequenz-Phase ab:
+//   unter 20 → einsteiger, 20 bis 100 → wachstum, über 100 → etabliert.
+export function empfohleneFrequenz(urlCount: number): PinningFrequenz {
+  if (urlCount < 20) return 'einsteiger'
+  if (urlCount <= 100) return 'wachstum'
+  return 'etabliert'
+}
+
+// =====================================================
+// Abschluss-Anzeige: empfohlener Angebotsart-Mix
+// =====================================================
+// Angebotsart = der Content-Typ am Pin (pins.strategie_typ). Für die
+// Abschluss-Zusammenfassung leiten wir aus den Zielflächen einen Vorschlag
+// ab, mit dem die spätere IST-Verteilung der Pins verglichen werden kann.
+export type Angebotsart = 'blog_content' | 'affiliate' | 'produkt' | 'dienstleistung'
+
+export type AngebotsartMix = Record<Angebotsart, number>
+
+export const ANGEBOTSART_LABEL: Record<Angebotsart, string> = {
+  blog_content: 'Blog-Content',
+  affiliate: 'Affiliate',
+  produkt: 'Produkt',
+  dienstleistung: 'Dienstleistung',
+}
+
+// Rundet einen Roh-Mix auf ganze Prozente, deren Summe genau 100 ergibt
+// (größter-Rest-Verfahren). Bei leerem Roh-Mix neutral auf Blog-Content.
+function normalizeAngebotsMix(raw: AngebotsartMix): AngebotsartMix {
+  const keys: Angebotsart[] = [
+    'blog_content',
+    'affiliate',
+    'produkt',
+    'dienstleistung',
+  ]
+  const total = keys.reduce((s, k) => s + raw[k], 0)
+  if (total <= 0) {
+    return { blog_content: 100, affiliate: 0, produkt: 0, dienstleistung: 0 }
+  }
+  const parts = keys.map((k) => {
+    const exact = (raw[k] / total) * 100
+    const floor = Math.floor(exact)
+    return { k, floor, rest: exact - floor }
+  })
+  const used = parts.reduce((s, p) => s + p.floor, 0)
+  let remainder = 100 - used
+  // Rest an die größten Nachkommastellen verteilen.
+  const order = [...parts].sort((a, b) => b.rest - a.rest)
+  const extra = new Set<Angebotsart>()
+  for (const p of order) {
+    if (remainder <= 0) break
+    extra.add(p.k)
+    remainder -= 1
+  }
+  const out: AngebotsartMix = {
+    blog_content: 0,
+    affiliate: 0,
+    produkt: 0,
+    dienstleistung: 0,
+  }
+  for (const p of parts) out[p.k] = p.floor + (extra.has(p.k) ? 1 : 0)
+  return out
+}
+
+// Einfache Heuristik: Zielflächen → Angebotsart.
+//   blog + newsletter        → Blog-Content
+//   shop + etsy + landingpage → Produkt
+//   affiliate                → Affiliate
+//   buchung                  → Dienstleistung
+// Sind noch keine Zielflächen verteilt, wird aus dem Business-Modell
+// abgeleitet (shop-lastig → mehr Produkt, blog-lastig → mehr Blog-Content).
+export function empfohlenerAngebotsMix(
+  businessModell: BusinessModell[],
+  zielflaechen: ZielflaechenVerteilung
+): AngebotsartMix {
+  const raw: AngebotsartMix = {
+    blog_content: zielflaechen.blog + zielflaechen.newsletter,
+    affiliate: zielflaechen.affiliate,
+    produkt: zielflaechen.shop + zielflaechen.etsy + zielflaechen.landingpage,
+    dienstleistung: zielflaechen.buchung,
+  }
+  const total =
+    raw.blog_content + raw.affiliate + raw.produkt + raw.dienstleistung
+  if (total > 0) return normalizeAngebotsMix(raw)
+
+  // Fallback aus dem Business-Modell (gleichgewichtet über die Auswahl).
+  const fromModell: AngebotsartMix = {
+    blog_content: 0,
+    affiliate: 0,
+    produkt: 0,
+    dienstleistung: 0,
+  }
+  for (const m of businessModell) {
+    if (m === 'blog') fromModell.blog_content += 1
+    else if (m === 'shop') fromModell.produkt += 1
+    else if (m === 'dienstleistung') fromModell.dienstleistung += 1
+    else if (m === 'affiliate') fromModell.affiliate += 1
+  }
+  return normalizeAngebotsMix(fromModell)
+}
+
+// =====================================================
+// Slider-Helfer (generisch, weiter genutzt von Einstellungen + Wizard)
+// =====================================================
 export function clampInt(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n))
 }
@@ -173,8 +272,6 @@ export function adjustProportional(
     )
   }
 
-  // Rundungs-Fix: Differenz auf den ersten passenden anderen Slider
-  // anwenden, sonst zurück auf den geänderten.
   let sum = result.reduce((a, b) => a + b, 0)
   let diff = 100 - sum
   if (diff !== 0) {
@@ -194,163 +291,8 @@ export function adjustProportional(
 }
 
 // =====================================================
-// Empfehlungs-Logik (regelbasiert)
+// (De-)Serialisierung der Text-Spalten
 // =====================================================
-
-export type RecommendationResult = {
-  mix: { blog: number; affiliate: number; produkt: number }
-  ziele: { traffic: number; lead: number; sales: number }
-  begruendung: string
-}
-
-export function computeRecommendation(
-  modelle: BusinessModell[],
-  hauptziel: Hauptziel,
-  vorhanden: VorhandenItem[]
-): RecommendationResult {
-  const modellOpts = modelle
-    .map((m) => BUSINESS_MODELL_OPTIONS.find((o) => o.value === m))
-    .filter((o): o is (typeof BUSINESS_MODELL_OPTIONS)[number] => o != null)
-
-  const base =
-    modellOpts.length === 0
-      ? { blog: 50, affiliate: 30, produkt: 20 }
-      : {
-          blog:
-            modellOpts.reduce((s, o) => s + o.mix.blog, 0) /
-            modellOpts.length,
-          affiliate:
-            modellOpts.reduce((s, o) => s + o.mix.affiliate, 0) /
-            modellOpts.length,
-          produkt:
-            modellOpts.reduce((s, o) => s + o.mix.produkt, 0) /
-            modellOpts.length,
-        }
-  const mix = { ...base }
-
-  const hasBlog = vorhanden.includes('blog')
-  const hasOwn =
-    vorhanden.includes('digitale_produkte') ||
-    vorhanden.includes('physische_produkte') ||
-    vorhanden.includes('coaching')
-  const hasAff = vorhanden.includes('affiliate')
-
-  if (!hasBlog) mix.blog = 0
-  if (!hasOwn) mix.produkt = 0
-  if (!hasAff) mix.affiliate = 0
-
-  const sum = mix.blog + mix.affiliate + mix.produkt
-  if (sum === 0) {
-    // Anwender hat noch nichts → konservativer Standard
-    mix.blog = 50
-    mix.affiliate = 30
-    mix.produkt = 20
-  } else {
-    const scale = 100 / sum
-    mix.blog = roundTo5(mix.blog * scale)
-    mix.affiliate = roundTo5(mix.affiliate * scale)
-    mix.produkt = roundTo5(mix.produkt * scale)
-    const total = mix.blog + mix.affiliate + mix.produkt
-    const diff = 100 - total
-    if (diff !== 0) {
-      const arr: Array<['blog' | 'affiliate' | 'produkt', number]> = [
-        ['blog', mix.blog],
-        ['affiliate', mix.affiliate],
-        ['produkt', mix.produkt],
-      ]
-      arr.sort((a, b) => b[1] - a[1])
-      const [largestKey] = arr[0]
-      mix[largestKey] = clampInt(mix[largestKey] + diff, 0, 100)
-    }
-  }
-
-  const zielOpt = HAUPTZIEL_OPTIONS.find((o) => o.value === hauptziel)
-  const ziele = zielOpt?.ziele ?? { traffic: 50, lead: 30, sales: 20 }
-
-  const dominant =
-    mix.blog >= mix.affiliate && mix.blog >= mix.produkt
-      ? 'Blog-Content'
-      : mix.affiliate >= mix.produkt
-        ? 'Affiliate-Empfehlungen'
-        : 'eigene Produkte'
-
-  let vorhandenText = 'noch keinen Content-Stack'
-  const realItems = vorhanden.filter((v) => v !== 'nichts')
-  if (realItems.length > 0) {
-    const labels = realItems.map(
-      (v) =>
-        VORHANDEN_OPTIONS.find((o) => o.value === v)?.label ?? v
-    )
-    if (labels.length === 1) {
-      vorhandenText = labels[0]
-    } else if (labels.length === 2) {
-      vorhandenText = labels.join(' und ')
-    } else {
-      vorhandenText =
-        labels.slice(0, -1).join(', ') +
-        ' und ' +
-        labels[labels.length - 1]
-    }
-  }
-
-  const modellKurzList = modellOpts.map((o) => o.kurz)
-  const modellKurz =
-    modellKurzList.length === 0
-      ? 'Pinterest-Nutzer'
-      : modellKurzList.length === 1
-        ? modellKurzList[0]
-        : modellKurzList.length === 2
-          ? modellKurzList.join(' und ')
-          : modellKurzList.slice(0, -1).join(', ') +
-            ' und ' +
-            modellKurzList[modellKurzList.length - 1]
-  const zielKurz = zielOpt?.kurz ?? 'Reichweite'
-
-  const begruendung =
-    `Da du als ${modellKurz} hauptsächlich ${zielKurz} erreichen willst und ` +
-    `bereits ${vorhandenText} hast, empfehlen wir den Schwerpunkt auf ` +
-    `${dominant} zu legen.`
-
-  return { mix, ziele, begruendung }
-}
-
-// Empfehlungs-Hinweis unterhalb der Zusammenfassung in Zustand C.
-export function getEmpfehlungstext(
-  blog: number,
-  affiliate: number,
-  produkt: number
-): string | null {
-  if (produkt > 50)
-    return 'Empfehlung: Fokussiere deine Pins auf direkte Produkt-Seiten mit klaren Kaufimpulsen.'
-  if (affiliate > 50)
-    return 'Empfehlung: Nutze Blog-Beiträge als Brücke zu Affiliate-Links für mehr Vertrauen.'
-  if (blog > 50)
-    return 'Empfehlung: Produziere Evergreen-Content der langfristig Traffic bringt.'
-  return null
-}
-
-// =====================================================
-// Vorhanden-Serialisierung (TEXT-Spalte → Array)
-// =====================================================
-
-export function serializeVorhanden(items: VorhandenItem[]): string {
-  return items.join(',')
-}
-
-export function parseVorhanden(s: string | null): VorhandenItem[] {
-  if (!s) return []
-  return s
-    .split(',')
-    .map((v) => v.trim())
-    .filter((v): v is VorhandenItem =>
-      VORHANDEN_OPTIONS.some((o) => o.value === v)
-    )
-}
-
-// =====================================================
-// Business-Modell-Serialisierung (TEXT-Spalte → Array)
-// =====================================================
-
 export function serializeBusinessModelle(items: BusinessModell[]): string {
   return items.join(',')
 }
@@ -360,35 +302,77 @@ export function parseBusinessModelle(s: string | null): BusinessModell[] {
   return s
     .split(',')
     .map((v) => v.trim())
-    .filter((v): v is BusinessModell =>
-      BUSINESS_MODELL_OPTIONS.some((o) => o.value === v)
-    )
+    .filter((v): v is BusinessModell => isBusinessModell(v))
+}
+
+export function serializeContentSaeulen(items: string[]): string {
+  return items
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .join(',')
+}
+
+export function parseContentSaeulen(s: string | null): string[] {
+  if (!s) return []
+  return s
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean)
 }
 
 // =====================================================
-// Datenbank-Zeilenformat (geteilt zwischen Page-Loader & Client)
+// Datenbank-Zeilenformat (geteilt zwischen Page-Loader & Action)
 // =====================================================
-
 export type StrategieRow = {
-  strategie_soll_blog: number | null
-  strategie_soll_affiliate: number | null
-  strategie_soll_produkt: number | null
-  ziel_soll_traffic: number | null
-  ziel_soll_lead: number | null
-  ziel_soll_sales: number | null
-  format_soll_standard: number | null
-  format_soll_video: number | null
-  format_soll_collage: number | null
-  format_soll_carousel: number | null
   strategie_business_modell: string | null
-  strategie_hauptziel: string | null
-  strategie_vorhanden: string | null
-  strategie_letzte_aenderung: string | null
+  strategie_hauptnische: string | null
+  ziel_soll_blog: number | null
+  ziel_soll_shop: number | null
+  ziel_soll_etsy: number | null
+  ziel_soll_affiliate: number | null
+  ziel_soll_landingpage: number | null
+  ziel_soll_newsletter: number | null
+  ziel_soll_buchung: number | null
+  strategie_content_saeulen: string | null
+  strategie_pinning_frequenz: string | null
   strategie_onboarding_abgeschlossen: boolean | null
+  strategie_letzte_aenderung: string | null
 }
 
-export const STRATEGIE_SELECT = `strategie_soll_blog, strategie_soll_affiliate, strategie_soll_produkt,
-       ziel_soll_traffic, ziel_soll_lead, ziel_soll_sales,
-       format_soll_standard, format_soll_video, format_soll_collage, format_soll_carousel,
-       strategie_business_modell, strategie_hauptziel, strategie_vorhanden,
-       strategie_letzte_aenderung, strategie_onboarding_abgeschlossen`
+export const STRATEGIE_SELECT = `strategie_business_modell, strategie_hauptnische,
+       ziel_soll_blog, ziel_soll_shop, ziel_soll_etsy, ziel_soll_affiliate,
+       ziel_soll_landingpage, ziel_soll_newsletter, ziel_soll_buchung,
+       strategie_content_saeulen, strategie_pinning_frequenz,
+       strategie_onboarding_abgeschlossen, strategie_letzte_aenderung`
+
+// Geparste, UI-freundliche Form der gespeicherten Strategie.
+export type NeueStrategie = {
+  businessModell: BusinessModell[]
+  hauptnische: string | null
+  zielflaechen: ZielflaechenVerteilung
+  contentSaeulen: string[]
+  pinningFrequenz: PinningFrequenz | null
+  onboardingAbgeschlossen: boolean
+  letzteAenderung: string | null
+}
+
+export function parseStrategieRow(row: StrategieRow | null): NeueStrategie {
+  const frequenzRaw = row?.strategie_pinning_frequenz ?? ''
+  return {
+    businessModell: parseBusinessModelle(row?.strategie_business_modell ?? null),
+    hauptnische: row?.strategie_hauptnische ?? null,
+    zielflaechen: {
+      blog: row?.ziel_soll_blog ?? 0,
+      shop: row?.ziel_soll_shop ?? 0,
+      etsy: row?.ziel_soll_etsy ?? 0,
+      affiliate: row?.ziel_soll_affiliate ?? 0,
+      landingpage: row?.ziel_soll_landingpage ?? 0,
+      newsletter: row?.ziel_soll_newsletter ?? 0,
+      buchung: row?.ziel_soll_buchung ?? 0,
+    },
+    contentSaeulen: parseContentSaeulen(row?.strategie_content_saeulen ?? null),
+    pinningFrequenz: isPinningFrequenz(frequenzRaw) ? frequenzRaw : null,
+    onboardingAbgeschlossen: row?.strategie_onboarding_abgeschlossen === true,
+    letzteAenderung: row?.strategie_letzte_aenderung ?? null,
+  }
+}

@@ -18,7 +18,6 @@ export default function AudienceInsightSummary({
   return (
     <section className="rounded-md border border-purple-200 border-l-[3px] border-l-purple-400 bg-purple-50 p-4">
       <h3 className="flex items-center gap-2 text-base font-semibold text-purple-900">
-        <span aria-hidden>🎯</span>
         Deine Zielgruppe auf einen Blick
       </h3>
       <div className="mt-3 text-sm text-purple-900">

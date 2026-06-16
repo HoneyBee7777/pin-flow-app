@@ -4,11 +4,9 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase-server'
 import { extractPinterestPinId } from '../analytics/csvImport'
 import {
-  CONVERSION_ZIELE,
   HOOK_ARTEN,
   PIN_FORMATE,
   STRATEGIE_TYPEN,
-  type ConversionZiel,
   type HookArt,
   type PinFormat,
   type Status,
@@ -47,9 +45,6 @@ function computeStatus(dateIso: string | null): Status {
 function isStrategie(value: string): value is StrategieTyp {
   return (STRATEGIE_TYPEN as readonly string[]).includes(value)
 }
-function isConversion(value: string): value is ConversionZiel {
-  return (CONVERSION_ZIELE as readonly string[]).includes(value)
-}
 function isHookArt(value: string): value is HookArt {
   return (HOOK_ARTEN as readonly string[]).includes(value)
 }
@@ -67,9 +62,7 @@ type Input = {
   titel: string | null
   hook: string | null
   beschreibung: string | null
-  call_to_action: string | null
   strategie_typ: StrategieTyp | null
-  conversion_ziel: ConversionZiel | null
   hook_art: HookArt | null
   pin_format: PinFormat | null
   status: Status
@@ -107,15 +100,12 @@ function parseInput(
   const strategieRaw = String(formData.get('strategie_typ') ?? '').trim()
   if (strategieRaw && !isStrategie(strategieRaw))
     return { error: 'Ungültiger Strategie-Typ.' }
-  const conversionRaw = String(formData.get('conversion_ziel') ?? '').trim()
-  if (conversionRaw && !isConversion(conversionRaw))
-    return { error: 'Ungültiges Conversion-Ziel.' }
   const hookArtRaw = String(formData.get('hook_art') ?? '').trim()
   if (hookArtRaw && !isHookArt(hookArtRaw))
     return { error: 'Ungültige Hook-Art.' }
   const pinFormatRaw = String(formData.get('pin_format') ?? '').trim()
   if (pinFormatRaw && !isPinFormat(pinFormatRaw))
-    return { error: 'Ungültiges Pin-Format.' }
+    return { error: 'Ungültiger Pin Typ.' }
 
   const titel = nullable(formData, 'titel')
   if (titel && titel.length > 100)
@@ -169,9 +159,7 @@ function parseInput(
       titel,
       hook,
       beschreibung,
-      call_to_action: nullable(formData, 'call_to_action'),
       strategie_typ: strategieRaw ? (strategieRaw as StrategieTyp) : null,
-      conversion_ziel: conversionRaw ? (conversionRaw as ConversionZiel) : null,
       hook_art: hookArtRaw ? (hookArtRaw as HookArt) : null,
       pin_format: pinFormatRaw ? (pinFormatRaw as PinFormat) : null,
       status: computeStatus(datumRaw),
@@ -208,8 +196,6 @@ async function resolveZielUrlId(
       user_id: userId,
       url,
       titel: url,
-      typ: 'blogpost',
-      prioritaet: 'mittel',
     })
     .select('id')
     .single()
@@ -377,13 +363,11 @@ export type ImportPinRow = {
   titel: string | null
   hook: string | null
   beschreibung: string | null
-  call_to_action: string | null
   pin_format: PinFormat | null
   geplante_veroeffentlichung: string | null
   board_id: string | null
   ziel_url_id: string | null
   strategie_typ: StrategieTyp | null
-  conversion_ziel: ConversionZiel | null
 }
 
 export async function importPins(args: {
@@ -411,15 +395,11 @@ export async function importPins(args: {
     const lineNo = i + 2
     if (r.pin_format && !isPinFormat(r.pin_format))
       return {
-        error: `Zeile ${lineNo}: Pin-Format "${r.pin_format}" ungültig.`,
+        error: `Zeile ${lineNo}: Pin Typ „${r.pin_format}" ungültig.`,
       }
     if (r.strategie_typ && !isStrategie(r.strategie_typ))
       return {
         error: `Zeile ${lineNo}: Strategie-Typ "${r.strategie_typ}" ungültig.`,
-      }
-    if (r.conversion_ziel && !isConversion(r.conversion_ziel))
-      return {
-        error: `Zeile ${lineNo}: Conversion-Ziel "${r.conversion_ziel}" ungültig.`,
       }
     if (
       r.geplante_veroeffentlichung &&
@@ -438,14 +418,12 @@ export async function importPins(args: {
     titel: r.titel ? r.titel.slice(0, 100) : r.titel,
     hook: r.hook,
     beschreibung: r.beschreibung ? r.beschreibung.slice(0, 500) : r.beschreibung,
-    call_to_action: r.call_to_action,
     pin_format: r.pin_format,
     status: computeStatus(r.geplante_veroeffentlichung),
     geplante_veroeffentlichung: r.geplante_veroeffentlichung,
     board_id: r.board_id,
     ziel_url_id: r.ziel_url_id,
     strategie_typ: r.strategie_typ,
-    conversion_ziel: r.conversion_ziel,
   }))
 
   const { error } = await supabase.from('pins').insert(inserts)

@@ -64,7 +64,7 @@ export default function AudienceCsvUpload() {
 
       <div className="rounded-md border border-teal-200 border-l-[3px] border-l-teal-400 bg-teal-50 p-3 text-[13px] text-teal-900">
         Wähle in Pinterest &bdquo;Interagierende Zielgruppe&ldquo; (nicht
-        &bdquo;Gesamte Zielgruppe&ldquo;) — diese Daten sind strategisch
+        &bdquo;Gesamte Zielgruppe&ldquo;), diese Daten sind strategisch
         wertvoller.
       </div>
 
@@ -118,7 +118,7 @@ export default function AudienceCsvUpload() {
                 : '✓ Snapshot gespeichert.'}
             </p>
             <p className="mt-1 text-green-900">
-              Stand: {formatDateDe(result.snapshot.audienceDate)} —{' '}
+              Stand: {formatDateDe(result.snapshot.audienceDate)},{' '}
               {formatCount(result.snapshot.audienceSize)} Personen.
             </p>
           </div>
@@ -131,7 +131,7 @@ export default function AudienceCsvUpload() {
               disabled={!canSubmit}
               className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
             >
-              {isPending ? 'Importiert…' : '📥 Import starten'}
+              {isPending ? 'Importiert…' : 'Import starten'}
             </button>
           </div>
         )}

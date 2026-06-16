@@ -319,7 +319,7 @@ export default function PinAnalyticsEditModal({
                   htmlFor="edit_pin_klicks"
                   className="block text-sm font-medium text-gray-700"
                 >
-                  Klicks
+                  Ausgehende Klicks
                 </label>
                 <input
                   id="edit_pin_klicks"

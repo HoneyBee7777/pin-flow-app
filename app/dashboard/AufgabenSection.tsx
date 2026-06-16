@@ -69,7 +69,7 @@ function OpenList({ tasks, today }: { tasks: Aufgabe[]; today: string }) {
   if (tasks.length === 0) {
     return (
       <p className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600">
-        Keine offenen Aufgaben 👍
+        Keine offenen Aufgaben
       </p>
     )
   }

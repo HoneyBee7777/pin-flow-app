@@ -79,6 +79,38 @@ export function addDays(iso: string, days: number): string {
   return d.toISOString().slice(0, 10)
 }
 
+export function firstOfMonthIso(iso: string): string {
+  return `${iso.slice(0, 7)}-01`
+}
+
+export function lastOfMonthIso(iso: string): string {
+  const d = new Date(iso + 'T00:00:00Z')
+  const last = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0))
+  return last.toISOString().slice(0, 10)
+}
+
+// Empfohlener nächster Eingabe-Zeitraum als Monatsscheibe.
+//   von = Tag nach dem letzten erfassten Ende (oder letzter abgeschlossener
+//         Monat beim allerersten Update).
+//   bis = Monatsende von "von", aber höchstens gestern (laufender Monat → gestern).
+// Gibt {von:null, bis:null} wenn der Nutzer auf dem aktuellen Stand ist
+// (von läge nach gestern → kein offener Zeitraum mehr, Edge-Case c).
+export function recommendedNextZeitraum(latestZeitraumBis: string | null): {
+  von: string | null
+  bis: string | null
+} {
+  const yesterday = addDays(todayIso(), -1)
+  const von = latestZeitraumBis
+    ? addDays(latestZeitraumBis, 1)
+    : firstOfMonthIso(addDays(firstOfCurrentMonthIso(), -1)) // Erst-Update: Vormonat
+  if (von > yesterday) {
+    return { von: null, bis: null }
+  }
+  const monatsEnde = lastOfMonthIso(von)
+  const bis = monatsEnde <= yesterday ? monatsEnde : yesterday
+  return { von, bis }
+}
+
 export function diffDays(fromIso: string, toIso: string): number {
   const a = new Date(fromIso + 'T00:00:00Z').getTime()
   const b = new Date(toIso + 'T00:00:00Z').getTime()
@@ -600,6 +632,50 @@ export function diagnoseBoard(args: {
   return 'inaktiv'
 }
 
+export type KeywordSignal =
+  | 'stark'
+  | 'gut'
+  | 'beobachten'
+  | 'kein_signal'
+  | 'unused'
+
+// Keyword-Signal aus kumulierten Keyword-Daten ableiten.
+//
+// Das Signal läuft gegen den Eigendaten-MEDIAN der CTR — dieselbe Median- und
+// Boost-Logik wie die Pin-Diagnose in diagnosePinAggregated (CTR ≥ median ×
+// ctrBoostFaktor = stark). Bewusst OHNE festen Fallback: ist kein Median
+// vorhanden (Account hat < 10 qualifizierte Pins, thresholds.medianCtr === null)
+// oder reichen die Impressionen nicht (< minImpCtrUrteil), gibt es 'kein_signal'
+// statt eines Urteils — eine Bewertung würde sonst auf zu wenig Daten beruhen.
+//
+// Die CTR wird kumuliert-pooled gebildet: Summe Klicks / Summe Impressionen
+// über alle Pins zum Keyword (calcCtr), NICHT als Mittel der Einzel-CTRs.
+export function deriveKeywordSignal(args: {
+  cumKlicks: number
+  cumImpressionen: number
+  pinsCount: number
+  thresholds: PinAnalyticsThresholds
+}): KeywordSignal {
+  const { cumKlicks, cumImpressionen, pinsCount, thresholds } = args
+
+  // 1. Keyword in keinem Pin verwendet.
+  if (pinsCount === 0) return 'unused'
+
+  // 2. Datengrundlage prüfen, bevor bewertet wird — kein Rückgriff auf
+  //    fallbackMindestCtr: ohne Median oder bei zu wenig Impressionen kein Signal.
+  if (thresholds.medianCtr === null) return 'kein_signal'
+  if (cumImpressionen < thresholds.minImpCtrUrteil) return 'kein_signal'
+
+  // 3. Median und genug Impressionen vorhanden — kumuliert-poolte CTR bewerten.
+  const ctr = calcCtr(cumKlicks, cumImpressionen)
+  if (ctr === null) return 'kein_signal'
+
+  const median = thresholds.medianCtr // hier garantiert nicht null
+  if (ctr >= median * thresholds.ctrBoostFaktor) return 'stark'
+  if (ctr >= median) return 'gut'
+  return 'beobachten'
+}
+
 export function calcBoardEngagementRate(
   interaktionen: number,
   impressionen: number
@@ -717,7 +793,7 @@ export function boardScoreTooltip(args: {
 
   switch (args.score) {
     case 'top': {
-      const base = `Engagement Rate ${fmt(er)} — Schwellwert erreicht (≥ ${fmt(th.topEr, 1)}) UND in den oberen ${th.topProzent.toFixed(0)}% deines Profils. Bedeutet: Dieses Board hat thematische Autorität bewiesen.`
+      const base = `Engagement Rate ${fmt(er)} — Schwellwert erreicht (≥ ${fmt(th.topEr, 1)}) UND in den oberen ${th.topProzent.toFixed(0)}% deines Profils. Dieses Board läuft im Vergleich zu deinen anderen stark.`
       if (args.short) return base
       return `${base} Handlung: Ähnliche Boards aufbauen und Keyword-Cluster erweitern.`
     }

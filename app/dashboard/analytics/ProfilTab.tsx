@@ -60,7 +60,7 @@ export default function ProfilTab({
   return (
     <div className="space-y-6">
       <p style={{ color: '#111827', fontWeight: '600', fontSize: '14px' }}>
-        Die Gesamt-Performance zeigt alle deine Pins zusammen — so wie
+        Die Gesamt-Performance zeigt alle deine Pins zusammen, so wie
         Pinterest sie ausweist.
       </p>
 
@@ -256,7 +256,7 @@ function HistoryTable({
             <Th>Zeitraum</Th>
             <Th>Tage</Th>
             <Th>Impressionen</Th>
-            <Th>Klicks</Th>
+            <Th>Ausg. Klicks</Th>
             <Th>Saves</Th>
             <Th>CTR</Th>
             <Th>Engagement</Th>

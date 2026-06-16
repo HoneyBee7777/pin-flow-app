@@ -1,4 +1,5 @@
-import { mergeSignalwoerter } from '@/lib/signalwoerter'
+import { baueAktiveSignalwoerter } from '@/lib/signalwoerter'
+import { type Zielflaeche } from '../strategie/lib'
 
 // ===== Enum-Werte =====
 export const STATUS = ['entwurf', 'geplant', 'veroeffentlicht'] as const
@@ -8,11 +9,9 @@ export const STRATEGIE_TYPEN = [
   'blog_content',
   'affiliate',
   'produkt',
+  'dienstleistung',
 ] as const
 export type StrategieTyp = (typeof STRATEGIE_TYPEN)[number]
-
-export const CONVERSION_ZIELE = ['traffic', 'lead', 'sales'] as const
-export type ConversionZiel = (typeof CONVERSION_ZIELE)[number]
 
 export const HOOK_ARTEN = [
   'problem',
@@ -24,16 +23,29 @@ export const HOOK_ARTEN = [
 ] as const
 export type HookArt = (typeof HOOK_ARTEN)[number]
 
+// Bekannte Pin-Typ-Werte der Spalte pins.pin_format. „infografik" ist ein
+// Altwert: er bleibt hier, damit bestehende Pins korrekt angezeigt werden,
+// ist aber nicht mehr auswählbar (siehe PIN_TYP_AUSWAHL). „idea" wurde
+// entfernt, da es dafür keine Pins gibt (Pinterest hat Idea Pins abgeschafft).
 export const PIN_FORMATE = [
   'standard',
   'video',
-  'idea',
   'collage',
   'shopping',
   'carousel',
   'infografik',
 ] as const
 export type PinFormat = (typeof PIN_FORMATE)[number]
+
+// Auswählbare Pin-Typen für Dropdown und Filter (Reihenfolge bewusst). „Idea"
+// und der Altwert „infografik" sind hier bewusst nicht enthalten.
+export const PIN_TYP_AUSWAHL: ReadonlyArray<{ value: PinFormat; label: string }> = [
+  { value: 'standard', label: 'Standard (statisches Bild)' },
+  { value: 'video', label: 'Video' },
+  { value: 'carousel', label: 'Carousel' },
+  { value: 'collage', label: 'Collage' },
+  { value: 'shopping', label: 'Shopping' },
+]
 
 export const KEYWORD_TYPEN = ['haupt', 'mid_tail', 'longtail'] as const
 export type KeywordTyp = (typeof KEYWORD_TYPEN)[number]
@@ -55,24 +67,14 @@ export const STRATEGIE_LABEL: Record<StrategieTyp, string> = {
   blog_content: 'Blog-Content',
   affiliate: 'Affiliate',
   produkt: 'Produkt',
+  dienstleistung: 'Dienstleistung',
 }
 
 export const STRATEGIE_BADGE: Record<StrategieTyp, string> = {
   blog_content: 'bg-blue-100 text-blue-700',
   affiliate: 'bg-amber-100 text-amber-800',
   produkt: 'bg-purple-100 text-purple-700',
-}
-
-export const CONVERSION_LABEL: Record<ConversionZiel, string> = {
-  traffic: 'Traffic',
-  lead: 'Lead',
-  sales: 'Sales',
-}
-
-export const CONVERSION_BADGE: Record<ConversionZiel, string> = {
-  traffic: 'bg-cyan-100 text-cyan-700',
-  lead: 'bg-emerald-100 text-emerald-700',
-  sales: 'bg-rose-100 text-rose-700',
+  dienstleistung: 'bg-teal-100 text-teal-700',
 }
 
 export const HOOK_ART_LABEL: Record<HookArt, string> = {
@@ -87,7 +89,6 @@ export const HOOK_ART_LABEL: Record<HookArt, string> = {
 export const PIN_FORMAT_LABEL: Record<PinFormat, string> = {
   standard: 'Standard',
   video: 'Video',
-  idea: 'Idea',
   collage: 'Collage',
   shopping: 'Shopping',
   carousel: 'Carousel',
@@ -97,7 +98,6 @@ export const PIN_FORMAT_LABEL: Record<PinFormat, string> = {
 export const PIN_FORMAT_BADGE: Record<PinFormat, string> = {
   standard: 'bg-gray-100 text-gray-700',
   video: 'bg-pink-100 text-pink-700',
-  idea: 'bg-violet-100 text-violet-700',
   collage: 'bg-emerald-100 text-emerald-700',
   shopping: 'bg-rose-100 text-rose-700',
   carousel: 'bg-amber-100 text-amber-800',
@@ -134,9 +134,7 @@ export type Pin = {
   titel: string | null
   hook: string | null
   beschreibung: string | null
-  call_to_action: string | null
   strategie_typ: StrategieTyp | null
-  conversion_ziel: ConversionZiel | null
   hook_art: HookArt | null
   pin_format: PinFormat | null
   status: Status
@@ -164,13 +162,16 @@ export type PinKeywordWithSource = {
   match_source: PinKeywordMatchSource
 }
 
-export type KeywordSignal = 'stark' | 'gut' | 'beobachten' | 'unused'
+// Median-basiertes Keyword-Signal — Typ-Quelle ist analytics/utils (kennt jetzt
+// auch 'kein_signal'). Re-Export, damit bestehende Importe aus './utils' weiter
+// funktionieren und es nur EINE Typ-Definition gibt.
+export type { KeywordSignal } from '../analytics/utils'
 
 export type PinWithRelations = Pin & {
   variante_von_titel?: string | null
   content: { id: string; titel: string } | null
   vorlage: { id: string; name: string } | null
-  url: { id: string; titel: string; url: string } | null
+  url: { id: string; titel: string; url: string; zielflaeche: Zielflaeche | null } | null
   board: { id: string; name: string } | null
   saison_event: { id: string; event_name: string } | null
   keywords: PinKeywordWithSource[]
@@ -197,6 +198,9 @@ export type ZielUrlOption = {
   id: string
   titel: string
   url: string
+  // Zielfläche der URL (das Pin-Ziel). Nicht jede URL hat eine gesetzt,
+  // daher nullable.
+  zielflaeche: Zielflaeche | null
 }
 
 export type CanvaVorlageOption = {
@@ -214,11 +218,11 @@ export type SaisonEventOption = {
 export function buildPrompt(args: {
   board: string
   thema: string
-  conversionZiel: string
   strategieTyp: string
   hookArt: string
   keywords: Array<{ keyword: string; typ: KeywordTyp }>
   customSignalwoerter?: string | null
+  deaktivierteSignalwoerter?: string | null
 }): string {
   const keywordsLine =
     args.keywords.length === 0
@@ -227,15 +231,15 @@ export function buildPrompt(args: {
           .map((k) => `${KEYWORD_TYP_EMOJI[k.typ]} ${k.keyword}`)
           .join(', ')
 
-  const signalwoerterLine = mergeSignalwoerter(
-    args.customSignalwoerter ?? null
+  const signalwoerterLine = baueAktiveSignalwoerter(
+    args.customSignalwoerter ?? null,
+    args.deaktivierteSignalwoerter ?? null
   ).join(', ')
 
   return `Du bist ein erfahrener Pinterest-SEO- und Content-Stratege.
 === KONTEXT ===
 BOARD: ${args.board}
 THEMA: ${args.thema}
-ZIEL: ${args.conversionZiel}
 CONTENT TYP: ${args.strategieTyp}
 HOOK-ART: ${args.hookArt}
 === KEYWORDS ===
@@ -246,14 +250,13 @@ Erstelle 2 eigenständige Pinterest-Pins. Jeder Pin muss eine eigene Suchintenti
 === LIEFERE FÜR JEDEN PIN ===
 1. PIN HOOK - Maximal 10 Wörter - Aufbau: Signalwort + Keyword + konkreter Nutzen
 2. PIN TITEL - SEO-optimiert - Keywords möglichst weit vorne - Max. 100 Zeichen
-3. PIN BESCHREIBUNG - 2-3 Sätze, max. 500 Zeichen - Keywords natürlich integriert
-4. CALL TO ACTION - Passend zum Ziel: ${args.conversionZiel}
+3. PIN BESCHREIBUNG - 2-3 Sätze, max. 500 Zeichen - Keywords natürlich integriert - schließe mit einer dezenten Handlungsaufforderung ab
 === SIGNALWÖRTER POOL ===
 ${signalwoerterLine}
 === REGELN ===
 - Tonalität: ruhig, hochwertig, sachlich - Kein Clickbait - Keine Emojis - Fokus auf Evergreen-Content
 === AUSGABEFORMAT ===
-Tabellarisch: Hook | Titel | Beschreibung | Call-to-Action`
+Tabellarisch: Hook | Titel | Beschreibung`
 }
 
 export function countWords(s: string): number {

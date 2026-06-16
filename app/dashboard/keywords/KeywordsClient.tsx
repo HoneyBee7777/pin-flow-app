@@ -2,6 +2,8 @@
 
 import { useMemo, useState, useTransition, type FormEvent } from 'react'
 import Link from 'next/link'
+import SortableTh from '@/components/SortableTh'
+import InfoTooltip from '@/components/InfoTooltip'
 import {
   addKeyword,
   deleteKeyword,
@@ -27,48 +29,21 @@ export type Keyword = {
   id: string
   keyword: string
   typ: KeywordTyp
-  saison_peak: string | null
   notizen: string | null
   created_at: string
   contents: Array<{ id: string; titel: string }>
   stats: KeywordStats
 }
 
-type Signal = 'stark' | 'gut' | 'beobachten' | 'unused'
+type SortKey = 'keyword' | 'pins' | 'ctr' | 'klicks'
 
-const SIGNAL_LABEL: Record<Signal, string> = {
-  stark: '🏆 Stark',
-  gut: '📈 Gut',
-  beobachten: '👀 Beobachten',
-  unused: '➕ Noch nicht verwendet',
-}
-
-const SIGNAL_BADGE: Record<Signal, string> = {
-  stark: 'bg-green-100 text-green-800',
-  gut: 'bg-blue-100 text-blue-800',
-  beobachten: 'bg-yellow-100 text-yellow-800',
-  unused: 'bg-gray-100 text-gray-600',
-}
-
-// Sortier-Reihenfolge — Stark zuerst, Noch-nicht-verwendet ans Ende.
-const SIGNAL_SORT_ORDER: Record<Signal, number> = {
-  stark: 0,
-  gut: 1,
-  beobachten: 2,
-  unused: 3,
-}
-
-function deriveSignal(stats: KeywordStats): Signal {
-  if (stats.pinsCount === 0) return 'unused'
-  const ctr = stats.avgCtr ?? 0
-  if (ctr > 2 && stats.pinsCount >= 3) return 'stark'
-  if (ctr >= 1 && ctr <= 2) return 'gut'
-  return 'beobachten'
-}
+// Tooltip an der Ø-CTR-Spaltenüberschrift.
+const CTR_COLUMN_TOOLTIP =
+  'Durchschnittliche Klickrate aller Pins zu diesem Keyword, seit Beginn der Aufzeichnung. Berechnet aus allen ausgehenden Klicks geteilt durch alle Impressionen dieser Pins.'
 
 function formatPercent(v: number | null): string {
   if (v === null) return '—'
-  return `${v.toFixed(2)}%`
+  return `${v.toFixed(1).replace('.', ',')} %`
 }
 
 function formatNumber(v: number | null): string {
@@ -85,9 +60,9 @@ const TYP_LABEL: Record<KeywordTyp, string> = {
 }
 
 const TYP_BADGE: Record<KeywordTyp, string> = {
-  haupt: 'bg-red-100 text-red-700',
-  mid_tail: 'bg-yellow-100 text-yellow-800',
-  longtail: 'bg-green-100 text-green-700',
+  haupt: 'bg-gray-100 text-gray-700',
+  mid_tail: 'bg-gray-100 text-gray-700',
+  longtail: 'bg-gray-100 text-gray-700',
 }
 
 function PencilIcon() {
@@ -130,21 +105,50 @@ export default function KeywordsClient({
   const [matching, setMatching] = useState(false)
   const [matchMessage, setMatchMessage] = useState<string | null>(null)
   const [matchError, setMatchError] = useState<string | null>(null)
+  const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' } | null>(
+    null
+  )
 
-  // Default-Sortierung: Signal-Rang aufsteigend (Stark zuerst), dann Ø CTR
-  // absteigend. Innerhalb der Stufe „Noch nicht verwendet" greift die
-  // ursprüngliche Reihenfolge (created_at desc) als Fallback durch stable sort.
-  const sortedKeywords = useMemo(() => {
-    return [...keywords].sort((a, b) => {
-      const sa = deriveSignal(a.stats)
-      const sb = deriveSignal(b.stats)
-      const rankDiff = SIGNAL_SORT_ORDER[sa] - SIGNAL_SORT_ORDER[sb]
-      if (rankDiff !== 0) return rankDiff
-      const ctrA = a.stats.avgCtr ?? -1
-      const ctrB = b.stats.avgCtr ?? -1
-      return ctrB - ctrA
+  function toggleSort(key: SortKey) {
+    setSort((cur) => {
+      if (!cur || cur.key !== key) return { key, dir: 'asc' }
+      if (cur.dir === 'asc') return { key, dir: 'desc' }
+      return null
     })
-  }, [keywords])
+  }
+
+  function dirOf(key: SortKey): 'asc' | 'desc' | null {
+    return sort && sort.key === key ? sort.dir : null
+  }
+
+  // Ohne aktive Spaltensortierung gilt die Default-Sortierung: Ø CTR
+  // absteigend, Keywords ohne CTR (null) ans Ende. Mit aktivem Sort wird
+  // nach der geklickten Spalte sortiert.
+  const sortedKeywords = useMemo(() => {
+    const arr = [...keywords]
+    if (!sort) {
+      return arr.sort((a, b) => {
+        const ctrA = a.stats.avgCtr ?? -1
+        const ctrB = b.stats.avgCtr ?? -1
+        return ctrB - ctrA
+      })
+    }
+    const dir = sort.dir === 'asc' ? 1 : -1
+    return arr.sort((a, b) => {
+      switch (sort.key) {
+        case 'keyword':
+          return a.keyword.localeCompare(b.keyword, 'de') * dir
+        case 'pins':
+          return (a.stats.pinsCount - b.stats.pinsCount) * dir
+        case 'ctr':
+          return ((a.stats.avgCtr ?? -1) - (b.stats.avgCtr ?? -1)) * dir
+        case 'klicks':
+          return ((a.stats.avgKlicks ?? -1) - (b.stats.avgKlicks ?? -1)) * dir
+        default:
+          return 0
+      }
+    })
+  }, [keywords, sort])
 
   async function onMatchKeywords() {
     setMatching(true)
@@ -270,7 +274,7 @@ export default function KeywordsClient({
           className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
           title="Gleicht alle Pins erneut mit der Keyword-Datenbank ab — anhand von Pin-Titel, Beschreibung und Board-Name."
         >
-          {matching ? 'Gleiche ab…' : '🔄 Keywords neu abgleichen'}
+          {matching ? 'Gleiche ab…' : 'Keywords neu abgleichen'}
         </button>
         <button
           type="button"
@@ -351,23 +355,6 @@ export default function KeywordsClient({
           </div>
 
           <div>
-            <label
-              htmlFor="saison_peak"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Saison-Peak
-            </label>
-            <input
-              id="saison_peak"
-              name="saison_peak"
-              type="text"
-              placeholder="z.B. November–Dezember"
-              defaultValue={editing?.saison_peak ?? ''}
-              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-            />
-          </div>
-
-          <div>
             <div className="mb-2 flex items-center justify-between gap-3">
               <label className="block text-sm font-medium text-gray-700">
                 Content-Inhalte zuordnen
@@ -385,7 +372,7 @@ export default function KeywordsClient({
             <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border border-gray-300 p-3">
               {availableContents.length === 0 ? (
                 <p className="text-sm text-gray-500">
-                  Noch keine Content-Inhalte vorhanden — lege erst welche unter
+                  Noch keine Content-Inhalte vorhanden. Lege erst welche unter
                   „Content-Inhalte“ an.
                 </p>
               ) : filteredContents.length === 0 ? (
@@ -525,27 +512,41 @@ export default function KeywordsClient({
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="sticky top-0 z-10 bg-gray-50">
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+              <SortableTh
+                dir={dirOf('keyword')}
+                onClick={() => toggleSort('keyword')}
+                className="min-w-[180px]"
+              >
                 Keyword
-              </th>
+              </SortableTh>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Typ
               </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Signal
-              </th>
-              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">
+              <SortableTh
+                dir={dirOf('pins')}
+                onClick={() => toggleSort('pins')}
+                align="right"
+              >
                 Pins
-              </th>
-              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Ø CTR
-              </th>
-              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Ø Klicks
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Saison-Peak
-              </th>
+              </SortableTh>
+              <SortableTh
+                dir={dirOf('ctr')}
+                onClick={() => toggleSort('ctr')}
+                align="right"
+                className="whitespace-nowrap"
+              >
+                <span className="whitespace-nowrap">
+                  Ø CTR<InfoTooltip text={CTR_COLUMN_TOOLTIP} />
+                </span>
+              </SortableTh>
+              <SortableTh
+                dir={dirOf('klicks')}
+                onClick={() => toggleSort('klicks')}
+                align="right"
+                className="whitespace-nowrap"
+              >
+                Ø Ausg. Klicks
+              </SortableTh>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Inhalte
               </th>
@@ -561,7 +562,7 @@ export default function KeywordsClient({
             {sortedKeywords.length === 0 ? (
               <tr>
                 <td
-                  colSpan={10}
+                  colSpan={8}
                   className="px-4 py-8 text-center text-sm text-gray-500"
                 >
                   Noch keine Keywords. Füge eines hinzu oder importiere mehrere.
@@ -569,10 +570,9 @@ export default function KeywordsClient({
               </tr>
             ) : (
               sortedKeywords.map((kw) => {
-                const signal = deriveSignal(kw.stats)
                 return (
                   <tr key={kw.id} className="align-top hover:bg-gray-50">
-                    <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                    <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">
                       {kw.keyword}
                     </td>
                     <td className="px-4 py-3 text-sm">
@@ -582,20 +582,13 @@ export default function KeywordsClient({
                         {TYP_LABEL[kw.typ]}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-sm">
-                      <span
-                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${SIGNAL_BADGE[signal]}`}
-                      >
-                        {SIGNAL_LABEL[signal]}
-                      </span>
-                    </td>
                     <td className="px-4 py-3 text-right text-sm tabular-nums text-gray-700">
                       {kw.stats.pinsCount === 0 ? (
                         '—'
                       ) : (
                         <Link
                           href={`/dashboard/pin-produktion?keyword=${encodeURIComponent(kw.keyword)}`}
-                          className="font-medium text-blue-600 underline underline-offset-2 hover:text-blue-800"
+                          className="font-medium text-red-600 hover:text-red-700 hover:underline"
                           title={`Pins anzeigen, in denen „${kw.keyword}" automatisch gefunden wurde`}
                         >
                           {kw.stats.pinsCount}
@@ -607,9 +600,6 @@ export default function KeywordsClient({
                     </td>
                     <td className="px-4 py-3 text-right text-sm tabular-nums text-gray-700">
                       {formatNumber(kw.stats.avgKlicks)}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-700">
-                      {kw.saison_peak ?? '—'}
                     </td>
                     <td className="px-4 py-3 text-sm">
                       {kw.contents.length === 0 ? (
@@ -657,30 +647,6 @@ export default function KeywordsClient({
             )}
           </tbody>
         </table>
-      </div>
-
-      <div className="rounded-md border border-gray-200 bg-white p-4 text-xs leading-relaxed text-gray-600">
-        <p className="mb-2 font-semibold uppercase tracking-wide text-gray-500">
-          Signal-Erklärung
-        </p>
-        <ul className="space-y-1">
-          <li>
-            🏆 <strong>Stark</strong> — Ø CTR über 2% in mindestens 3 Pins.
-            Dieses Keyword funktioniert — öfter einsetzen.
-          </li>
-          <li>
-            📈 <strong>Gut</strong> — Ø CTR 1–2%. Solide Performance, weiter
-            beobachten.
-          </li>
-          <li>
-            👀 <strong>Beobachten</strong> — Keyword in Pins gefunden aber
-            CTR unter 1%. Pin oder Keyword optimieren.
-          </li>
-          <li>
-            ➕ <strong>Noch nicht verwendet</strong> — Keyword noch in
-            keinem Pin gefunden. Beim nächsten passenden Pin einsetzen.
-          </li>
-        </ul>
       </div>
     </div>
   )

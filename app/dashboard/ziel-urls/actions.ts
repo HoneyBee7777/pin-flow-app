@@ -3,26 +3,37 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase-server'
 
-const ALLOWED_TYPES = [
-  'blogpost',
-  'produkt',
+// Strategie-Umbau: Zuordnung der Ziel-URL zu einer Zielfläche. Erlaubte
+// Werte entsprechen dem DB-Constraint; leer/NULL ist für bestehende URLs ok.
+const ALLOWED_ZIELFLAECHE = [
+  'blog',
+  'shop',
+  'etsy',
   'affiliate',
   'landingpage',
-  'leadmagnet',
-  'kategorie',
-  'startseite',
+  'newsletter',
+  'buchung',
 ] as const
-type ZielUrlTyp = (typeof ALLOWED_TYPES)[number]
+type Zielflaeche = (typeof ALLOWED_ZIELFLAECHE)[number]
 
-const ALLOWED_PRIO = ['hoch', 'mittel', 'niedrig'] as const
-type Prioritaet = (typeof ALLOWED_PRIO)[number]
-
-function isTyp(value: string): value is ZielUrlTyp {
-  return (ALLOWED_TYPES as readonly string[]).includes(value)
+function isZielflaeche(value: string): value is Zielflaeche {
+  return (ALLOWED_ZIELFLAECHE as readonly string[]).includes(value)
 }
 
-function isPrio(value: string): value is Prioritaet {
-  return (ALLOWED_PRIO as readonly string[]).includes(value)
+// Liest die Zielfläche. Leerer Wert → null (erlaubt bei bestehenden URLs);
+// bei neuen URLs (required) ist ein gültiger Wert Pflicht.
+function readZielflaeche(
+  formData: FormData,
+  { required }: { required: boolean }
+): { value: string | null } | { error: string } {
+  const raw = String(formData.get('zielflaeche') ?? '').trim()
+  if (!raw) {
+    if (required) return { error: 'Bitte ein Pin-Ziel wählen.' }
+    return { value: null }
+  }
+  if (!isZielflaeche(raw))
+    return { error: 'Bitte ein gültiges Pin-Ziel wählen.' }
+  return { value: raw }
 }
 
 function readContentIds(formData: FormData): string[] {
@@ -58,17 +69,15 @@ export async function addZielUrl(
 
   const url = String(formData.get('url') ?? '').trim()
   const titel = String(formData.get('titel') ?? '').trim()
-  const typ = String(formData.get('typ') ?? '')
-  const prioritaet = String(formData.get('prioritaet') ?? '')
   const notizen = String(formData.get('notizen') ?? '').trim() || null
   const contentIds = readContentIds(formData)
   const boardIds = readBoardIds(formData)
 
   if (!url) return { error: 'URL darf nicht leer sein.' }
   if (!titel) return { error: 'Titel darf nicht leer sein.' }
-  if (!isTyp(typ)) return { error: 'Bitte einen gültigen Typ wählen.' }
-  if (!isPrio(prioritaet))
-    return { error: 'Bitte eine gültige Priorität wählen.' }
+  // Neue URLs: Zielfläche ist Pflicht (bestehende dürfen NULL bleiben).
+  const zielflaeche = readZielflaeche(formData, { required: true })
+  if ('error' in zielflaeche) return { error: zielflaeche.error }
 
   const { data: inserted, error } = await supabase
     .from('ziel_urls')
@@ -76,8 +85,7 @@ export async function addZielUrl(
       user_id: user.id,
       url,
       titel,
-      typ,
-      prioritaet,
+      zielflaeche: zielflaeche.value,
       notizen,
     })
     .select('id')
@@ -136,21 +144,24 @@ export async function updateZielUrl(
 
   const url = String(formData.get('url') ?? '').trim()
   const titel = String(formData.get('titel') ?? '').trim()
-  const typ = String(formData.get('typ') ?? '')
-  const prioritaet = String(formData.get('prioritaet') ?? '')
   const notizen = String(formData.get('notizen') ?? '').trim() || null
   const contentIds = readContentIds(formData)
   const boardIds = readBoardIds(formData)
 
   if (!url) return { error: 'URL darf nicht leer sein.' }
   if (!titel) return { error: 'Titel darf nicht leer sein.' }
-  if (!isTyp(typ)) return { error: 'Bitte einen gültigen Typ wählen.' }
-  if (!isPrio(prioritaet))
-    return { error: 'Bitte eine gültige Priorität wählen.' }
+  // Bearbeiten: Zielfläche darf NULL bleiben, wird aber validiert falls gesetzt.
+  const zielflaeche = readZielflaeche(formData, { required: false })
+  if ('error' in zielflaeche) return { error: zielflaeche.error }
 
   const { error: updateError } = await supabase
     .from('ziel_urls')
-    .update({ url, titel, typ, prioritaet, notizen })
+    .update({
+      url,
+      titel,
+      zielflaeche: zielflaeche.value,
+      notizen,
+    })
     .eq('id', id)
 
   if (updateError) return { error: updateError.message }
@@ -214,12 +225,6 @@ export async function importZielUrls(
   if (!user) return { error: 'Nicht angemeldet.' }
 
   const text = String(formData.get('text') ?? '')
-  const typ = String(formData.get('typ') ?? '')
-  const prioritaet = String(formData.get('prioritaet') ?? '')
-
-  if (!isTyp(typ)) return { error: 'Bitte einen gültigen Typ wählen.' }
-  if (!isPrio(prioritaet))
-    return { error: 'Bitte eine gültige Priorität wählen.' }
 
   const lines = text
     .split(/\r?\n/)
@@ -231,8 +236,6 @@ export async function importZielUrls(
     user_id: string
     url: string
     titel: string
-    typ: string
-    prioritaet: string
     notizen: null
   }> = []
 
@@ -247,8 +250,6 @@ export async function importZielUrls(
       user_id: user.id,
       url,
       titel,
-      typ,
-      prioritaet,
       notizen: null,
     })
   }

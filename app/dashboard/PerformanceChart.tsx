@@ -53,7 +53,7 @@ const METRIC_CONFIG: Record<
   }
 > = {
   klicks: {
-    label: 'Klicks',
+    label: 'Ausg. Klicks',
     key: 'ausgehende_klicks',
     color: '#ea580c',
   },

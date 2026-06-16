@@ -25,6 +25,7 @@ import {
   formatDateDe,
   PIN_STATUS_BADGE,
   PIN_STATUS_LABEL,
+  recommendedNextZeitraum,
   todayIso,
   type BoardOption,
   type PinOption,
@@ -117,9 +118,9 @@ export default function EingabeTab({
           />
         </div>
         <p className="mt-2 text-[13px] text-gray-500">
-          💡 Du trägst deine Daten immer für einen einzelnen Zeitraum ein.
+          Du trägst deine Daten immer für einen einzelnen Zeitraum ein.
           Auf dem Dashboard, im Tab Profil-Entwicklung sowie in Top Pins und
-          Boards werden alle Perioden kumuliert ausgewertet — so siehst du
+          Boards werden alle Perioden kumuliert ausgewertet, so siehst du
           deine All-Time-Werte und die Entwicklung über die Zeit.
         </p>
       </div>
@@ -139,7 +140,7 @@ export default function EingabeTab({
               {formatDateDe(pendingNotice.zeitraum_bis)})
             </>
           )}
-          . Bitte Zuordnung abschließen oder überspringen — die Zuordnung
+          . Bitte Zuordnung abschließen oder überspringen, die Zuordnung
           erfolgt in den Tabs →{' '}
           <button
             type="button"
@@ -203,28 +204,33 @@ function ZeitraumHeader({
   von: string | null
   bis: string | null
 }) {
-  const hasPrevious = !!von
+  // von/bis null → Nutzer ist auf dem aktuellen Stand (laufender Monat noch
+  // nicht abgeschlossen). Sonst: Empfehlung + Hinweis auf gleich lange Monate.
+  const aktuellerStand = !von || !bis
   return (
     <div className="flex flex-wrap items-start justify-between gap-3 rounded-md border border-teal-200 border-l-[3px] border-l-teal-400 bg-teal-50 p-3 text-sm leading-relaxed text-teal-900">
-      <p className="min-w-0 flex-1">
-        <span className="mr-1" aria-hidden>
-          📅
-        </span>
-        {hasPrevious ? (
-          <>
-            <strong>Dein nächster Zeitraum:</strong> {formatDateDe(von)} bis{' '}
-            {bis ? formatDateDe(bis) : '—'}
-            <br />
-            Stelle in Pinterest Analytics unter „Benutzerdefiniert" genau
-            diesen Zeitraum ein.
-          </>
+      <div className="min-w-0 flex-1">
+        {aktuellerStand ? (
+          <p>
+            <strong>Du bist auf dem aktuellen Stand.</strong> Der laufende Monat
+            ist noch nicht abgeschlossen, trag ihn ein, sobald er vorbei ist.
+          </p>
         ) : (
           <>
-            <strong>Erstes Update:</strong> Wähle einen beliebigen
-            Startzeitpunkt für dein erstes Update.
+            <p>
+              <strong>Empfohlener nächster Zeitraum:</strong>{' '}
+              {formatDateDe(von)} bis {formatDateDe(bis)}. Stelle in Pinterest
+              Analytics unter „Benutzerdefiniert" genau diesen Zeitraum ein.
+            </p>
+            <p className="mt-1 text-[12px] text-teal-700">
+              Trag am besten immer gleich lange Zeiträume ein, idealerweise
+              ganze Monate. Nur so lassen sich die Zeiträume im Tab
+              Profil-Entwicklung fair vergleichen. Den laufenden Monat trägst du
+              erst ein, wenn er abgeschlossen ist.
+            </p>
           </>
         )}
-      </p>
+      </div>
     </div>
   )
 }
@@ -284,7 +290,7 @@ function CombinedHowToToggle({
         <div>
           <p className="font-semibold text-gray-900">Top Boards</p>
           <p className="mt-1">
-            Werden automatisch aus denselben CSVs importiert — kein separater
+            Werden automatisch aus denselben CSVs importiert, kein separater
             Export nötig.
           </p>
         </div>
@@ -299,7 +305,7 @@ function CombinedHowToToggle({
             </li>
             <li>
               Reiter „Interagierende Zielgruppe" auswählen (nicht „Gesamte
-              Zielgruppe" — die Interagierende ist strategisch wertvoller)
+              Zielgruppe", die Interagierende ist strategisch wertvoller)
             </li>
             <li>
               Rechts oben auf das Export-Symbol klicken → CSV speichern
@@ -312,7 +318,7 @@ function CombinedHowToToggle({
         </div>
         <div className="border-l-4 border-amber-400 bg-amber-50 px-3 py-2 text-[13px] text-amber-800">
           ⚠️ Pinterest speichert Analytics nur max. 6 Monate. Dieses System
-          speichert deine historischen Daten dauerhaft — trage monatlich ein
+          speichert deine historischen Daten dauerhaft: trage monatlich ein
           damit keine Daten verloren gehen.
         </div>
       </div>
@@ -344,12 +350,10 @@ function Schritt1ProfilForm({
   }>({})
 
   useEffect(() => {
-    const yesterday = addDays(todayIso(), -1)
-    setZeitraumBis((prev) => prev || yesterday)
-    setZeitraumVon(
-      (prev) =>
-        prev || (latestZeitraumBis ? addDays(latestZeitraumBis, 1) : '')
-    )
+    const { von, bis } = recommendedNextZeitraum(latestZeitraumBis)
+    // null/null = aktueller Stand → Felder nicht zwangs-vorbefüllen.
+    if (von) setZeitraumVon((prev) => prev || von)
+    if (bis) setZeitraumBis((prev) => prev || bis)
   }, [latestZeitraumBis])
 
   const existingForBis = useMemo(
@@ -390,7 +394,7 @@ function Schritt1ProfilForm({
           1) Profil-Performance eintragen
         </h2>
         <p className="mt-0.5 text-sm text-gray-600">
-          Muss monatlich manuell eingetragen werden — Pinterest bietet hier
+          Muss monatlich manuell eingetragen werden, Pinterest bietet hier
           keinen CSV-Export.
         </p>
       </div>
@@ -425,7 +429,7 @@ function Schritt1ProfilForm({
             />
             {existingForBis && (
               <p className="mt-1 text-xs text-amber-700">
-                ⚠️ Eintrag mit diesem End-Datum existiert bereits — wird
+                ⚠️ Eintrag mit diesem End-Datum existiert bereits, wird
                 überschrieben.
               </p>
             )}
@@ -780,7 +784,7 @@ function Schritt2CsvUpload({
       </div>
 
       <div className="rounded-md border border-teal-200 border-l-[3px] border-l-teal-400 bg-teal-50 p-3 text-[13px] text-teal-900">
-        Lade die CSVs direkt von Pinterest herunter — nicht vorher in Excel
+        Lade die CSVs direkt von Pinterest herunter, nicht vorher in Excel
         öffnen.
       </div>
 
@@ -872,14 +876,14 @@ function Schritt2CsvUpload({
               disabled={!canSubmit || isPending}
               className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
             >
-              {isPending ? 'Importiert…' : '📥 Import starten'}
+              {isPending ? 'Importiert…' : 'Import starten'}
             </button>
           </div>
         )}
 
         <p className="text-xs text-gray-500">
           ⚠️ Nach dem Import: Neue Pins und Boards müssen einmalig per URL
-          zugeordnet werden — die Zuordnungs-Dialoge erscheinen dann auf den
+          zugeordnet werden, die Zuordnungs-Dialoge erscheinen dann auf den
           Tabs „Top Pins" und „Boards".
         </p>
       </form>
@@ -933,7 +937,7 @@ function FileSlotInput({
       </div>
       {file && detectedPeriod && (
         <p className="mt-1 break-all text-xs text-teal-700">
-          ✓ {file.name} — Zeitraum:{' '}
+          ✓ {file.name}, Zeitraum:{' '}
           {formatPeriodCompact(detectedPeriod.von, detectedPeriod.bis)}
         </p>
       )}
@@ -950,14 +954,14 @@ function FileSlotInput({
       {file && metricMismatch && (
         <div className="mt-1 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
           ⚠️ Diese Datei enthält{' '}
-          <strong>{METRIC_LABEL[detectedMetric as PinMetric]}</strong> —
+          <strong>{METRIC_LABEL[detectedMetric as PinMetric]}</strong>,
           dieses Feld erwartet <strong>{METRIC_LABEL[expectedMetric]}</strong>
           . Bitte die richtige CSV hochladen.
         </div>
       )}
       {file && detectedMetric === null && (
         <p className="mt-1 text-xs text-amber-800">
-          ⚠️ In dieser CSV wurde kein „Top Pins"-Block gefunden — bitte
+          ⚠️ In dieser CSV wurde kein „Top Pins"-Block gefunden, bitte
           prüfen, ob das wirklich der Pinterest-Analytics-Overview-Export ist.
         </p>
       )}
@@ -982,7 +986,7 @@ function ImportSummary({
   const boardsUnmatched = result.boardsUnmatched?.length ?? 0
   // Interne Metric-Keys → deutsche Labels für die Anzeige.
   const METRIC_DISPLAY: Record<PinMetric, string> = {
-    klicks: 'Klicks',
+    klicks: 'Ausgehende Klicks',
     impressionen: 'Impressionen',
     saves: 'Saves',
   }
@@ -1014,7 +1018,7 @@ function ImportSummary({
           <p>
             ⚠️ {pinsUnmatched} Pin{pinsUnmatched === 1 ? '' : 's'}{' '}
             {pinsUnmatched === 1 ? 'wurde' : 'wurden'} importiert aber noch
-            keinem Pin-Titel zugeordnet. Bitte einmalig verknüpfen — beim
+            keinem Pin-Titel zugeordnet. Bitte einmalig verknüpfen, beim
             nächsten Import werden diese Pins automatisch erkannt.
           </p>
           <p className="mt-1.5">
@@ -1079,7 +1083,7 @@ function ManualEntryToggle({
           Alternativ: Pins und Boards manuell eingeben
         </span>
         <span className="ml-2 text-xs text-gray-500">
-          Optional — nur wenn kein CSV-Export möglich
+          Optional, nur wenn kein CSV-Export möglich
         </span>
       </summary>
       <div className="mt-4 space-y-6">
@@ -1115,12 +1119,10 @@ function PinManualForm({
   }>({})
 
   useEffect(() => {
-    const yesterday = addDays(todayIso(), -1)
-    setZeitraumBis((prev) => prev || yesterday)
-    setZeitraumVon(
-      (prev) =>
-        prev || (latestZeitraumBis ? addDays(latestZeitraumBis, 1) : '')
-    )
+    const { von, bis } = recommendedNextZeitraum(latestZeitraumBis)
+    // null/null = aktueller Stand → Felder nicht zwangs-vorbefüllen.
+    if (von) setZeitraumVon((prev) => prev || von)
+    if (bis) setZeitraumBis((prev) => prev || bis)
   }, [latestZeitraumBis])
 
   const filteredPins = useMemo(() => {
@@ -1231,7 +1233,7 @@ function PinManualForm({
               />
             </Field>
 
-            <Field label="Klicks" htmlFor="pin_klicks">
+            <Field label="Ausgehende Klicks" htmlFor="pin_klicks">
               <input
                 id="pin_klicks"
                 name="klicks"
@@ -1394,7 +1396,7 @@ function PinSearchField({
 
 function formatPinDate(pin: PinOption): string {
   if (pin.geplante_veroeffentlichung) {
-    return `📅 Veröffentlichung: ${formatDateDe(pin.geplante_veroeffentlichung)}`
+    return `Veröffentlichung: ${formatDateDe(pin.geplante_veroeffentlichung)}`
   }
   return `Erstellt: ${formatDateDe(pin.created_at.slice(0, 10))}`
 }

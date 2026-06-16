@@ -110,7 +110,7 @@ export default function BoardsTab({
   return (
     <div className="space-y-6">
       <p style={{ color: '#111827', fontWeight: '600', fontSize: '14px' }}>
-        Boards sind entscheidend für deine Reichweite auf Pinterest — korrekte
+        Boards sind entscheidend für deine Reichweite auf Pinterest: korrekte
         Keywords im Board-Namen helfen Pinterest zu verstehen, worum es auf
         deinem Profil geht.
       </p>
@@ -118,7 +118,7 @@ export default function BoardsTab({
       {publicBoardsWithoutAnalytics.length > 0 && (
         <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
           <p className="font-medium">
-            Diese Boards sind angelegt und öffentlich, haben aber noch keine
+            Diese Boards sind angelegt, haben aber noch keine
             Analytics-Einträge:
           </p>
           <ul className="mt-2 space-y-1">
@@ -366,7 +366,7 @@ function BoardAnalyticsTable({
                 current={sortKey}
                 dir={sortDir}
                 onSort={toggleSort}
-                info="Wie oft Nutzer auf einen Pin geklickt haben um ihn zu vergrößern — zählt NICHT als Website-Besucher. Für Traffic zählen nur Ausgehende Klicks."
+                info="Wie oft Nutzer auf einen Pin geklickt haben um ihn zu vergrößern, zählt NICHT als Website-Besucher. Für Traffic zählen nur Ausgehende Klicks."
               >
                 PIN KLICKS
               </SortableTh>
@@ -375,7 +375,7 @@ function BoardAnalyticsTable({
                 current={sortKey}
                 dir={sortDir}
                 onSort={toggleSort}
-                info="Wie oft Nutzer von Pinterest auf deine Website weitergeleitet wurden — das ist die wichtigste Metrik für deinen Website-Traffic."
+                info="Wie oft Nutzer von Pinterest auf deine Website weitergeleitet wurden, das ist die wichtigste Metrik für deinen Website-Traffic."
               >
                 AUSG. KLICKS
               </SortableTh>
@@ -565,7 +565,7 @@ function BoardAnalyticsTable({
                       }`}
                       title={
                         isStale
-                          ? `Letzter Eintrag vor ${daysSince} Tagen — Zeit, dieses Board neu zu checken.`
+                          ? `Letzter Eintrag vor ${daysSince} Tagen, Zeit, dieses Board neu zu checken.`
                           : `Letzter Eintrag vor ${daysSince} Tagen`
                       }
                     >

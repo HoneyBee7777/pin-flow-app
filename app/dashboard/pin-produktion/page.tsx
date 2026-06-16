@@ -5,7 +5,6 @@ import type {
   CanvaVorlageOption,
   ContentOption,
   KeywordOption,
-  KeywordSignal,
   PinKeywordMatchSource,
   PinWithRelations,
   SaisonEventOption,
@@ -14,12 +13,12 @@ import type {
 
 const PIN_SELECT = `
   id, user_id, content_id, canva_vorlage_id, ziel_url_id, board_id, saison_event_id,
-  titel, hook, beschreibung, call_to_action, strategie_typ, conversion_ziel, hook_art,
+  titel, hook, beschreibung, strategie_typ, hook_art,
   pin_format, status, geplante_veroeffentlichung, impressionen, klicks, saves, created_at,
   variante_von_pin_id, variante_typ, pinterest_pin_url,
   content_inhalte ( id, titel ),
   canva_vorlagen ( id, name ),
-  ziel_urls ( id, titel, url ),
+  ziel_urls ( id, titel, url, zielflaeche ),
   boards ( id, name ),
   saison_events ( id, event_name ),
   pin_keywords ( keyword_id, match_source, keywords ( id, keyword, typ ) )
@@ -31,7 +30,7 @@ type RawPinRow = Omit<
 > & {
   content_inhalte: { id: string; titel: string } | null
   canva_vorlagen: { id: string; name: string } | null
-  ziel_urls: { id: string; titel: string; url: string } | null
+  ziel_urls: PinWithRelations['url']
   boards: { id: string; name: string } | null
   saison_events: { id: string; event_name: string } | null
   pin_keywords: Array<{
@@ -123,8 +122,6 @@ export default async function PinProduktionPage() {
     saisonRes,
     duplCountRes,
     settingsRes,
-    pinKeywordsRes,
-    pinAnalyticsRes,
   ] = await Promise.all([
     supabase
       .from('pins')
@@ -144,7 +141,7 @@ export default async function PinProduktionPage() {
       .order('name', { ascending: true }),
     supabase
       .from('ziel_urls')
-      .select('id, titel, url')
+      .select('id, titel, url, zielflaeche')
       .order('titel', { ascending: true }),
     supabase
       .from('canva_vorlagen')
@@ -161,35 +158,15 @@ export default async function PinProduktionPage() {
       .not('ziel_url_id', 'is', null),
     supabase
       .from('einstellungen')
-      .select('eigene_signalwoerter')
+      .select('eigene_signalwoerter, signalwoerter_deaktiviert')
       .eq('user_id', user.id)
       .maybeSingle(),
-    // Für Keyword-Signale (Stark / Gut / Beobachten) brauchen wir alle
-    // pin_keywords + die latest pins_analytics pro Pin. Defensiv eingewickelt
-    // damit ein Fehler die Tabelle nicht crasht — Spalte zeigt dann '—'.
-    Promise.resolve(
-      supabase
-        .from('pin_keywords')
-        .select('pin_id, keyword_id')
-        .eq('user_id', user.id)
-    ).catch((err: unknown) => {
-      console.error('[PinProduktion] pin_keywords query failed:', err)
-      return { data: [], error: err as Error }
-    }),
-    Promise.resolve(
-      supabase
-        .from('pins_analytics')
-        .select('pin_id, datum, impressionen, klicks')
-        .is('deleted_at', null)
-        .order('datum', { ascending: false })
-    ).catch((err: unknown) => {
-      console.error('[PinProduktion] pins_analytics query failed:', err)
-      return { data: [], error: err as Error }
-    }),
   ])
 
   const customSignalwoerter =
     (settingsRes.data?.eigene_signalwoerter ?? null) as string | null
+  const deaktivierteSignalwoerter =
+    (settingsRes.data?.signalwoerter_deaktiviert ?? null) as string | null
 
   const pinsRaw = (pinsRes.data ?? []) as unknown as RawPinRow[]
   const titelById = new Map<string, string | null>()
@@ -245,66 +222,6 @@ export default async function PinProduktionPage() {
     comboCount[key] = (comboCount[key] ?? 0) + 1
   }
 
-  // Keyword-Signal pro Keyword: gleiche Logik wie auf der Keywords-Seite —
-  // pinsCount + Ø CTR (latest analytics pro Pin) → Signal.
-  type PinKeywordRow = { pin_id: string; keyword_id: string }
-  type PinAnalyticsRow = {
-    pin_id: string
-    datum: string
-    impressionen: number
-    klicks: number
-  }
-  const pinKeywordRows =
-    (pinKeywordsRes.data ?? []) as unknown as PinKeywordRow[]
-  const pinAnalyticsRows =
-    (pinAnalyticsRes.data ?? []) as unknown as PinAnalyticsRow[]
-
-  const latestAnalyticsByPin = new Map<
-    string,
-    { impressionen: number; klicks: number }
-  >()
-  for (const row of pinAnalyticsRows) {
-    if (!latestAnalyticsByPin.has(row.pin_id)) {
-      latestAnalyticsByPin.set(row.pin_id, {
-        impressionen: row.impressionen ?? 0,
-        klicks: row.klicks ?? 0,
-      })
-    }
-  }
-
-  const pinIdsByKeyword = new Map<string, Set<string>>()
-  for (const row of pinKeywordRows) {
-    const set = pinIdsByKeyword.get(row.keyword_id) ?? new Set<string>()
-    set.add(row.pin_id)
-    pinIdsByKeyword.set(row.keyword_id, set)
-  }
-
-  const keywordSignalById: Record<string, KeywordSignal> = {}
-  pinIdsByKeyword.forEach((pinIds, keywordId) => {
-    if (pinIds.size === 0) {
-      keywordSignalById[keywordId] = 'unused'
-      return
-    }
-    let ctrSum = 0
-    let ctrCount = 0
-    pinIds.forEach((pinId) => {
-      const a = latestAnalyticsByPin.get(pinId)
-      if (!a) return
-      if (a.impressionen > 0) {
-        ctrSum += (a.klicks / a.impressionen) * 100
-        ctrCount += 1
-      }
-    })
-    const avgCtr = ctrCount > 0 ? ctrSum / ctrCount : 0
-    if (avgCtr > 2 && pinIds.size >= 3) {
-      keywordSignalById[keywordId] = 'stark'
-    } else if (avgCtr >= 1 && avgCtr <= 2) {
-      keywordSignalById[keywordId] = 'gut'
-    } else {
-      keywordSignalById[keywordId] = 'beobachten'
-    }
-  })
-
   const loadError =
     pinsRes.error?.message ??
     contentsRes.error?.message ??
@@ -320,14 +237,71 @@ export default async function PinProduktionPage() {
     <div className="p-8">
       <header className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900">Pin-Produktion</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          Hier erfasst du alle Pins — veröffentlichte, geplante und
-          Entwürfe. Du siehst welche Keywords in deinen Pins stecken
-          (📌 Titel · 📝 Beschreibung), kannst nach Board, Status,
-          Keyword und mehr filtern und neue Pins direkt anlegen oder per
-          CSV importieren. Die Grundlage für dein monatliches
-          Analytics-Update.
+        <p className="mt-1 max-w-3xl text-sm leading-relaxed text-gray-600">
+          Hier verwaltest du alle deine Pins: veröffentlichte, geplante und
+          Entwürfe. Du siehst, welche Keywords in jedem Pin stecken (📌 im
+          Titel, 📝 in der Beschreibung), filterst nach Board, Status, Keyword
+          und mehr, und legst neue Pins direkt an oder importierst sie per CSV.
+          Diese Seite ist die Grundlage für dein monatliches Analytics-Update.
         </p>
+        <details className="group mt-4 max-w-3xl rounded-lg border border-gray-200 bg-white shadow-sm">
+          <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-4 text-base font-semibold text-gray-900 hover:bg-red-50 [&::-webkit-details-marker]:hidden">
+            <span
+              className="text-lg leading-none text-gray-400 transition-transform"
+              aria-hidden
+            >
+              <span className="inline group-open:hidden">▸</span>
+              <span className="hidden group-open:inline">▾</span>
+            </span>
+            <span className="flex-1">So arbeitest du mit dieser Seite</span>
+          </summary>
+          <div className="space-y-4 border-t border-gray-100 px-5 py-5 text-sm leading-relaxed text-gray-700">
+            <div>
+              <p className="font-semibold text-gray-900">
+                Zwei Wege, einen Pin anzulegen
+              </p>
+              <p>
+                Neuen Pin erstellen führt dich Schritt für Schritt: Du
+                beschreibst das Thema, wählst Keywords und bekommst einen
+                KI-Prompt für Titel, Hook und Beschreibung. Pin manuell
+                eintragen ist der schnelle Weg für fertige Pins, ohne KI-Schritt.
+              </p>
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900">
+                Wo deine Keywords stecken
+              </p>
+              <p>
+                An jedem Pin siehst du, wo seine Keywords vorkommen: 📌 steht
+                für den Titel, 📝 für die Beschreibung. So erkennst du auf einen
+                Blick, ob deine wichtigen Keywords an den richtigen Stellen
+                stehen. Die Farbe eines Keyword-Chips zeigt, wie es läuft: grün
+                steht für ein starkes Signal, gelb für beobachten, grau für noch
+                keine oder wenig aussagekräftige Daten.
+              </p>
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900">
+                Der Status berechnet sich selbst
+              </p>
+              <p>
+                Den Status (Entwurf, Geplant, Veröffentlicht) setzt Pin-Flow
+                automatisch aus dem Veröffentlichungsdatum. Du musst ihn nicht
+                selbst pflegen.
+              </p>
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900">
+                Mehrere Pins auf einmal
+              </p>
+              <p>
+                Über Pins importieren bringst du viele Pins gleichzeitig aus
+                einer CSV-Datei herein, etwa wenn du sie in einer Tabelle
+                vorbereitet hast.
+              </p>
+            </div>
+          </div>
+        </details>
       </header>
 
       {loadError && (
@@ -346,7 +320,7 @@ export default async function PinProduktionPage() {
         saisonEvents={saisonEvents}
         comboCount={comboCount}
         customSignalwoerter={customSignalwoerter}
-        keywordSignalById={keywordSignalById}
+        deaktivierteSignalwoerter={deaktivierteSignalwoerter}
       />
     </div>
   )

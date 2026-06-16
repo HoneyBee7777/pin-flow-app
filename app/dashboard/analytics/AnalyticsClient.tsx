@@ -14,9 +14,8 @@ import PinsTab from './PinsTab'
 import ProfilTab from './ProfilTab'
 import type { AudienceSnapshot } from '@/lib/audience-types'
 import {
-  addDays,
   effectiveZeitraum,
-  todayIso,
+  recommendedNextZeitraum,
   type BoardAnalyticsEntry,
   type BoardAnalyticsRow,
   type BoardOption,
@@ -43,7 +42,7 @@ export type PendingImport = {
 type Tab = 'eingabe' | 'profil' | 'pins' | 'boards' | 'audience'
 
 const TABS: Array<{ id: Tab; label: string }> = [
-  { id: 'eingabe', label: '✏️ Eingabe' },
+  { id: 'eingabe', label: 'Eingabe' },
   { id: 'profil', label: 'Profil-Entwicklung' },
   { id: 'pins', label: 'Top Pins' },
   { id: 'boards', label: 'Boards' },
@@ -187,10 +186,8 @@ export default function AnalyticsClient({
     return max
   }, [profilAnalytics, pinAnalytics])
 
-  const expectedZeitraumVon = latestZeitraumBis
-    ? addDays(latestZeitraumBis, 1)
-    : null
-  const expectedZeitraumBis = addDays(todayIso(), -1)
+  const { von: expectedZeitraumVon, bis: expectedZeitraumBis } =
+    recommendedNextZeitraum(latestZeitraumBis)
 
   const pinsPending = pendingImport?.unmatchedPins ?? []
   const boardsPending = pendingImport?.unmatchedBoards ?? []
@@ -223,7 +220,7 @@ export default function AnalyticsClient({
                   : 0
             const label =
               t.id === 'eingabe' && totalPending > 0
-                ? `✏️ Eingabe (${totalPending} offen)`
+                ? `Eingabe (${totalPending} offen)`
                 : t.label
             return (
               <button
@@ -361,7 +358,7 @@ function ClassificationExplainerBanner() {
           </p>
           <ol className="ml-4 list-decimal space-y-1">
             <li>
-              Wir vergleichen jeden Pin mit deinem eigenen Durchschnitt — du
+              Wir vergleichen jeden Pin mit deinem eigenen Durchschnitt, du
               performst gegen dich selbst, nicht gegen Branchenwerte.
             </li>
             <li>
@@ -369,7 +366,7 @@ function ClassificationExplainerBanner() {
               Erfolg gefeiert werden.
             </li>
             <li>
-              Jede Diagnose hat eine konkrete Handlung — du musst nie raten, was
+              Jede Diagnose hat eine konkrete Handlung, du musst nie raten, was
               zu tun ist.
             </li>
           </ol>
@@ -444,10 +441,9 @@ function ClassificationV2Notice() {
   return (
     <div className="rounded-md border border-cyan-200 bg-cyan-50 p-3 text-sm text-cyan-900">
       <div className="flex items-start gap-3">
-        <span aria-hidden>💡</span>
         <div className="flex-1">
           Das Klassifikations-System wurde verbessert. Deine Pins wurden neu
-          bewertet — du wirst leichte Verschiebungen zwischen den Kategorien
+          bewertet, du wirst leichte Verschiebungen zwischen den Kategorien
           sehen. Das ist normal.
         </div>
         <button

@@ -1,20 +1,36 @@
 'use client'
 
 import Link from 'next/link'
-import { useState, useTransition, type FormEvent } from 'react'
+import { useMemo, useState, useTransition, type FormEvent } from 'react'
+import SortableTh from '@/components/SortableTh'
 import { addEvent, deleteEvent, updateEvent } from './actions'
 import {
   formatDateDe,
   SAISON_TYP_BADGE,
   SAISON_TYP_LABEL,
+  type EventStatus,
   type EventWithStatus,
   type SaisonTyp,
 } from './utils'
+
+type SortKey = 'event' | 'datum' | 'status' | 'typ'
+
+// Reihenfolge nach Dringlichkeit für die Status-Sortierung.
+const STATUS_RANK: Record<EventStatus, number> = {
+  hochphase: 0,
+  jetzt_pinnen: 1,
+  jetzt_produzieren: 2,
+  noch_zeit: 3,
+  evergreen: 4,
+  abgeschlossen: 5,
+}
 
 const TYP_OPTIONS: Array<{ value: SaisonTyp; label: string }> = [
   { value: 'feiertag', label: 'Feiertag' },
   { value: 'jahreszeit', label: 'Jahreszeit' },
   { value: 'shopping_event', label: 'Shopping-Event' },
+  { value: 'anlass', label: 'Anlass' },
+  { value: 'saison', label: 'Saison' },
   { value: 'evergreen', label: 'Evergreen' },
 ]
 
@@ -48,9 +64,64 @@ export default function SaisonClient({
   const [saisonTyp, setSaisonTyp] = useState<SaisonTyp | ''>('')
   const [isPending, startTransition] = useTransition()
   const [showPromptModal, setShowPromptModal] = useState(false)
+  const [expandedNotizId, setExpandedNotizId] = useState<string | null>(null)
+  const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' } | null>(
+    null
+  )
 
   const formOpen = showAddForm || editing !== null
   const isEvergreen = saisonTyp === 'evergreen'
+
+  function toggleSort(key: SortKey) {
+    setSort((cur) => {
+      if (!cur || cur.key !== key) return { key, dir: 'asc' }
+      if (cur.dir === 'asc') return { key, dir: 'desc' }
+      return null
+    })
+  }
+
+  function dirOf(key: SortKey): 'asc' | 'desc' | null {
+    return sort && sort.key === key ? sort.dir : null
+  }
+
+  // Ohne aktive Spaltensortierung bleibt die serverseitige Reihenfolge nach
+  // Datum (dringendste Events oben). Mit aktivem Sort wird nach der geklickten
+  // Spalte sortiert.
+  const sortedEvents = useMemo(() => {
+    if (!sort) return events
+    const dir = sort.dir === 'asc' ? 1 : -1
+    const arr = [...events]
+    arr.sort((a, b) => {
+      switch (sort.key) {
+        case 'event':
+          return a.event_name.localeCompare(b.event_name, 'de') * dir
+        case 'datum': {
+          const ad = a.event_datum ?? ''
+          const bd = b.event_datum ?? ''
+          if (ad === '' && bd !== '') return 1
+          if (bd === '' && ad !== '') return -1
+          if (ad === bd) return 0
+          return (ad < bd ? -1 : 1) * dir
+        }
+        case 'status':
+          return (
+            (STATUS_RANK[a.statusInfo.status] -
+              STATUS_RANK[b.statusInfo.status]) *
+            dir
+          )
+        case 'typ':
+          return (
+            SAISON_TYP_LABEL[a.saison_typ].localeCompare(
+              SAISON_TYP_LABEL[b.saison_typ],
+              'de'
+            ) * dir
+          )
+        default:
+          return 0
+      }
+    })
+    return arr
+  }, [events, sort])
 
   function openAdd() {
     setEditing(null)
@@ -117,13 +188,13 @@ export default function SaisonClient({
           onClick={() => setShowPromptModal(true)}
           className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
         >
-          ✨ KI-Prompt: Events für deine Nische
+          KI-Prompt für Saison-Events
         </button>
         <Link
           href="/dashboard/saison-kalender/planung"
           className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
         >
-          📅 Nächstes Jahr planen
+          Nächstes Jahr planen
         </Link>
       </div>
 
@@ -201,7 +272,7 @@ export default function SaisonClient({
                   Datum ändert sich jährlich (z.B. Ostern, Muttertag)
                 </label>
                 <p className="text-xs text-gray-500">
-                  Aktivieren bei beweglichen Feiertagen — diese Events
+                  Aktivieren bei beweglichen Feiertagen, diese Events
                   erscheinen im Modus „Nächstes Jahr planen".
                 </p>
               </div>
@@ -250,7 +321,10 @@ export default function SaisonClient({
               className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500 disabled:bg-gray-100 disabled:text-gray-500"
             />
             <p className="mt-1 text-xs text-gray-500">
-              Wie viele Tage vor dem Event sollen Pins live gehen? Standard: 60.
+              Wie viele Tage vor dem Event sollen deine Pins live sein? Das
+              hängt vom Event ab: große oder früh gesuchte Anlässe brauchen mehr
+              Vorlauf (Richtung 90 Tage), kleinere weniger (Richtung 14 Tage).
+              Lässt du das Feld leer, rechnet Pin-Flow mit 60.
             </p>
           </div>
 
@@ -294,24 +368,36 @@ export default function SaisonClient({
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="sticky top-0 z-10 bg-gray-50">
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+              <SortableTh
+                dir={dirOf('status')}
+                onClick={() => toggleSort('status')}
+              >
                 Status
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+              </SortableTh>
+              <SortableTh
+                dir={dirOf('event')}
+                onClick={() => toggleSort('event')}
+              >
                 Event
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+              </SortableTh>
+              <SortableTh
+                dir={dirOf('datum')}
+                onClick={() => toggleSort('datum')}
+              >
                 Datum
-              </th>
+              </SortableTh>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Pin-Fenster
               </th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Countdown
               </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+              <SortableTh
+                dir={dirOf('typ')}
+                onClick={() => toggleSort('typ')}
+              >
                 Typ
-              </th>
+              </SortableTh>
               <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Aktion
               </th>
@@ -328,7 +414,7 @@ export default function SaisonClient({
                 </td>
               </tr>
             ) : (
-              events.map((ev) => {
+              sortedEvents.map((ev) => {
                 const s = ev.statusInfo
                 return (
                   <tr key={ev.id} className="align-top hover:bg-gray-50">
@@ -344,6 +430,22 @@ export default function SaisonClient({
                     <td className="px-4 py-3 text-sm font-medium text-gray-900">
                       {ev.event_name}
                       {ev.notizen && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setExpandedNotizId(
+                              expandedNotizId === ev.id ? null : ev.id
+                            )
+                          }
+                          aria-expanded={expandedNotizId === ev.id}
+                          className="mt-1 block text-xs font-normal text-gray-400 hover:text-gray-600"
+                        >
+                          {expandedNotizId === ev.id
+                            ? 'Notiz ausblenden'
+                            : 'Notiz anzeigen'}
+                        </button>
+                      )}
+                      {ev.notizen && expandedNotizId === ev.id && (
                         <p className="mt-1 text-xs font-normal text-gray-500">
                           {ev.notizen}
                         </p>
@@ -355,8 +457,8 @@ export default function SaisonClient({
                         {ev.datum_variabel && (
                           <span
                             className="text-yellow-500"
-                            title="Datum ändert sich jährlich — bitte vorausschauend pflegen"
-                            aria-label="Datum ändert sich jährlich — bitte vorausschauend pflegen"
+                            title="Datum ändert sich jährlich, bitte vorausschauend pflegen"
+                            aria-label="Datum ändert sich jährlich, bitte vorausschauend pflegen"
                           >
                             ⚠️
                           </span>
@@ -364,10 +466,10 @@ export default function SaisonClient({
                       </span>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-700">
-                      {s.pinFenster ?? '—'}
+                      {s.pinFenster ?? '-'}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-700">
-                      {s.countdown ?? '—'}
+                      {s.countdown ?? '-'}
                     </td>
                     <td className="px-4 py-3 text-sm">
                       <span
@@ -437,7 +539,7 @@ function NischePromptModal({ onClose }: { onClose: () => void }) {
       `3. Welche saisonalen Themen kann ich aus meinem Hauptangebot ableiten?\n` +
       `4. Was sind typische Sucheingaben meiner Zielgruppe pro Saison auf Pinterest?\n` +
       `5. Wie viele Wochen vor dem Event sollte ich produzieren / pinnen für jede dieser Saisons?\n\n` +
-      `Berücksichtige Pinterest-Suchverhalten: Nutzer:innen recherchieren 4-12 Wochen vor einem Event. Pinterest-Pins brauchen ca. 60 Tage zur vollen Ausspielung. Hauptevents wie Weihnachten oder Black Friday brauchen 90 Tage Vorlauf, mittlere Events wie Muttertag oder Valentinstag 45 Tage.`
+      `Berücksichtige Pinterest-Suchverhalten: Deine Zielgruppe recherchiert 4 bis 12 Wochen vor einem Event. Pinterest-Pins brauchen ca. 60 Tage zur vollen Ausspielung. Große oder früh gesuchte Events wie Weihnachten oder Black Friday brauchen viel Vorlauf (Richtung 90 Tage), kleinere Anlässe deutlich weniger.`
     setGenerated(prompt)
     setCopied(false)
   }
@@ -471,11 +573,11 @@ function NischePromptModal({ onClose }: { onClose: () => void }) {
               id="nische-prompt-modal-title"
               className="text-lg font-semibold text-gray-900"
             >
-              ✨ Personalisierte Saison-Events für deine Nische
+              Personalisierte Saison-Events für deine Nische
             </h2>
             <p className="mt-1 text-sm text-gray-600">
-              Fülle die Felder aus — wir generieren daraus einen fertigen
-              KI-Prompt.
+              Fülle die Felder aus. Pin-Flow erzeugt daraus einen fertigen
+              Prompt für deine KI.
             </p>
           </div>
           <button

@@ -11,21 +11,24 @@ function isTyp(value: string): value is VorlagenTyp {
 type Input = {
   name: string
   canva_link: string | null
-  vorlagen_typ: VorlagenTyp
-  farbschema: string | null
+  vorlagen_typ: VorlagenTyp | null
   notizen: string | null
 }
 
 function parseInput(formData: FormData): { input: Input } | { error: string } {
   const name = String(formData.get('name') ?? '').trim()
   const canvaLinkRaw = String(formData.get('canva_link') ?? '').trim()
-  const typRaw = String(formData.get('vorlagen_typ') ?? '')
-  const farbschemaRaw = String(formData.get('farbschema') ?? '').trim()
+  const typRaw = String(formData.get('vorlagen_typ') ?? '').trim()
   const notizenRaw = String(formData.get('notizen') ?? '').trim()
 
   if (!name) return { error: 'Name darf nicht leer sein.' }
-  if (!isTyp(typRaw))
-    return { error: 'Bitte einen gültigen Vorlagen-Typ wählen.' }
+  // Vorlagen-Typ ist optional. Ist ein Wert gesetzt, muss er gültig sein.
+  let vorlagen_typ: VorlagenTyp | null = null
+  if (typRaw) {
+    if (!isTyp(typRaw))
+      return { error: 'Bitte einen gültigen Vorlagen-Typ wählen.' }
+    vorlagen_typ = typRaw
+  }
   if (canvaLinkRaw && !/^https?:\/\//i.test(canvaLinkRaw))
     return { error: 'Canva-Link muss mit http:// oder https:// beginnen.' }
 
@@ -33,8 +36,7 @@ function parseInput(formData: FormData): { input: Input } | { error: string } {
     input: {
       name,
       canva_link: canvaLinkRaw || null,
-      vorlagen_typ: typRaw,
-      farbschema: farbschemaRaw || null,
+      vorlagen_typ,
       notizen: notizenRaw || null,
     },
   }

@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useTransition, type FormEvent } from 'react'
+import { useMemo, useState, useTransition, type FormEvent } from 'react'
+import SortableTh from '@/components/SortableTh'
 import { addVorlage, deleteVorlage, updateVorlage } from './actions'
 import {
   VORLAGEN_TYPEN,
@@ -9,6 +10,8 @@ import {
   type VorlageWithStats,
   type VorlagenTyp,
 } from './utils'
+
+type SortKey = 'name' | 'typ' | 'pins'
 
 const TYP_OPTIONS: Array<{ value: VorlagenTyp; label: string }> =
   VORLAGEN_TYPEN.map((t) => ({ value: t, label: VORLAGEN_TYP_LABEL[t] }))
@@ -41,8 +44,51 @@ export default function CanvaClient({
   const [editing, setEditing] = useState<VorlageWithStats | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' } | null>(
+    null
+  )
 
   const formOpen = showAddForm || editing !== null
+
+  function toggleSort(key: SortKey) {
+    setSort((cur) => {
+      if (!cur || cur.key !== key) return { key, dir: 'asc' }
+      if (cur.dir === 'asc') return { key, dir: 'desc' }
+      return null
+    })
+  }
+
+  function dirOf(key: SortKey): 'asc' | 'desc' | null {
+    return sort && sort.key === key ? sort.dir : null
+  }
+
+  // Ohne aktive Spaltensortierung bleibt die serverseitige Reihenfolge nach
+  // created_at (aufsteigend). Mit aktivem Sort wird nach der geklickten Spalte
+  // sortiert.
+  const sortedVorlagen = useMemo(() => {
+    if (!sort) return vorlagen
+    const dir = sort.dir === 'asc' ? 1 : -1
+    const arr = [...vorlagen]
+    arr.sort((a, b) => {
+      switch (sort.key) {
+        case 'name':
+          return a.name.localeCompare(b.name, 'de') * dir
+        case 'typ': {
+          // Vorlagen ohne Typ ans Ende, unabhängig von der Richtung.
+          const al = a.vorlagen_typ ? VORLAGEN_TYP_LABEL[a.vorlagen_typ] : ''
+          const bl = b.vorlagen_typ ? VORLAGEN_TYP_LABEL[b.vorlagen_typ] : ''
+          if (al === '' && bl !== '') return 1
+          if (bl === '' && al !== '') return -1
+          return al.localeCompare(bl, 'de') * dir
+        }
+        case 'pins':
+          return (a.pinCount - b.pinCount) * dir
+        default:
+          return 0
+      }
+    })
+    return arr
+  }, [vorlagen, sort])
 
   function openAdd() {
     setEditing(null)
@@ -156,41 +202,21 @@ export default function CanvaClient({
               htmlFor="vorlagen_typ"
               className="block text-sm font-medium text-gray-700"
             >
-              Vorlagen-Typ <span className="text-red-600">*</span>
+              Vorlagen-Typ
             </label>
             <select
               id="vorlagen_typ"
               name="vorlagen_typ"
-              required
               defaultValue={editing?.vorlagen_typ ?? ''}
               className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
             >
-              <option value="" disabled>
-                Bitte wählen…
-              </option>
+              <option value="">— ohne Typ —</option>
               {TYP_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
                 </option>
               ))}
             </select>
-          </div>
-
-          <div>
-            <label
-              htmlFor="farbschema"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Farbschema
-            </label>
-            <input
-              id="farbschema"
-              name="farbschema"
-              type="text"
-              placeholder="z.B. Rosa/Weiß"
-              defaultValue={editing?.farbschema ?? ''}
-              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-            />
           </div>
 
           <div>
@@ -233,21 +259,18 @@ export default function CanvaClient({
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="sticky top-0 z-10 bg-gray-50">
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+              <SortableTh dir={dirOf('name')} onClick={() => toggleSort('name')}>
                 Name
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+              </SortableTh>
+              <SortableTh dir={dirOf('typ')} onClick={() => toggleSort('typ')}>
                 Typ
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Farbschema
-              </th>
+              </SortableTh>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Canva
               </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+              <SortableTh dir={dirOf('pins')} onClick={() => toggleSort('pins')}>
                 Pins
-              </th>
+              </SortableTh>
               <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Aktion
               </th>
@@ -257,14 +280,14 @@ export default function CanvaClient({
             {vorlagen.length === 0 ? (
               <tr>
                 <td
-                  colSpan={6}
+                  colSpan={5}
                   className="px-4 py-8 text-center text-sm text-gray-500"
                 >
                   Noch keine Vorlagen. Füge eine hinzu.
                 </td>
               </tr>
             ) : (
-              vorlagen.map((v) => (
+              sortedVorlagen.map((v) => (
                 <tr key={v.id} className="align-top hover:bg-gray-50">
                   <td className="px-4 py-3 text-sm font-medium text-gray-900">
                     <div className="flex flex-wrap items-center gap-2">
@@ -285,14 +308,15 @@ export default function CanvaClient({
                     )}
                   </td>
                   <td className="px-4 py-3 text-sm">
-                    <span
-                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${VORLAGEN_TYP_BADGE[v.vorlagen_typ]}`}
-                    >
-                      {VORLAGEN_TYP_LABEL[v.vorlagen_typ]}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-700">
-                    {v.farbschema ?? '—'}
+                    {v.vorlagen_typ ? (
+                      <span
+                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${VORLAGEN_TYP_BADGE[v.vorlagen_typ]}`}
+                      >
+                        {VORLAGEN_TYP_LABEL[v.vorlagen_typ]}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400">—</span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-sm">
                     {v.canva_link ? (

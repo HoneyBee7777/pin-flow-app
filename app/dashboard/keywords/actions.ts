@@ -32,8 +32,6 @@ export async function addKeyword(
 
   const keyword = String(formData.get('keyword') ?? '').trim()
   const typ = String(formData.get('typ') ?? '')
-  const saison_peak =
-    String(formData.get('saison_peak') ?? '').trim() || null
   const notizen = String(formData.get('notizen') ?? '').trim() || null
   const contentIds = readContentIds(formData)
 
@@ -46,7 +44,6 @@ export async function addKeyword(
       user_id: user.id,
       keyword,
       typ,
-      saison_peak,
       notizen,
     })
     .select('id')
@@ -89,8 +86,6 @@ export async function updateKeyword(
 
   const keyword = String(formData.get('keyword') ?? '').trim()
   const typ = String(formData.get('typ') ?? '')
-  const saison_peak =
-    String(formData.get('saison_peak') ?? '').trim() || null
   const notizen = String(formData.get('notizen') ?? '').trim() || null
   const contentIds = readContentIds(formData)
 
@@ -99,7 +94,7 @@ export async function updateKeyword(
 
   const { error: updateError } = await supabase
     .from('keywords')
-    .update({ keyword, typ, saison_peak, notizen })
+    .update({ keyword, typ, notizen })
     .eq('id', id)
 
   if (updateError) return { error: updateError.message }
@@ -165,7 +160,6 @@ export async function importKeywords(
     user_id: user.id,
     keyword,
     typ,
-    saison_peak: null,
     notizen: null,
   }))
 

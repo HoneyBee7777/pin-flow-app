@@ -1,9 +1,10 @@
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase-server'
 import CanvaClient from './CanvaClient'
 import type { CanvaVorlage, VorlageWithStats } from './utils'
 
 const SELECT_FIELDS =
-  'id, user_id, name, canva_link, vorlagen_typ, farbschema, notizen, created_at'
+  'id, user_id, name, canva_link, vorlagen_typ, notizen, created_at'
 
 type PinRow = {
   canva_vorlage_id: string | null
@@ -65,10 +66,77 @@ export default async function CanvaVorlagenPage() {
     <div className="p-8">
       <header className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Canva-Vorlagen</h1>
-        <p className="mt-1 text-sm text-gray-600">
-          Verwalte deine Canva-Vorlagen für Pinterest-Pins. Die Spalte „Pins"
-          zeigt, wie oft jede Vorlage bereits verwendet wurde.
+        <p className="mt-1 max-w-3xl text-sm leading-relaxed text-gray-600">
+          Hier sammelst du deine Canva-Vorlagen für Pinterest-Pins. Beim Anlegen
+          eines Pins wählst du die passende Vorlage aus, und die Spalte „Pins"
+          zeigt dir, wie oft jede Vorlage schon im Einsatz war. Ein eigenes,
+          wiedererkennbares Design ist auf Pinterest ein echter Vorteil: Wer
+          deine Pins im Feed sofort erkennt, klickt eher.
         </p>
+        <details className="group mt-4 max-w-3xl rounded-lg border border-gray-200 bg-white shadow-sm">
+          <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-4 text-base font-semibold text-gray-900 hover:bg-red-50 [&::-webkit-details-marker]:hidden">
+            <span
+              className="text-lg leading-none text-gray-400 transition-transform"
+              aria-hidden
+            >
+              <span className="inline group-open:hidden">▸</span>
+              <span className="hidden group-open:inline">▾</span>
+            </span>
+            <span className="flex-1">So funktioniert diese Seite</span>
+          </summary>
+          <div className="space-y-4 border-t border-gray-100 px-5 py-5 text-sm leading-relaxed text-gray-700">
+            <div>
+              <p className="font-semibold text-gray-900">Was du einträgst</p>
+              <p>
+                Pro Vorlage einen Namen, optional den Canva-Link zum direkten
+                Öffnen, den Vorlagen-Typ als grobe Einordnung und eine Notiz. Nur
+                der Name ist Pflicht.
+              </p>
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900">
+                Dein Branding macht den Unterschied
+              </p>
+              <p>
+                Das Wichtigste an deinen Vorlagen ist ein einheitlicher Look.
+                Verwende überall dieselben Farben, dieselbe Schrift und dein
+                Logo, passend zu deiner Website. So entsteht Wiedererkennung:
+                Menschen sehen einen Pin und wissen sofort, dass er von dir ist.
+                Das baut Vertrauen auf und hebt dich von austauschbaren Pins ab.
+                Lege dir am besten ein festes Set aus wenigen Vorlagen an und
+                bleib dabei, statt jeden Pin neu zu gestalten.
+              </p>
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900">
+                Wie Vorlage und Pin zusammenhängen
+              </p>
+              <p>
+                Beim Anlegen eines Pins wählst du seine Vorlage aus. Die Spalte
+                „Pins" zählt, wie viele deiner Pins eine Vorlage nutzen. So
+                siehst du, welche Vorlagen du wirklich einsetzt und welche
+                brachliegen.
+              </p>
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900">
+                Aus einer Vorlage viele Pins
+              </p>
+              <p>
+                Mit einer guten Vorlage machst du aus einem einzigen Foto schnell
+                mehrere unterschiedliche Pins. Wie das effizient geht, zeigt dir
+                die{' '}
+                <Link
+                  href="/dashboard/strategie?tab=design&accordion=effiziente-pin-produktion"
+                  className="font-medium text-red-600 hover:underline"
+                >
+                  Anleitung zur effizienten Pin-Produktion
+                </Link>
+                .
+              </p>
+            </div>
+          </div>
+        </details>
       </header>
 
       {loadError && (

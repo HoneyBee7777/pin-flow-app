@@ -3,6 +3,8 @@ export type SaisonTyp =
   | 'jahreszeit'
   | 'shopping_event'
   | 'evergreen'
+  | 'anlass'
+  | 'saison'
 
 export type SaisonEvent = {
   id: string
@@ -42,6 +44,8 @@ export const SAISON_TYP_LABEL: Record<SaisonTyp, string> = {
   jahreszeit: 'Jahreszeit',
   shopping_event: 'Shopping-Event',
   evergreen: 'Evergreen',
+  anlass: 'Anlass',
+  saison: 'Saison',
 }
 
 export const SAISON_TYP_BADGE: Record<SaisonTyp, string> = {
@@ -49,11 +53,13 @@ export const SAISON_TYP_BADGE: Record<SaisonTyp, string> = {
   jahreszeit: 'bg-blue-100 text-blue-700',
   shopping_event: 'bg-purple-100 text-purple-700',
   evergreen: 'bg-emerald-100 text-emerald-700',
+  anlass: 'bg-orange-100 text-orange-700',
+  saison: 'bg-teal-100 text-teal-700',
 }
 
 const STATUS_LABEL: Record<EventStatus, string> = {
   abgeschlossen: 'Abgeschlossen',
-  hochphase: 'Hochphase — nicht mehr pinnen!',
+  hochphase: 'Hochphase: nicht mehr pinnen!',
   jetzt_pinnen: 'Jetzt pinnen',
   jetzt_produzieren: 'Jetzt produzieren',
   noch_zeit: 'Noch Zeit',
@@ -95,7 +101,7 @@ export function diffDays(fromIso: string, toIso: string): number {
 }
 
 export function formatDateDe(iso: string | null): string {
-  if (!iso) return '—'
+  if (!iso) return '-'
   const [y, m, d] = iso.split('-')
   return `${d}.${m}.${y}`
 }

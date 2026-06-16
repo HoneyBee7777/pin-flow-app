@@ -259,7 +259,7 @@ export default function ImportPinterestCsvModal({
               </div>
 
               <p className="text-xs text-gray-500">
-                Alle drei Felder sind optional — du kannst auch nur 1 oder
+                Alle drei Felder sind optional, du kannst auch nur 1 oder
                 2 CSVs hochladen. Der Zeitraum wird automatisch aus dem
                 Dateinamen ausgelesen.
               </p>
@@ -384,7 +384,7 @@ function FileSlotInput({
       </div>
       {file && detectedPeriod && (
         <p className="mt-1 break-all text-xs text-teal-700">
-          ✓ {file.name} — Zeitraum:{' '}
+          ✓ {file.name}, Zeitraum:{' '}
           {formatPeriodCompact(detectedPeriod.von, detectedPeriod.bis)}
         </p>
       )}

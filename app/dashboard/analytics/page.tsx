@@ -96,7 +96,7 @@ export default async function AnalyticsPage() {
       .order('datum', { ascending: false }),
     supabase
       .from('boards')
-      .select('id, name, pinterest_url, geheim')
+      .select('id, name, pinterest_url')
       .order('name', { ascending: true }),
     supabase
       .from('board_analytics')
@@ -173,8 +173,7 @@ export default async function AnalyticsPage() {
   })
 
   // ===== Boards =====
-  type BoardRow = BoardOption & { geheim: boolean | null }
-  const boardsRaw = (boardsRes.data ?? []) as BoardRow[]
+  const boardsRaw = (boardsRes.data ?? []) as BoardOption[]
   const boards: BoardOption[] = boardsRaw.map(({ id, name, pinterest_url }) => ({
     id,
     name,
@@ -296,10 +295,10 @@ export default async function AnalyticsPage() {
     }
   })
 
-  // Öffentliche Boards (geheim = false) ohne board_analytics-Eintrag
+  // Angelegte Boards ohne board_analytics-Eintrag
   const boardsWithAnalyticsIds = new Set(latestByBoard.keys())
   const publicBoardsWithoutAnalytics = boardsRaw
-    .filter((b) => b.geheim === false && !boardsWithAnalyticsIds.has(b.id))
+    .filter((b) => !boardsWithAnalyticsIds.has(b.id))
     .map((b) => ({ id: b.id, name: b.name }))
 
   // ===== Persistente „Nicht zugeordnet"-Liste in das von AnalyticsClient

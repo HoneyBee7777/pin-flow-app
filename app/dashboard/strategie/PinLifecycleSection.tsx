@@ -67,7 +67,7 @@ export default function PinLifecycleSection({
         setOpen((e.currentTarget as HTMLDetailsElement).open)
       }
     >
-      <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-4 text-base font-semibold text-gray-900 hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
+      <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-4 text-base font-semibold text-gray-900 hover:bg-red-50 [&::-webkit-details-marker]:hidden">
         <span
           className="text-lg leading-none text-gray-400 transition-transform"
           aria-hidden

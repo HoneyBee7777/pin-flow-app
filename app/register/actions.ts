@@ -5,6 +5,16 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase-server'
 
 export async function signup(formData: FormData) {
+  // Selbst-Registrierung kann per Env-Flag deaktiviert sein. Der Check
+  // muss auch hier (nicht nur in der UI) stehen, damit POST-Anfragen ohne
+  // sichtbares Formular geblockt werden.
+  if (process.env.NEXT_PUBLIC_ALLOW_SIGNUP === 'false') {
+    redirect(
+      '/register?error=' +
+        encodeURIComponent('Registrierung ist deaktiviert. Zugang nur per Einladung.')
+    )
+  }
+
   const supabase = createClient()
 
   const email = formData.get('email') as string

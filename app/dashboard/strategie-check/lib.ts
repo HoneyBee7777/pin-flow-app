@@ -1,423 +1,364 @@
-// Reine Berechnungslogik für die Dashboard-Sektion „Strategie-Check".
-// Vergleicht die IST-Verteilung der Pins (letzte 180 Tage) mit der
-// SOLL-Strategie aus den Einstellungen.
+// Phase B — Berechnungslogik für den neuen Strategie-Check (V2).
+//
+// Vergleicht die tatsächliche Pin-Arbeit gegen die im Wizard festgelegte
+// Strategie. Drei Bereiche (siehe STRATEGIE-UMBAU-AUDIT.md, „Monatliches
+// Tracking pro Baustein"):
+//   1. Zielflächen-Verteilung (Soll/Ist über die verknüpften Ziel-URLs)
+//   2. Pinning-Frequenz (Soll-Korridor vs. Ist im Zeitfenster)
+//   3. Content-Säulen-Abdeckung (welche Säulen haben neue Pins bekommen)
+//
+// Reine, testbare Funktion ohne Seiteneffekte. Sämtliche DB-Auflösungen
+// (pins.ziel_url_id → ziel_urls.zielflaeche, pins.board_id → boards.kategorie)
+// macht der Aufrufer/Loader; hier kommen die bereits aufgelösten Werte an.
 
-export const STRATEGIE_CHECK_FENSTER_TAGE = 180
+import {
+  PINNING_FREQUENZ_OPTIONS,
+  ZIELFLAECHEN,
+  isZielflaeche,
+  leereZielflaechen,
+  type PinningFrequenz,
+  type Zielflaeche,
+  type ZielflaechenVerteilung,
+} from '../strategie/lib'
+
 export const STRATEGIE_CHECK_DEFAULT_GELB = 5
 export const STRATEGIE_CHECK_DEFAULT_ROT = 15
+export const STRATEGIE_CHECK_V2_FENSTER_TAGE = 30
 
-export type StrategiePinRow = {
-  strategie_typ: string | null
-  conversion_ziel: string | null
-  pin_format: string | null
+// Nur diese Status zählen in die Strategie-Auswertung. Entwürfe sind
+// Arbeitsstände und lenken noch keinen Traffic, daher ausgeklammert.
+const STRATEGIE_CHECK_RELEVANTE_STATUS = ['veroeffentlicht', 'geplant'] as const
+
+// Soll-Frequenz als grobe Monatsspanne (Pins pro Monat), abgeleitet aus den
+// Tagesspannen der Wizard-Optionen (1-3 / 3-5 / 5-10 Pins pro Tag × 30).
+const FREQUENZ_MONAT: Record<PinningFrequenz, { min: number; max: number }> = {
+  einsteiger: { min: 30, max: 90 },
+  wachstum: { min: 90, max: 150 },
+  etabliert: { min: 150, max: 300 },
+}
+
+// =====================================================
+// Eingaben
+// =====================================================
+export type StrategieCheckV2Settings = {
+  // Soll-Verteilung der Zielflächen (7 Werte, in Summe idealerweise 100).
+  zielSoll: ZielflaechenVerteilung
+  pinningFrequenz: PinningFrequenz | null
+  // Im Wizard bestätigte Content-Säulen (Board-Kategorien) oder leer.
+  contentSaeulen: string[]
+  onboardingAbgeschlossen: boolean
+  schwelleGelb: number | null
+  schwelleRot: number | null
+}
+
+export type StrategieCheckV2Pin = {
+  // Status des Pins (pins.status). Nur 'veroeffentlicht' und 'geplant' fließen
+  // in die Strategie-Auswertung ein; 'entwurf' wird ausgeklammert.
+  status: string | null
+  // Zielfläche der verknüpften Ziel-URL (ziel_urls.zielflaeche) oder null.
+  zielflaeche: string | null
+  // Kategorie des Boards des Pins (boards.kategorie) oder null.
+  boardKategorie: string | null
   created_at: string | null
+  geplante_veroeffentlichung: string | null
 }
 
-export type StrategieSettings = {
-  strategie_soll_blog: number | null
-  strategie_soll_affiliate: number | null
-  strategie_soll_produkt: number | null
-  ziel_soll_traffic: number | null
-  ziel_soll_lead: number | null
-  ziel_soll_sales: number | null
-  format_soll_standard: number | null
-  format_soll_video: number | null
-  format_soll_collage: number | null
-  format_soll_carousel: number | null
-  strategie_onboarding_abgeschlossen: boolean | null
-  strategie_check_schwelle_gelb: number | null
-  strategie_check_schwelle_rot: number | null
-}
+// =====================================================
+// Ergebnis-Typen
+// =====================================================
+export type AbweichungStatus = 'im_plan' | 'leicht_daneben' | 'deutlich_daneben'
 
-export type DiffColor = 'green' | 'yellow' | 'red'
+export type StrategieGesamtStatus =
+  | 'auf_kurs'
+  | 'leicht_daneben'
+  | 'deutlich_daneben'
+  | 'unbekannt'
 
-export type CheckItem = {
-  key: string
+export type FrequenzLage = 'unter' | 'im_korridor' | 'ueber' | 'unbekannt'
+
+export type ZielflaecheCheckItem = {
+  flaeche: Zielflaeche
   label: string
-  ist: number // 0..100
-  soll: number // 0..100
+  soll: number // Prozent 0..100
+  ist: number // Prozent 0..100 (eine Nachkommastelle)
   diff: number // ist - soll
-  color: DiffColor
-  message: string
-  recommendation: string | null // null wenn im Plan
+  status: AbweichungStatus
 }
 
-export type CheckArea = {
-  key: 'mix' | 'ziel' | 'format'
-  header: string
-  items: CheckItem[]
-  pinsMitDaten: number
-  hasData: boolean
+export type ZielflaechenCheck = {
+  items: ZielflaecheCheckItem[]
+  pinsGesamt: number // Pins im Fenster gesamt
+  pinsZugeordnet: number // davon mit gültiger Zielfläche
+  pinsOhneZuordnung: number // ohne Ziel-URL oder ohne Zielfläche
+  hatDaten: boolean // pinsZugeordnet > 0
+  hatSoll: boolean // mindestens eine Soll-Fläche > 0
 }
 
-export type CoachingItem = {
-  area: CheckArea['key']
-  label: string
-  diff: number
-  recommendation: string
+export type FrequenzCheck = {
+  sollFrequenz: PinningFrequenz | null
+  sollLabel: string | null
+  sollMinProMonat: number | null
+  sollMaxProMonat: number | null
+  istPins: number // Pins im Fenster
+  istProMonat: number // auf 30 Tage normiert
+  lage: FrequenzLage
 }
 
-export type StrategieCheckResult = {
+export type SaeuleCheckItem = {
+  saeule: string
+  pins: number
+  aktiv: boolean
+}
+
+export type SaeulenCheck = {
+  items: SaeuleCheckItem[]
+  aktiveAnzahl: number
+  vernachlaessigtAnzahl: number
+  hatSaeulen: boolean
+}
+
+export type StrategieCheckV2 = {
   fensterTage: number
-  totalPinsImFenster: number
-  // Drei separate Zähler — pro Feld: NULL / '' / undefined zählen als fehlend.
-  pinsOhneStrategie: number
-  pinsOhneConversion: number
-  pinsOhneFormat: number
+  pinsImFenster: number
   onboardingAbgeschlossen: boolean
   schwelleGelb: number
   schwelleRot: number
-  areas: CheckArea[]
-  coachingTop3: CoachingItem[] // sortiert nach |diff| desc, max 3
-  allInPlan: boolean // true wenn coachingTop3 leer und Daten vorhanden
+  zielflaechen: ZielflaechenCheck
+  frequenz: FrequenzCheck
+  saeulen: SaeulenCheck
+  gesamtStatus: StrategieGesamtStatus
+  // Über ALLE Pins des Nutzers (nicht nur das Fenster): wie viele es gesamt
+  // gibt und wie viele davon kein gültiges Pin-Ziel haben. Für den Hinweis,
+  // dass das Strategie-Bild noch unvollständig ist.
+  pinsGesamtAlle: number
+  pinsGesamtOhneZuordnung: number
 }
 
 // =====================================================
-// Filter: nur Pins der letzten 180 Tage
+// Helfer
 // =====================================================
-export function filterPinsLetzte180Tage<T extends { created_at: string | null }>(
-  pins: T[],
-  todayIso: string
-): T[] {
-  const cutoff = new Date(todayIso + 'T00:00:00Z')
-  cutoff.setUTCDate(cutoff.getUTCDate() - STRATEGIE_CHECK_FENSTER_TAGE)
-  const cutoffMs = cutoff.getTime()
-  return pins.filter((p) => {
-    if (!p.created_at) return false
-    const created = new Date(p.created_at).getTime()
-    if (Number.isNaN(created)) return false
-    return created >= cutoffMs
-  })
-}
-
-// =====================================================
-// Diff-Bewertung
-// =====================================================
-function evaluateDiff(
-  diff: number,
-  schwelleGelb: number,
-  schwelleRot: number
-): { color: DiffColor; message: string } {
-  const abs = Math.abs(diff)
-  if (abs <= schwelleGelb) {
-    return { color: 'green', message: 'im Plan ✓' }
-  }
-  const richtung = diff > 0 ? 'über Plan' : 'unter Plan'
-  const sign = diff > 0 ? '+' : '−'
-  const rounded = Math.round(abs)
-  if (abs <= schwelleRot) {
-    return { color: 'yellow', message: `${sign}${rounded}% ${richtung}` }
-  }
-  return {
-    color: 'red',
-    message: `${sign}${rounded}% deutlich ${richtung} ⚠️`,
-  }
-}
-
-// =====================================================
-// Empfehlungs-Templates pro Bereich/Kanal/Richtung
-// =====================================================
-const RECOMMENDATIONS: Record<
-  string,
-  { hoch: string; niedrig: string }
-> = {
-  // Strategie-Mix
-  'mix:blog': {
-    hoch: 'Blog-Anteil reduzieren – mehr Affiliate- oder Produkt-Pins produzieren.',
-    niedrig:
-      'Blog-Anteil erhöhen – mehr Pins zu eigenen Blogbeiträgen erstellen.',
-  },
-  'mix:affiliate': {
-    hoch: 'Affiliate-Anteil reduzieren – mehr Blog- oder Produkt-Pins für nachhaltigeren Aufbau.',
-    niedrig:
-      'Affiliate-Anteil erhöhen – mehr Pins mit Affiliate-Empfehlungen produzieren.',
-  },
-  'mix:produkt': {
-    hoch: 'Produkt-Anteil reduzieren – mehr Blog-Pins für Vertrauensaufbau.',
-    niedrig:
-      'Produkt-Anteil erhöhen – mehr Pins zu eigenen Produkten und Angeboten.',
-  },
-  // Conversion-Ziele
-  'ziel:traffic': {
-    hoch: 'Mehr Pins mit konkretem Lead- oder Sales-Ziel produzieren, nicht nur Traffic-Pins.',
-    niedrig:
-      'Mehr Pins mit Traffic-Ziel – grundlegende Reichweite ist Voraussetzung für Leads und Sales.',
-  },
-  'ziel:lead': {
-    hoch: 'Auch Sales- und Traffic-Pins produzieren, nicht nur auf Leads fokussieren.',
-    niedrig:
-      'Mehr Lead-orientierte Pins – z.B. mit Freebie oder Newsletter-Anmeldung als Conversion-Ziel.',
-  },
-  'ziel:sales': {
-    hoch: 'Auch Traffic-Pins für Vertrauensaufbau – nicht nur Verkaufs-Pins.',
-    niedrig:
-      'Mehr Sales-fokussierte Pins – direkte Produkt- oder Affiliate-Links.',
-  },
-  // Format-Mix
-  'format:standard': {
-    hoch: 'Mehr Format-Abwechslung – Pinterest belohnt Video- und Collage-Pins.',
-    niedrig:
-      'Mehr Standard-Pins – sie sind das SEO-Fundament für nachhaltige Reichweite.',
-  },
-  'format:video': {
-    hoch: 'Auch Standard-Pins produzieren – sie tragen die langfristige SEO-Performance.',
-    niedrig:
-      'Video-Pins erhöhen die Reichweite deutlich – mindestens 1-2 pro Monat produzieren.',
-  },
-  'format:collage': {
-    hoch: 'Collage-Anteil reduzieren – Standard-Pins bieten verlässlichere SEO-Reichweite.',
-    niedrig:
-      'Collage-Pins für visuelle Abwechslung – ideal für Vergleiche oder Vorher/Nachher.',
-  },
-  'format:carousel': {
-    hoch: 'Carousel-Anteil reduzieren – Standard- und Video-Pins haben breitere Reichweite.',
-    niedrig:
-      'Carousel-Pins haben hohe Interaktionsrate – ideal für Schritt-für-Schritt-Inhalte.',
-  },
-}
-
-function recommendationFor(
-  area: CheckArea['key'],
-  channelKey: string,
-  diff: number,
-  schwelleGelb: number
-): string | null {
-  if (Math.abs(diff) <= schwelleGelb) return null
-  const tpl = RECOMMENDATIONS[`${area}:${channelKey}`]
-  if (!tpl) return null
-  return diff > 0 ? tpl.hoch : tpl.niedrig
-}
-
-// =====================================================
-// Bereich aus Counts + Soll-Werten bauen
-// =====================================================
-function buildArea(
-  area: CheckArea['key'],
-  header: string,
-  channels: Array<{ key: string; label: string; ist: number; soll: number }>,
-  pinsMitDaten: number,
-  schwelleGelb: number,
-  schwelleRot: number
-): CheckArea {
-  const items: CheckItem[] = channels.map((c) => {
-    const diff = c.ist - c.soll
-    const { color, message } = evaluateDiff(diff, schwelleGelb, schwelleRot)
-    return {
-      key: c.key,
-      label: c.label,
-      ist: c.ist,
-      soll: c.soll,
-      diff,
-      color,
-      message,
-      recommendation: recommendationFor(area, c.key, diff, schwelleGelb),
-    }
-  })
-  return {
-    key: area,
-    header,
-    items,
-    pinsMitDaten,
-    hasData: pinsMitDaten > 0,
-  }
-}
-
-// Prozent-Anteil berechnen, auf eine Nachkommastelle runden.
 function pct(count: number, total: number): number {
   if (total <= 0) return 0
   return Math.round((count * 1000) / total) / 10
 }
 
+function abweichungStatus(
+  diff: number,
+  schwelleGelb: number,
+  schwelleRot: number
+): AbweichungStatus {
+  const abs = Math.abs(diff)
+  if (abs <= schwelleGelb) return 'im_plan'
+  if (abs <= schwelleRot) return 'leicht_daneben'
+  return 'deutlich_daneben'
+}
+
+// Leitet aus den drei Bereichen einen einfachen Gesamt-Status ab. Nutzt die
+// bereits pro Item gesetzten Abweichungs-Stufen (die wiederum auf den
+// Schwellen gelb/rot beruhen). Ohne belastbare Daten: „unbekannt".
+export function ableitenGesamtStatus(
+  zielflaechen: ZielflaechenCheck,
+  frequenz: FrequenzCheck,
+  saeulen: SaeulenCheck
+): StrategieGesamtStatus {
+  const keineDaten =
+    !zielflaechen.hatDaten &&
+    frequenz.lage === 'unbekannt' &&
+    !saeulen.hatSaeulen
+  if (keineDaten) return 'unbekannt'
+
+  let deutlich = 0
+  let leicht = 0
+
+  // Zielflächen nur werten, wenn es überhaupt zugeordnete Pins gibt. Ohne
+  // Daten ist ein Ist von 0% keine echte Abweichung, sondern „unbekannt".
+  if (zielflaechen.hatDaten) {
+    for (const item of zielflaechen.items) {
+      if (item.status === 'deutlich_daneben') deutlich += 1
+      else if (item.status === 'leicht_daneben') leicht += 1
+    }
+  }
+
+  if (frequenz.lage === 'unter' || frequenz.lage === 'ueber') {
+    // Deutlich daneben, wenn weit außerhalb des Korridors, sonst leicht.
+    const weitDaneben =
+      (frequenz.sollMinProMonat !== null &&
+        frequenz.istProMonat < frequenz.sollMinProMonat / 2) ||
+      (frequenz.sollMaxProMonat !== null &&
+        frequenz.istProMonat > frequenz.sollMaxProMonat * 1.5)
+    if (weitDaneben) deutlich += 1
+    else leicht += 1
+  }
+
+  if (saeulen.hatSaeulen && saeulen.vernachlaessigtAnzahl > 0) {
+    if (saeulen.aktiveAnzahl === 0) deutlich += 1
+    else leicht += 1
+  }
+
+  if (deutlich > 0) return 'deutlich_daneben'
+  if (leicht > 0) return 'leicht_daneben'
+  return 'auf_kurs'
+}
+
 // =====================================================
 // Hauptfunktion
 // =====================================================
-export function computeStrategieCheck(
-  pins: StrategiePinRow[],
-  settings: StrategieSettings | null,
-  todayIso: string
-): StrategieCheckResult {
-  const fenster = filterPinsLetzte180Tage(pins, todayIso)
-  const total = fenster.length
-
+export function computeStrategieCheckV2(
+  settings: StrategieCheckV2Settings | null,
+  pins: StrategieCheckV2Pin[],
+  todayIso: string,
+  fensterTage: number = STRATEGIE_CHECK_V2_FENSTER_TAGE
+): StrategieCheckV2 {
+  const zielSoll = settings?.zielSoll ?? leereZielflaechen()
   const schwelleGelb =
-    settings?.strategie_check_schwelle_gelb ?? STRATEGIE_CHECK_DEFAULT_GELB
-  const schwelleRot =
-    settings?.strategie_check_schwelle_rot ?? STRATEGIE_CHECK_DEFAULT_ROT
-  const onboardingAbgeschlossen =
-    settings?.strategie_onboarding_abgeschlossen === true
+    settings?.schwelleGelb ?? STRATEGIE_CHECK_DEFAULT_GELB
+  const schwelleRot = settings?.schwelleRot ?? STRATEGIE_CHECK_DEFAULT_ROT
+  const onboardingAbgeschlossen = settings?.onboardingAbgeschlossen === true
+  const contentSaeulen = settings?.contentSaeulen ?? []
+  const pinningFrequenz = settings?.pinningFrequenz ?? null
 
-  // Drei separate Zähler — jeweils Pins, bei denen das jeweilige Feld
-  // NULL, leerer String oder undefined ist.
-  const pinsOhneStrategie = fenster.filter(
-    (p) => !p.strategie_typ?.trim()
-  ).length
-  const pinsOhneConversion = fenster.filter(
-    (p) => !p.conversion_ziel?.trim()
-  ).length
-  const pinsOhneFormat = fenster.filter((p) => !p.pin_format?.trim()).length
+  // ----- Grundmenge: nur veröffentlichte und geplante Pins -----
+  // Entwürfe werden vor jeder Auswertung ausgeklammert, damit die Bezugsgröße
+  // zur Status-Zählung oben im Dashboard passt (veröffentlicht + geplant).
+  const relevanteStatus = STRATEGIE_CHECK_RELEVANTE_STATUS as readonly string[]
+  const aktivePins = pins.filter(
+    (p) => p.status !== null && relevanteStatus.includes(p.status)
+  )
 
-  // ----- Strategie-Mix -----
-  const stratPins = fenster.filter((p) => !!p.strategie_typ?.trim())
-  const stratTotal = stratPins.length
-  const stratCounts = {
-    blog_content: stratPins.filter((p) => p.strategie_typ === 'blog_content')
-      .length,
-    affiliate: stratPins.filter((p) => p.strategie_typ === 'affiliate').length,
-    produkt: stratPins.filter((p) => p.strategie_typ === 'produkt').length,
+  // ----- Zeitfenster -----
+  const today = new Date(todayIso + 'T00:00:00Z')
+  const cutoff = new Date(today)
+  cutoff.setUTCDate(cutoff.getUTCDate() - fensterTage)
+  const obergrenze = new Date(today)
+  obergrenze.setUTCDate(obergrenze.getUTCDate() + 1)
+  const cutoffMs = cutoff.getTime()
+  const obergrenzeMs = obergrenze.getTime()
+
+  const fenster = aktivePins.filter((p) => {
+    const d = p.geplante_veroeffentlichung ?? p.created_at
+    if (!d) return false
+    const t = new Date(d).getTime()
+    if (Number.isNaN(t)) return false
+    return t >= cutoffMs && t < obergrenzeMs
+  })
+
+  // ----- Gesamtbild über alle relevanten Pins (nicht nur das Fenster) -----
+  // Zeigt, wie vollständig das Strategie-Bild ist: Wie viele veröffentlichte
+  // und geplante Pins der Nutzer hat und wie viele davon noch kein gültiges
+  // Pin-Ziel tragen. Entwürfe sind hier bereits ausgeklammert.
+  let pinsGesamtZugeordnet = 0
+  for (const p of aktivePins) {
+    const zf = p.zielflaeche?.trim()
+    if (zf && isZielflaeche(zf)) pinsGesamtZugeordnet += 1
   }
-  const mixArea = buildArea(
-    'mix',
-    'Wie verteilen sich deine Pins auf die drei Hauptstrategien?',
-    [
-      {
-        key: 'blog',
-        label: 'Blog/Content',
-        ist: pct(stratCounts.blog_content, stratTotal),
-        soll: settings?.strategie_soll_blog ?? 0,
-      },
-      {
-        key: 'affiliate',
-        label: 'Affiliate',
-        ist: pct(stratCounts.affiliate, stratTotal),
-        soll: settings?.strategie_soll_affiliate ?? 0,
-      },
-      {
-        key: 'produkt',
-        label: 'Produkt',
-        ist: pct(stratCounts.produkt, stratTotal),
-        soll: settings?.strategie_soll_produkt ?? 0,
-      },
-    ],
-    stratTotal,
-    schwelleGelb,
-    schwelleRot
-  )
+  const pinsGesamtAlle = aktivePins.length
+  const pinsGesamtOhneZuordnung = pinsGesamtAlle - pinsGesamtZugeordnet
 
-  // ----- Conversion-Ziele -----
-  const zielPins = fenster.filter((p) => !!p.conversion_ziel?.trim())
-  const zielTotal = zielPins.length
-  const zielCounts = {
-    traffic: zielPins.filter((p) => p.conversion_ziel === 'traffic').length,
-    lead: zielPins.filter((p) => p.conversion_ziel === 'lead').length,
-    sales: zielPins.filter((p) => p.conversion_ziel === 'sales').length,
-  }
-  const zielArea = buildArea(
-    'ziel',
-    'Welche Ziele verfolgen deine Pins?',
-    [
-      {
-        key: 'traffic',
-        label: 'Traffic',
-        ist: pct(zielCounts.traffic, zielTotal),
-        soll: settings?.ziel_soll_traffic ?? 0,
-      },
-      {
-        key: 'lead',
-        label: 'Lead',
-        ist: pct(zielCounts.lead, zielTotal),
-        soll: settings?.ziel_soll_lead ?? 0,
-      },
-      {
-        key: 'sales',
-        label: 'Sales',
-        ist: pct(zielCounts.sales, zielTotal),
-        soll: settings?.ziel_soll_sales ?? 0,
-      },
-    ],
-    zielTotal,
-    schwelleGelb,
-    schwelleRot
-  )
-
-  // ----- Format-Mix (nur die 4 abgedeckten Formate) -----
-  const FORMAT_KEYS = ['standard', 'video', 'collage', 'carousel'] as const
-  const formatPins = fenster.filter(
-    (p) =>
-      !!p.pin_format?.trim() &&
-      (FORMAT_KEYS as readonly string[]).includes(p.pin_format)
-  )
-  const formatTotal = formatPins.length
-  const formatCounts = {
-    standard: formatPins.filter((p) => p.pin_format === 'standard').length,
-    video: formatPins.filter((p) => p.pin_format === 'video').length,
-    collage: formatPins.filter((p) => p.pin_format === 'collage').length,
-    carousel: formatPins.filter((p) => p.pin_format === 'carousel').length,
-  }
-  const formatArea = buildArea(
-    'format',
-    'Welche Pin-Formate nutzt du im Vergleich zur Pinterest-Empfehlung?',
-    [
-      {
-        key: 'standard',
-        label: 'Standard',
-        ist: pct(formatCounts.standard, formatTotal),
-        soll: settings?.format_soll_standard ?? 0,
-      },
-      {
-        key: 'video',
-        label: 'Video',
-        ist: pct(formatCounts.video, formatTotal),
-        soll: settings?.format_soll_video ?? 0,
-      },
-      {
-        key: 'collage',
-        label: 'Collage',
-        ist: pct(formatCounts.collage, formatTotal),
-        soll: settings?.format_soll_collage ?? 0,
-      },
-      {
-        key: 'carousel',
-        label: 'Carousel',
-        ist: pct(formatCounts.carousel, formatTotal),
-        soll: settings?.format_soll_carousel ?? 0,
-      },
-    ],
-    formatTotal,
-    schwelleGelb,
-    schwelleRot
-  )
-
-  const areas: CheckArea[] = [mixArea, zielArea, formatArea]
-
-  // ----- Coaching: Top 3 Abweichungen mit Empfehlung -----
-  // Nur aus Bereichen mit hasData. Nur wenn Onboarding abgeschlossen — sonst
-  // gibt es ja keine Soll-Werte zu vergleichen.
-  const coachingCandidates: CoachingItem[] = []
-  if (onboardingAbgeschlossen) {
-    for (const area of areas) {
-      if (!area.hasData) continue
-      for (const item of area.items) {
-        if (!item.recommendation) continue
-        coachingCandidates.push({
-          area: area.key,
-          label: item.label,
-          diff: item.diff,
-          recommendation: item.recommendation,
-        })
-      }
+  // ===== Bereich 1: Zielflächen (Soll/Ist) =====
+  const counts = leereZielflaechen()
+  let pinsZugeordnet = 0
+  for (const p of fenster) {
+    const zf = p.zielflaeche?.trim()
+    if (zf && isZielflaeche(zf)) {
+      counts[zf] += 1
+      pinsZugeordnet += 1
     }
-    coachingCandidates.sort(
-      (a, b) => Math.abs(b.diff) - Math.abs(a.diff)
-    )
   }
-  const coachingTop3 = coachingCandidates.slice(0, 3)
+  const pinsOhneZuordnung = fenster.length - pinsZugeordnet
+  const sollSumme = ZIELFLAECHEN.reduce((s, z) => s + (zielSoll[z.value] ?? 0), 0)
 
-  const hasAnyData =
-    mixArea.hasData || zielArea.hasData || formatArea.hasData
-  const allInPlan =
-    onboardingAbgeschlossen && hasAnyData && coachingTop3.length === 0
+  const zielItems: ZielflaecheCheckItem[] = []
+  for (const z of ZIELFLAECHEN) {
+    const soll = zielSoll[z.value] ?? 0
+    const istCount = counts[z.value]
+    // Nur Flächen, die im Soll > 0 sind ODER im Ist vorkommen.
+    if (soll <= 0 && istCount <= 0) continue
+    const ist = pct(istCount, pinsZugeordnet)
+    const diff = Math.round((ist - soll) * 10) / 10
+    zielItems.push({
+      flaeche: z.value,
+      label: z.label,
+      soll,
+      ist,
+      diff,
+      status: abweichungStatus(diff, schwelleGelb, schwelleRot),
+    })
+  }
+
+  const zielflaechenCheck: ZielflaechenCheck = {
+    items: zielItems,
+    pinsGesamt: fenster.length,
+    pinsZugeordnet,
+    pinsOhneZuordnung,
+    hatDaten: pinsZugeordnet > 0,
+    hatSoll: sollSumme > 0,
+  }
+
+  // ===== Bereich 2: Pinning-Frequenz (Soll/Ist) =====
+  const istPins = fenster.length
+  const istProMonat =
+    fensterTage === 30
+      ? istPins
+      : Math.round((istPins * 30) / Math.max(1, fensterTage))
+  const span = pinningFrequenz ? FREQUENZ_MONAT[pinningFrequenz] : null
+  const lage: FrequenzLage = !span
+    ? 'unbekannt'
+    : istProMonat < span.min
+      ? 'unter'
+      : istProMonat > span.max
+        ? 'ueber'
+        : 'im_korridor'
+  const frequenzCheck: FrequenzCheck = {
+    sollFrequenz: pinningFrequenz,
+    sollLabel: pinningFrequenz
+      ? (PINNING_FREQUENZ_OPTIONS.find((o) => o.value === pinningFrequenz)
+          ?.label ?? null)
+      : null,
+    sollMinProMonat: span?.min ?? null,
+    sollMaxProMonat: span?.max ?? null,
+    istPins,
+    istProMonat,
+    lage,
+  }
+
+  // ===== Bereich 3: Content-Säulen-Abdeckung =====
+  const saeulenZaehler = new Map<string, number>()
+  for (const s of contentSaeulen) saeulenZaehler.set(s, 0)
+  for (const p of fenster) {
+    const k = p.boardKategorie?.trim()
+    if (k && saeulenZaehler.has(k)) {
+      saeulenZaehler.set(k, (saeulenZaehler.get(k) ?? 0) + 1)
+    }
+  }
+  const saeulenItems: SaeuleCheckItem[] = contentSaeulen.map((s) => {
+    const n = saeulenZaehler.get(s) ?? 0
+    return { saeule: s, pins: n, aktiv: n > 0 }
+  })
+  const aktiveAnzahl = saeulenItems.filter((i) => i.aktiv).length
+  const saeulenCheck: SaeulenCheck = {
+    items: saeulenItems,
+    aktiveAnzahl,
+    vernachlaessigtAnzahl: saeulenItems.length - aktiveAnzahl,
+    hatSaeulen: contentSaeulen.length > 0,
+  }
 
   return {
-    fensterTage: STRATEGIE_CHECK_FENSTER_TAGE,
-    totalPinsImFenster: total,
-    pinsOhneStrategie,
-    pinsOhneConversion,
-    pinsOhneFormat,
+    fensterTage,
+    pinsImFenster: fenster.length,
     onboardingAbgeschlossen,
     schwelleGelb,
     schwelleRot,
-    areas,
-    coachingTop3,
-    allInPlan,
+    zielflaechen: zielflaechenCheck,
+    frequenz: frequenzCheck,
+    saeulen: saeulenCheck,
+    // Ohne Pins im Fenster gibt es nichts zu bewerten: Status „unbekannt",
+    // nicht „deutlich daneben". Einzelbereiche ohne Daten werden in
+    // ableitenGesamtStatus neutral behandelt.
+    gesamtStatus:
+      fenster.length === 0
+        ? 'unbekannt'
+        : ableitenGesamtStatus(zielflaechenCheck, frequenzCheck, saeulenCheck),
+    pinsGesamtAlle,
+    pinsGesamtOhneZuordnung,
   }
 }

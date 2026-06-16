@@ -3,26 +3,6 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase-server'
 
-const ALLOWED_TYPES = [
-  'blogpost',
-  'produkt',
-  'affiliate',
-  'landingpage',
-  'leadmagnet',
-] as const
-type ContentTyp = (typeof ALLOWED_TYPES)[number]
-
-const ALLOWED_STRATEGIE = ['traffic', 'lead', 'sales'] as const
-type StrategieTyp = (typeof ALLOWED_STRATEGIE)[number]
-
-function isTyp(value: string): value is ContentTyp {
-  return (ALLOWED_TYPES as readonly string[]).includes(value)
-}
-
-function isStrategie(value: string): value is StrategieTyp {
-  return (ALLOWED_STRATEGIE as readonly string[]).includes(value)
-}
-
 function readIds(formData: FormData, name: string): string[] {
   return Array.from(
     new Set(
@@ -44,14 +24,9 @@ export async function addContent(
   if (!user) return { error: 'Nicht angemeldet.' }
 
   const titel = String(formData.get('titel') ?? '').trim()
-  const typ = String(formData.get('typ') ?? '')
-  const strategie_typ = String(formData.get('strategie_typ') ?? '')
   const notizen = String(formData.get('notizen') ?? '').trim() || null
 
   if (!titel) return { error: 'Titel darf nicht leer sein.' }
-  if (!isTyp(typ)) return { error: 'Bitte einen gültigen Typ wählen.' }
-  if (!isStrategie(strategie_typ))
-    return { error: 'Bitte einen gültigen Strategie-Typ wählen.' }
 
   const keywordIds = readIds(formData, 'keyword_ids')
   const urlIds = readIds(formData, 'url_ids')
@@ -59,7 +34,7 @@ export async function addContent(
 
   const { data: inserted, error } = await supabase
     .from('content_inhalte')
-    .insert({ user_id: user.id, titel, typ, strategie_typ, notizen })
+    .insert({ user_id: user.id, titel, notizen })
     .select('id')
     .single()
 
@@ -128,14 +103,9 @@ export async function updateContent(
   if (!id) return { error: 'ID fehlt.' }
 
   const titel = String(formData.get('titel') ?? '').trim()
-  const typ = String(formData.get('typ') ?? '')
-  const strategie_typ = String(formData.get('strategie_typ') ?? '')
   const notizen = String(formData.get('notizen') ?? '').trim() || null
 
   if (!titel) return { error: 'Titel darf nicht leer sein.' }
-  if (!isTyp(typ)) return { error: 'Bitte einen gültigen Typ wählen.' }
-  if (!isStrategie(strategie_typ))
-    return { error: 'Bitte einen gültigen Strategie-Typ wählen.' }
 
   const keywordIds = readIds(formData, 'keyword_ids')
   const urlIds = readIds(formData, 'url_ids')
@@ -143,7 +113,7 @@ export async function updateContent(
 
   const { error: updateError } = await supabase
     .from('content_inhalte')
-    .update({ titel, typ, strategie_typ, notizen })
+    .update({ titel, notizen })
     .eq('id', id)
 
   if (updateError) return { error: updateError.message }

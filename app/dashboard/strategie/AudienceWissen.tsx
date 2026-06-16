@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import type { ReactNode } from 'react'
 
 // V3.0 Phase 2c — Inhalt des Tabs „👥 Zielgruppe verstehen" auf der
@@ -21,117 +22,214 @@ import type { ReactNode } from 'react'
 export default function AudienceWissen() {
   return (
     <section className="space-y-3">
+      <p className="mb-4 text-sm font-medium text-gray-600">
+        Für wen du das alles machst.
+      </p>
       <p className="text-sm text-gray-600">
-        Hintergrundwissen zu den Pinterest-Zielgruppen-Daten — was sie zeigen
-        und wie du sie für deine Pin-Strategie nutzt.
+        Hintergrundwissen zu den Pinterest-Zielgruppen-Daten, was sie zeigen und
+        wie du sie für deine Pin-Strategie nutzt.
       </p>
 
-      <Toggle title="Was zeigt Pinterest Audience Insights?">
-        <p>
+      <Toggle title="Wer ist deine Zielgruppe und warum es sich lohnt, sie auszuarbeiten">
+        <Para>
+          Pinterest zeigt dir später, wer tatsächlich auf deine Pins reagiert.
+          Aber zuerst brauchst du eine klare Vorstellung davon, wen du erreichen
+          willst. Wer für alle pinnt, trifft niemanden. Je genauer du deinen
+          Wunschkunden kennst, desto treffender werden deine Hooks, deine Themen
+          und deine Ansprache.
+        </Para>
+
+        <H4>Definiere deinen Wunschkunden</H4>
+        <Bullets
+          items={[
+            'Wer ist dieser Mensch? Seine Lebenssituation, sein Alltag, wo er gerade steht.',
+            'Welches Problem oder welcher Wunsch beschäftigt ihn?',
+            'Was hat er vielleicht schon erfolglos versucht?',
+            'Wonach sucht er auf Pinterest, und in welchen Worten denkt und sucht er?',
+            'Was soll sich für ihn ändern, wohin will er?',
+          ]}
+        />
+
+        <H4>Deine Positionierung in einem Satz</H4>
+        <Para>
+          Aus deinen Antworten formst du einen einzigen Satz. Nutze diese
+          Vorlage:
+        </Para>
+        <Para>
+          „Ich helfe [Wunschkunde] dabei, [gewünschtes Ergebnis] zu erreichen,
+          ohne [größte Hürde oder Frust]."
+        </Para>
+        <Para>
+          Ein Beispiel: „Ich helfe berufstätigen Müttern dabei, in 20 Minuten
+          gesunde Familiengerichte zu kochen, ohne stundenlang in der Küche zu
+          stehen."
+        </Para>
+
+        <Para>
+          Die Zielgruppe ist die Grundlage deiner gesamten Strategie, mehr dazu
+          im Bereich{' '}
+          <Link
+            href="/dashboard/strategie?tab=strategien"
+            className="font-medium text-red-600 hover:underline"
+          >
+            Strategie verstehen
+          </Link>
+          .
+        </Para>
+        <Para>
+          Genau dieses Wissen über die Wünsche und Probleme deiner Zielgruppe
+          brauchst du, um starke Hooks zu schreiben, die sie direkt ansprechen,
+          siehe{' '}
+          <Link
+            href="/dashboard/strategie?tab=design"
+            className="font-medium text-red-600 hover:underline"
+          >
+            Pin-Gestaltung
+          </Link>
+          .
+        </Para>
+        <Para>
+          Sobald du weißt, wen du ansprechen willst, zeigt dir Pinterest mit
+          Audience Insights, wer tatsächlich auf deine Pins reagiert. Das deckt
+          sich nicht immer mit deiner ursprünglichen Vorstellung, und genau
+          diese Abweichung ist wertvoll: Sie zeigt dir, ob du die richtigen
+          Menschen erreichst oder ob du deine Ansprache nachschärfen solltest.
+        </Para>
+      </Toggle>
+
+      <Toggle title="Was zeigt Pinterest Audience Insights, und warum es sich lohnt">
+        <Para>
           Pinterest Audience Insights ist Pinterests Datenbericht über die
           Menschen, die mit deinen Pins interagieren. Du bekommst drei
           Daten-Typen:
-        </p>
+        </Para>
         <Bullets
           items={[
             <>
-              <strong>Interessen &amp; Affinitäten</strong> — welche Themen
-              deine Zielgruppe besonders interessieren, im Vergleich zur
+              <strong>Interessen und Affinitäten:</strong> welche Themen deine
+              Zielgruppe besonders interessieren, im Vergleich zur
               Pinterest-Allgemeinheit.
             </>,
             <>
-              <strong>Demografie</strong> — Geschlecht, Altersgruppen,
+              <strong>Demografie:</strong> Geschlecht, Altersgruppen,
               Herkunftsländer, genutzte Geräte.
             </>,
             <>
-              <strong>Größe und Wachstum der Zielgruppe</strong> — wie viele
+              <strong>Größe und Wachstum der Zielgruppe:</strong> wie viele
               Menschen aktuell mit deinen Pins interagieren und ob die Zahl
               steigt oder fällt.
             </>,
           ]}
         />
-        <p>
-          Aus diesen drei Bausteinen kannst du ableiten, welche Themen, Tonalitäten
-          und Formate bei deiner Zielgruppe funktionieren — und welche Lücken oder
-          Chancen es noch gibt.
-        </p>
+        <Para>
+          Aus diesen drei Bausteinen kannst du ableiten, welche Themen,
+          Tonalitäten und Formate bei deiner Zielgruppe funktionieren, und
+          welche Lücken oder Chancen es noch gibt.
+        </Para>
+        <H4>Warum es sich lohnt</H4>
+        <Para>
+          Audience Insights zeigt dir schwarz auf weiß, wer wirklich auf deine
+          Pins reagiert, statt dass du raten musst. Du erkennst, welche Themen
+          ziehen, ob du die richtigen Menschen erreichst und wo ungenutzte
+          Chancen liegen. So triffst du Entscheidungen über Themen und Ansprache
+          auf Basis echter Daten, nicht aus dem Bauch heraus.
+        </Para>
       </Toggle>
 
-      <Toggle title='Warum „Interagierende Zielgruppe" statt „Gesamte Zielgruppe"?'>
-        <p>
-          Pinterest unterscheidet zwei Zielgruppen-Typen, die du im Export-Dialog
-          auswählst:
-        </p>
+      <Toggle title="Den Zielgruppen-Bericht richtig lesen">
+        <H4>Welche Zielgruppe</H4>
+        <Para>
+          Pinterest unterscheidet zwei Zielgruppen-Typen, die du im
+          Export-Dialog auswählst:
+        </Para>
         <Bullets
           items={[
             <>
-              <strong>Interagierende Zielgruppe (Engaged Audience)</strong> —
-              Menschen, die mit deinen Pins aktiv interagieren: klicken,
+              <strong>Interagierende Zielgruppe (Engaged Audience):</strong>{' '}
+              Menschen, die mit deinen Pins aktiv interagieren, also klicken,
               speichern, kommentieren. Das sind die echten Interessenten.
             </>,
             <>
-              <strong>Gesamte Zielgruppe (Total Audience)</strong> — alle, die
-              deine Pins überhaupt gesehen haben, inklusive Zufallstreffer
-              ohne Interaktion.
+              <strong>Gesamte Zielgruppe (Total Audience):</strong> alle, die
+              deine Pins überhaupt gesehen haben, inklusive Zufallstreffer ohne
+              Interaktion.
             </>,
           ]}
         />
-        <p>
+        <Para>
           Strategisch ist die <strong>Interagierende Zielgruppe</strong>{' '}
-          deutlich wertvoller: Die Affinitäts-Werte sind aussagekräftiger,
-          weil sie nur die Menschen abbilden, die deine Themen wirklich
-          beschäftigen. Diese App importiert deshalb ausschließlich die
-          Engaged-Audience.
-        </p>
-      </Toggle>
+          deutlich wertvoller: Die Affinitäts-Werte sind aussagekräftiger, weil
+          sie nur die Menschen abbilden, die deine Themen wirklich beschäftigen.
+          Pin-Flow importiert deshalb ausschließlich die Engaged Audience.
+        </Para>
 
-      <Toggle title="Wie liest du den Affinitäts-Index?">
-        <p>
+        <H4>Den Affinitäts-Index lesen</H4>
+        <Para>
           Der Affinitäts-Index zeigt, wie stark sich deine Zielgruppe für ein
           Thema interessiert <em>im Vergleich zum Pinterest-Durchschnitt</em>.
-          Ein Wert von 1,0 entspricht genau dem Pinterest-Mittel — alles
-          darüber ist überdurchschnittlich, alles darunter unterdurchschnittlich.
-        </p>
+          Ein Wert von 1,0 entspricht genau dem Pinterest-Mittel: Alles darüber
+          ist überdurchschnittlich, alles darunter unterdurchschnittlich.
+        </Para>
         <Bullets
           items={[
             <>
               <span className="font-medium text-green-700">
                 🟢 Affinität ≥ 1,5
-              </span>{' '}
-              — Stark überdurchschnittliches Interesse. Hier hat deine
+              </span>
+              : stark überdurchschnittliches Interesse. Hier hat deine
               Zielgruppe einen klaren Schwerpunkt: <strong>hoher Hebel</strong>.
             </>,
             <>
               <span className="font-medium text-amber-700">
-                🟡 Affinität 0,8 – 1,5
-              </span>{' '}
-              — Durchschnittlich. Deine Zielgruppe teilt das Interesse mit dem
+                🟡 Affinität 0,5 bis 1,5
+              </span>
+              : durchschnittlich. Deine Zielgruppe teilt das Interesse mit dem
               Pinterest-Schnitt: <strong>neutral</strong>.
             </>,
             <>
               <span className="font-medium text-red-700">
-                🔴 Affinität &lt; 0,8
-              </span>{' '}
-              — Unterdurchschnittlich. Deine Zielgruppe interessiert sich
-              spürbar weniger als der Durchschnitt: <strong>nicht relevant</strong>.
+                🔴 Affinität &lt; 0,5
+              </span>
+              : unterdurchschnittlich. Deine Zielgruppe interessiert sich
+              spürbar weniger als der Durchschnitt:{' '}
+              <strong>nicht relevant</strong>.
             </>,
           ]}
         />
-        <p>
-          <strong>Wichtig:</strong> Affinität ist relativ, nicht absolut. Ein
+        <div className="rounded-md border border-teal-200 border-l-[3px] border-l-teal-400 bg-teal-50 p-4 text-sm leading-relaxed text-teal-800">
+          <strong>Merke:</strong> Affinität ist relativ, nicht absolut. Ein
           Thema mit Affinität 1,8 bedeutet nicht &bdquo;alle deine Follower
           interessieren sich dafür&ldquo;, sondern &bdquo;deine Zielgruppe
           interessiert sich 1,8-mal so stark dafür wie Pinterest-Nutzer im
-          Schnitt&ldquo;. Das ist genau der strategische Wert: Du siehst,
-          was deine Zielgruppe <em>besonders</em> interessiert.
-        </p>
+          Schnitt&ldquo;. Das ist genau der strategische Wert: Du siehst, was
+          deine Zielgruppe <em>besonders</em> interessiert.
+        </div>
       </Toggle>
 
       <Toggle title="Wie nutzt du diese Daten für deine Pin-Strategie?">
-        <p>
+        <H4>Gleiche ab mit deiner Vorstellung</H4>
+        <Para>
+          Im ersten Schritt hast du definiert, wen du erreichen willst. Jetzt
+          zeigt dir Pinterest, wer tatsächlich reagiert. Halte beides
+          nebeneinander: Passt es zusammen, bist du auf dem richtigen Weg. Weicht
+          es ab, ist das kein Fehler, sondern eine Erkenntnis. Vielleicht
+          sprichst du unbeabsichtigt eine andere Gruppe an, oder deine Ansprache
+          trifft noch nicht die Menschen, die du eigentlich meinst. Beides ist
+          ein Hinweis, entweder deine Positionierung zu schärfen oder deine Pins
+          anders auszurichten.
+        </Para>
+        <Para>
+          Pin-Flow nimmt dir einen Teil davon ab: Im Analytics-Bereich und auf
+          deinem Dashboard gleicht Pin-Flow deine Hauptnische automatisch mit der
+          stärksten Affinität deiner Zielgruppe ab und zeigt dir in einem kurzen
+          Coaching-Hinweis, ob beides zusammenpasst oder ob sich eine Lücke
+          auftut.
+        </Para>
+
+        <Para>
           Drei Wege, die Zielgruppen-Daten konkret für deine Pin-Strategie zu
           nutzen — passend zu jeder Nische:
-        </p>
+        </Para>
 
         <H4>1. Themen-Erweiterung</H4>
         <Para>
@@ -164,38 +262,46 @@ export default function AudienceWissen() {
       </Toggle>
 
       <Toggle title="Warum monatliche Snapshots wichtig sind">
-        <p>
+        <Para>
           Deine Zielgruppe ist <strong>nicht statisch</strong>. Sie wächst,
-          schrumpft und verschiebt sich kontinuierlich — durch neue Pins,
-          saisonale Trends, virale Treffer oder geänderte Pinterest-Algorithmen.
-          Ein einzelner Snapshot ist eine Momentaufnahme. Erst eine{' '}
-          <strong>Reihe monatlicher Snapshots</strong> macht Entwicklung
-          sichtbar.
-        </p>
-        <p>Was du dabei beobachten solltest:</p>
+          schrumpft und verschiebt sich kontinuierlich, durch neue Pins,
+          saisonale Trends, virale Treffer oder geänderte
+          Pinterest-Algorithmen. Ein einzelner Snapshot ist eine Momentaufnahme.
+          Erst regelmäßige Snapshots machen die Entwicklung sichtbar.
+        </Para>
+        <Para>Was du dabei beobachten solltest:</Para>
         <Bullets
           items={[
             <>
-              <strong>Wachstum der Zielgruppe</strong> — wächst die Anzahl der
-              interagierenden Personen? Oder stagniert sie?
+              <strong>Wachstum der Zielgruppe:</strong> wächst die Anzahl der
+              interagierenden Personen, oder stagniert sie?
             </>,
             <>
-              <strong>Affinitäts-Verschiebungen</strong> — welche Themen
-              werden über Monate hinweg wichtiger, welche verlieren an
-              Bedeutung?
+              <strong>Affinitäts-Verschiebungen:</strong> welche Themen werden
+              über Monate hinweg wichtiger, welche verlieren an Bedeutung?
             </>,
             <>
-              <strong>Demografie-Trends</strong> — verändern sich
+              <strong>Demografie-Trends:</strong> verändern sich
               Altersverteilung oder Herkunftsländer? Das kann auf neue
               Zielgruppen-Segmente hindeuten.
             </>,
           ]}
         />
-        <p>
-          Empfehlung: <strong>1× pro Monat</strong> die aktuelle CSV importieren.
-          Mit drei oder mehr Snapshots in der App siehst du Trends, statt nur
-          Einzelwerte zu interpretieren.
-        </p>
+        <Para>
+          Pin-Flow nimmt dir die Arbeit ab: Jeden Import speichert es als
+          Snapshot mit Stichtag dauerhaft im Analytics-Bereich (Tab „Erfolg
+          messen", Bereich Zielgruppe). Du musst die Werte also nicht selbst
+          notieren. Sobald ein zweiter Snapshot vorliegt, vergleicht Pin-Flow
+          ihn automatisch mit dem vorherigen und zeigt dir, ob deine Zielgruppe
+          gewachsen oder geschrumpft ist und wie sich die Schwerpunkte
+          verschoben haben.
+        </Para>
+        <Para>
+          Empfehlung: einmal pro Monat die aktuelle CSV importieren. Schon ab dem
+          zweiten Snapshot wird die Entwicklung gegenüber dem Vormonat sichtbar.
+          Je regelmäßiger du importierst, desto besser erkennst du über die Zeit,
+          wohin sich deine Zielgruppe bewegt.
+        </Para>
       </Toggle>
     </section>
   )
@@ -213,7 +319,7 @@ function Toggle({
 }) {
   return (
     <details className="group scroll-mt-4 rounded-lg border border-gray-200 bg-white shadow-sm open:shadow-md">
-      <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-4 text-base font-semibold text-gray-900 hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
+      <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-4 text-base font-semibold text-gray-900 hover:bg-red-50 [&::-webkit-details-marker]:hidden">
         <span
           className="text-lg leading-none text-gray-400 transition-transform"
           aria-hidden
@@ -232,7 +338,7 @@ function Toggle({
 
 function Bullets({ items }: { items: ReactNode[] }) {
   return (
-    <ul className="ml-5 list-disc space-y-1">
+    <ul className="list-disc space-y-1 pl-5 text-sm leading-relaxed text-gray-700">
       {items.map((item, i) => (
         <li key={i}>{item}</li>
       ))}
@@ -241,9 +347,9 @@ function Bullets({ items }: { items: ReactNode[] }) {
 }
 
 function H4({ children }: { children: ReactNode }) {
-  return <h4 className="font-semibold text-gray-900">{children}</h4>
+  return <h4 className="text-sm font-semibold text-gray-900">{children}</h4>
 }
 
 function Para({ children }: { children: ReactNode }) {
-  return <p>{children}</p>
+  return <p className="text-sm leading-relaxed text-gray-700">{children}</p>
 }

@@ -188,7 +188,7 @@ export default function BoardAnalyticsEditModal({
                 type="url"
                 value={pinterestUrl}
                 onChange={(e) => setPinterestUrl(e.target.value)}
-                placeholder="https://www.pinterest.com/soulfulspaceyoga/yoga-zuhause/"
+                placeholder="https://www.pinterest.com/yogaflow-studio/yoga-zuhause/"
                 className={inputCls}
               />
               <p className="mt-1 text-xs text-gray-500">

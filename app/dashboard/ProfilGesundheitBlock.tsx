@@ -37,6 +37,7 @@ function fmtPct(v: number | null | undefined, digits = 2): string {
 
 export default function ProfilGesundheitBlock({
   profilEr,
+  profilSaveRate,
   profilCtr,
   nicheProfile,
   coachingDiagnoses,
@@ -45,6 +46,9 @@ export default function ProfilGesundheitBlock({
   // Profil-Engagement-Rate aus dem letzten profil_analytics-Eintrag
   // (= (saves + ausgehende_klicks) / impressionen × 100).
   profilEr: number | null
+  // Profil-Save-Rate aus dem letzten profil_analytics-Eintrag
+  // (= saves / impressionen × 100). Reine Anzeige, kein Maßstab.
+  profilSaveRate: number | null
   // Profil-CTR aus dem letzten profil_analytics-Eintrag
   // (= ausgehende_klicks / impressionen × 100).
   profilCtr: number | null
@@ -76,61 +80,79 @@ export default function ProfilGesundheitBlock({
     : 'Keine klare Hauptnische erkannt'
 
   return (
-    <section className="space-y-4 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-      <div>
-        <p className="text-base font-semibold text-gray-900">
-          Profil-Status: {ergebnis.label}
-        </p>
-        <p className="mt-1 text-sm text-gray-700">{ergebnis.beschreibung}</p>
+    <section>
+      <h2 className="text-lg font-semibold text-gray-900">Profil-Status</h2>
+      <div className="mt-3 space-y-4 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+        <div>
+          <p className="text-base font-semibold text-gray-900">
+            {ergebnis.label}
+          </p>
+          <p className="mt-1 text-sm text-gray-700">{ergebnis.beschreibung}</p>
+        </div>
+
+        <ProfilStatusSkala currentStatus={ergebnis.status} />
+
+        <div className="text-[13px] text-gray-600">
+          <ul className="space-y-1">
+            <li className="flex flex-wrap items-center gap-x-1">
+              <span>
+                Engagement-Rate:{' '}
+                <strong className="text-gray-800">{fmtPct(profilEr)}</strong>
+              </span>
+              <span aria-hidden className="text-gray-300">
+                ·
+              </span>
+              <span className="text-gray-400">
+                Überblickswert, achte auf den Verlauf
+              </span>
+              <InfoTooltip text="(Saves + Ausgehende Klicks) ÷ Impressionen, über alle Pins. Gesamtleistung aller Pins zusammen — aus deinen manuell eingetragenen Profil-Daten." />
+            </li>
+            <li className="flex flex-wrap items-center gap-x-1">
+              <span>
+                Save-Rate:{' '}
+                <strong className="text-gray-800">
+                  {fmtPct(profilSaveRate)}
+                </strong>
+              </span>
+              <span aria-hidden className="text-gray-300">
+                ·
+              </span>
+              <span className="text-gray-400">
+                Überblickswert, achte auf den Verlauf
+              </span>
+              <InfoTooltip text="Saves ÷ Impressionen, über alle Pins. Wie oft Menschen deine Pins speichern, das stärkste Signal, das Pinterest für die Ausspielung nutzt. Aus deinen manuell eingetragenen Profil-Daten." />
+            </li>
+            <li className="flex flex-wrap items-center gap-x-1">
+              <span>
+                CTR:{' '}
+                <strong className="text-gray-800">{fmtPct(profilCtr)}</strong>
+              </span>
+              <span aria-hidden className="text-gray-300">
+                ·
+              </span>
+              <span className="text-gray-400">
+                {benchmarkPrefix}: {benchmark.ctr.label}
+              </span>
+              <InfoTooltip text="Ausgehende Klicks ÷ Impressionen, über alle Pins. Zeigt, wie gut deine Pins zum Klick auf die Website motivieren." />
+            </li>
+            <li>
+              Hauptnische:{' '}
+              <strong className="text-gray-800">{nischeLabel}</strong>
+            </li>
+          </ul>
+
+          <p className="mt-2 flex items-center gap-1 text-[12px] text-gray-400">
+            Wie diese Werte zu lesen sind
+            <InfoTooltip text={METHODIK_HINWEIS} />
+          </p>
+        </div>
+
+        {/* V3.2.1 Fix 2 — „Befunde" als Sub-Sektion derselben Box,
+            getrennt durch eine Trennlinie. */}
+        <hr className="border-gray-200" />
+
+        <BefundeListe diagnoses={coachingDiagnoses} />
       </div>
-
-      <ProfilStatusSkala currentStatus={ergebnis.status} />
-
-      <div className="text-[13px] text-gray-600">
-        <ul className="space-y-1">
-          <li className="flex flex-wrap items-center gap-x-1">
-            <span>
-              Engagement-Rate:{' '}
-              <strong className="text-gray-800">{fmtPct(profilEr)}</strong>
-            </span>
-            <span aria-hidden className="text-gray-300">
-              ·
-            </span>
-            <span className="text-gray-400">
-              {benchmarkPrefix}: {benchmark.engagementRate.label}
-            </span>
-            <InfoTooltip text="(Saves + Ausgehende Klicks) ÷ Impressionen, über alle Pins. Gesamtleistung aller Pins zusammen — aus deinen manuell eingetragenen Profil-Daten." />
-          </li>
-          <li className="flex flex-wrap items-center gap-x-1">
-            <span>
-              CTR:{' '}
-              <strong className="text-gray-800">{fmtPct(profilCtr)}</strong>
-            </span>
-            <span aria-hidden className="text-gray-300">
-              ·
-            </span>
-            <span className="text-gray-400">
-              {benchmarkPrefix}: {benchmark.ctr.label}
-            </span>
-            <InfoTooltip text="Ausgehende Klicks ÷ Impressionen, über alle Pins. Zeigt, wie gut deine Pins zum Klick auf die Website motivieren." />
-          </li>
-          <li>
-            Hauptnische:{' '}
-            <strong className="text-gray-800">{nischeLabel}</strong>
-          </li>
-        </ul>
-
-        <p className="mt-2 flex items-center gap-1 text-[12px] text-gray-400">
-          Wie diese Werte zu lesen sind
-          <InfoTooltip text={METHODIK_HINWEIS} />
-        </p>
-      </div>
-
-      {/* V3.2.1 Fix 2 — „Befunde" als Sub-Sektion derselben Box,
-          getrennt durch eine Trennlinie. */}
-      <hr className="border-gray-200" />
-
-      <BefundeListe diagnoses={coachingDiagnoses} />
     </section>
   )
 }

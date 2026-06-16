@@ -54,17 +54,17 @@ import {
 // jedem Spaltenkopf angezeigt.
 const COLUMN_TOOLTIPS = {
   klicks:
-    'Wie oft Menschen vom Pin auf deine Website geklickt haben. Das ist die wichtigste Zahl — sie zeigt, ob dein Pin Besucher bringt. (Achtung: Das sind ausgehende Klicks zur Website — nicht das Vergrößern des Pins auf Pinterest.)',
+    'Wie oft Menschen vom Pin auf deine Website geklickt haben. Das ist die wichtigste Zahl, sie zeigt, ob dein Pin Besucher bringt. (Achtung: Das sind ausgehende Klicks zur Website, nicht das Vergrößern des Pins auf Pinterest.)',
   impressionen:
-    'Wie oft dein Pin überhaupt angezeigt wurde — also wie viele Menschen ihn auf Pinterest gesehen haben. Sagt nichts darüber aus, ob jemand reagiert hat.',
+    'Wie oft dein Pin überhaupt angezeigt wurde, also wie viele Menschen ihn auf Pinterest gesehen haben. Sagt nichts darüber aus, ob jemand reagiert hat.',
   saves:
     'Wie oft Menschen deinen Pin auf eigene Boards gespeichert haben. Das ist Pinterests wichtigstes Signal: Viele Saves → Pinterest spielt deinen Pin mehr aus.',
   ctr:
-    'Von 100 Menschen, die deinen Pin sehen — wie viele klicken auf deine Website? Beispiel: 1,5 % heißt: 1,5 von 100 klicken durch. Klingt wenig, ist aber bei Pinterest ein guter Wert.',
+    'Von 100 Menschen, die deinen Pin sehen, wie viele klicken auf deine Website? Beispiel: 1,5 % heißt: 1,5 von 100 klicken durch. Klingt wenig, ist aber bei Pinterest ein guter Wert.',
   saveRate:
-    'Von 100 Menschen, die deinen Pin sehen — wie viele speichern ihn auf eigenen Boards? Beispiel: 0,5 % heißt: 1 von 200 speichert ihn. Pinterest belohnt hohe Save-Rates mit mehr Reichweite.',
+    'Von 100 Menschen, die deinen Pin sehen, wie viele speichern ihn auf eigenen Boards? Beispiel: 0,5 % heißt: 1 von 200 speichert ihn. Pinterest belohnt hohe Save-Rates mit mehr Reichweite.',
   er:
-    'Engagement-Rate. Zeigt die Gesamtwirkung eines Pins: von 100 Sehern, wie viele reagieren (durch Speichern oder Klicken)? Pinterest belohnt hohe Engagement-Werte mit mehr Reichweite. Beispiel: 1,5 % heißt: 1,5 von 100 Sehern reagieren irgendwie auf den Pin.',
+    'Engagement-Rate. Zeigt die Gesamtwirkung eines Pins: Von 100 Menschen, denen Pinterest deinen Pin ausgespielt hat, wie viele reagieren (durch Speichern oder Klicken)? Ein guter Überblickswert. Die Ausspielung steuert Pinterest aber über die Save-Rate, nicht über die Engagement-Rate. Beispiel: 1,5 % heißt: 1,5 von 100 reagieren auf den Pin.',
   diagnose:
     'Welche Stärke und Schwäche hat dieser Pin? Die Diagnose entscheidet, was du als nächstes tun solltest.',
   handlung:
@@ -72,7 +72,7 @@ const COLUMN_TOOLTIPS = {
   perioden:
     'In wie vielen monatlichen Daten-Imports kommt dieser Pin schon vor? Mehr Perioden = stabilere Aussage.',
   alter:
-    'Wie viele Tage seit der ersten Veröffentlichung. Pinterest braucht Zeit, um neue Pins voll auszuspielen — meist 60+ Tage.',
+    'Wie viele Tage seit der ersten Veröffentlichung. Pinterest braucht Zeit, um neue Pins voll auszuspielen, meist 60+ Tage.',
 } as const
 
 export default function PinsTab({
@@ -227,7 +227,7 @@ export default function PinsTab({
           className="font-medium text-red-600 hover:underline"
         >
           Mehr zur Analyse: Pin-Lebenszyklus, Kategorien und Vergleichswerte
-          in Strategie &amp; Ausrichtung
+          in Pinterest-Wissen
         </Link>
       </p>
 
@@ -241,7 +241,7 @@ export default function PinsTab({
       />
 
       <p className="text-sm text-gray-500">
-        💡 Halte den Mauszeiger über die Spaltenüberschriften für Erklärungen.
+        Halte den Mauszeiger über die Spaltenüberschriften für Erklärungen.
       </p>
 
       <PinAnalyticsTable
@@ -456,7 +456,7 @@ function PinAnalyticsTable({
               onSort={toggleSort}
             >
               <span className="whitespace-nowrap">
-                Klicks ∑<InfoTooltip text={COLUMN_TOOLTIPS.klicks} />
+                Ausg. Klicks ∑<InfoTooltip text={COLUMN_TOOLTIPS.klicks} />
               </span>
             </SortableTh>
             <SortableTh
@@ -690,7 +690,7 @@ function PinTimeline({
   if (history.length === 0) {
     return (
       <div className="ml-6 rounded-md border border-gray-200 bg-white px-3 py-2 text-xs text-gray-500">
-        Noch keine Daten — füge beim nächsten Update neue Werte hinzu.
+        Noch keine Daten, füge beim nächsten Update neue Werte hinzu.
       </div>
     )
   }
@@ -706,7 +706,7 @@ function PinTimeline({
               Imp
             </th>
             <th className="px-3 py-2 text-left font-semibold uppercase tracking-wide text-gray-500">
-              Klicks
+              Ausg. Klicks
             </th>
             <th className="px-3 py-2 text-left font-semibold uppercase tracking-wide text-gray-500">
               Saves

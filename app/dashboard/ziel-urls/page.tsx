@@ -9,8 +9,7 @@ type RawZielUrlRow = {
   id: string
   url: string
   titel: string
-  typ: ZielUrl['typ']
-  prioritaet: ZielUrl['prioritaet']
+  zielflaeche: ZielUrl['zielflaeche']
   notizen: string | null
   created_at: string
   content_urls: Array<{
@@ -31,7 +30,7 @@ export default async function ZielUrlsPage() {
       .from('ziel_urls')
       .select(
         `
-        id, url, titel, typ, prioritaet, notizen, created_at,
+        id, url, titel, zielflaeche, notizen, created_at,
         content_urls ( content_id, content_inhalte ( id, titel ) ),
         url_boards ( boards ( id, name ) ),
         pins!ziel_url_id ( id )
@@ -53,8 +52,7 @@ export default async function ZielUrlsPage() {
     id: row.id,
     url: row.url,
     titel: row.titel,
-    typ: row.typ,
-    prioritaet: row.prioritaet,
+    zielflaeche: row.zielflaeche,
     notizen: row.notizen,
     created_at: row.created_at,
     contents: row.content_urls
@@ -82,8 +80,19 @@ export default async function ZielUrlsPage() {
     <div className="p-8">
       <header className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Ziel-URLs</h1>
-        <p className="mt-1 text-sm text-gray-600">
-          Sammle und priorisiere alle URLs, auf die deine Pins verlinken sollen.
+        <p className="mt-2 max-w-3xl text-sm leading-relaxed text-gray-600">
+          Hier sammelst du alle Adressen, auf die deine Pins führen sollen:
+          Blogartikel, Shop-Seiten, Landingpages, Buchungsseiten. Jeder Pin
+          verlinkt auf genau eine Ziel-URL, und über das Pin-Ziel ordnest du
+          ein, welche Art von Seite (Landingpage, Shop, Blog) dahintersteht. So
+          siehst du auf einen Blick, wohin deine Pins lenken, und Pin-Flow kann
+          auswerten, ob deine Verteilung zu deiner Strategie passt.
+        </p>
+        <p className="mt-2 max-w-2xl text-xs leading-relaxed text-gray-500">
+          Pinterest liest auch deine Ziel-URL aus und bewertet, ob sie zum
+          Pin-Thema passt. Benenne deine URLs daher sinnvoll, auch aus
+          SEO-Sicht. Statt www.website.de/hhh3gdfs lieber
+          www.website.de/blog/onlinesichtbarsein.
         </p>
       </header>
 

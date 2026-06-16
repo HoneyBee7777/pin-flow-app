@@ -32,7 +32,7 @@ const NAV_GROUPS: NavGroup[] = [
     collapsible: true,
     defaultOpen: true,
     items: [
-      { name: 'Content & Strategie', href: '/dashboard/content-inhalte' },
+      { name: 'Dein Content', href: '/dashboard/content-inhalte' },
       { name: 'Ziel-URLs', href: '/dashboard/ziel-urls' },
       { name: 'Keywords', href: '/dashboard/keywords' },
       { name: 'Boards', href: '/dashboard/boards' },
@@ -63,8 +63,10 @@ const NAV_GROUPS: NavGroup[] = [
     collapsible: true,
     defaultOpen: true,
     items: [
+      { name: 'Onboarding', href: '/dashboard/onboarding' },
+      { name: 'Checkliste', href: '/dashboard/checkliste' },
       { name: 'Prompts & Vorlagen', href: '/dashboard/ressourcen' },
-      { name: 'Strategie & Ausrichtung', href: '/dashboard/strategie' },
+      { name: 'Pinterest-Wissen', href: '/dashboard/strategie' },
       { name: 'FAQ', href: '/dashboard/faq' },
     ],
   },
@@ -122,8 +124,12 @@ export default function Sidebar({
   return (
     <aside className="flex h-screen w-64 shrink-0 flex-col border-r border-gray-200 bg-white">
       <div className="border-b border-gray-200 p-6">
-        <h1 className="text-xl font-bold text-red-600">Pin-Flow</h1>
-        <p className="mt-1 text-xs text-gray-500">Pinterest-Strategie</p>
+        <Link href="/dashboard" className="block">
+          <h1 className="text-xl font-bold text-red-600 hover:text-red-700">
+            Pin-Flow
+          </h1>
+          <p className="mt-1 text-xs text-gray-500">Pinterest-Strategie</p>
+        </Link>
       </div>
 
       <nav className="flex-1 overflow-y-auto p-3">

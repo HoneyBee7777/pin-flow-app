@@ -6,6 +6,39 @@ export default function RegisterPage({
 }: {
   searchParams: { error?: string }
 }) {
+  // Selbst-Registrierung kann per Env-Variable deaktiviert werden.
+  // `NEXT_PUBLIC_ALLOW_SIGNUP=false` → nur Einladungs-Zugang.
+  const allowSignup = process.env.NEXT_PUBLIC_ALLOW_SIGNUP !== 'false'
+
+  if (!allowSignup) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
+        <div className="w-full max-w-md space-y-6 rounded-xl bg-white p-8 shadow">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">
+              Zugang nur per Einladung
+            </h1>
+            <p className="mt-4 text-sm text-gray-600">
+              Pin-Flow ist aktuell nur für eingeladene Nutzer zugänglich. Wenn
+              du eine Einladung erhalten hast, prüfe bitte dein E-Mail-Postfach
+              — der Link führt dich direkt zur Passwort-Einrichtung.
+            </p>
+          </div>
+
+          <p className="text-center text-sm text-gray-600">
+            Schon ein Konto?{' '}
+            <Link
+              href="/login"
+              className="font-medium text-red-600 hover:text-red-500"
+            >
+              Anmelden
+            </Link>
+          </p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
       <div className="w-full max-w-md space-y-6 rounded-xl bg-white p-8 shadow">

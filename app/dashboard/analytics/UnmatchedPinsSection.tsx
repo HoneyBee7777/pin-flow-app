@@ -206,7 +206,7 @@ export default function UnmatchedPinsSection({
           </div>
         </div>
         <p className="mt-2 text-xs text-gray-500">
-          Es reicht wenn ein Kriterium zutrifft — Felder können auch leer
+          Es reicht wenn ein Kriterium zutrifft, Felder können auch leer
           gelassen werden.
         </p>
         <p className="mt-1 text-xs text-gray-600">
@@ -240,7 +240,7 @@ export default function UnmatchedPinsSection({
         <p className="mt-3 text-xs text-gray-500">
           {hiddenCount} Pin{hiddenCount === 1 ? '' : 's'} unter dem
           Schwellenwert{' '}
-          {hiddenCount === 1 ? 'wird' : 'werden'} nicht angezeigt — diese
+          {hiddenCount === 1 ? 'wird' : 'werden'} nicht angezeigt, diese
           können jederzeit über „Alle anzeigen" nachgepflegt werden.
         </p>
       )}
@@ -444,7 +444,7 @@ function UnmatchedPinRow({
             onClick={onSkip}
             disabled={isPending}
             className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-            title="Datensatz verwerfen — Analytics-Daten dieses Pins werden NICHT importiert."
+            title="Datensatz verwerfen, Analytics-Daten dieses Pins werden NICHT importiert."
           >
             ⚠️ Überspringen
           </button>

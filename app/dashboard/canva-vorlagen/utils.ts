@@ -13,8 +13,7 @@ export type CanvaVorlage = {
   user_id: string
   name: string
   canva_link: string | null
-  vorlagen_typ: VorlagenTyp
-  farbschema: string | null
+  vorlagen_typ: VorlagenTyp | null
   notizen: string | null
   created_at: string
 }

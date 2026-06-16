@@ -108,9 +108,6 @@ export default function AudienceInterestsTable({
       {/* V3.0.1: Erklär-Hinweis direkt unter dem Titel — macht klar, warum
           die Affinitäts-Sortierung der strategische Default ist. */}
       <div className="border-b border-gray-100 bg-blue-50 px-4 py-2 text-xs text-blue-900">
-        <span aria-hidden className="mr-1">
-          💡
-        </span>
         Sortiert nach Affinitäts-Index — die Themen oben sind dein
         strategischer Hebel: Hier interessiert sich deine Audience stärker
         als der Pinterest-Durchschnitt.

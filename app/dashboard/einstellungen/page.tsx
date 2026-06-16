@@ -14,7 +14,8 @@ export default async function EinstellungenPage() {
     supabase
       .from('einstellungen')
       .select(
-        `profil_name, eigene_signalwoerter, pinterest_analytics_url,
+        `profil_name, eigene_signalwoerter, signalwoerter_deaktiviert,
+       pinterest_analytics_url,
        pinterest_account_url, website_url, tailwind_url,
        schwellwert_beobachtung, schwellwert_min_klicks,
        schwellwert_ctr,
@@ -28,11 +29,6 @@ export default async function EinstellungenPage() {
        schwellwert_board_schwach_er, schwellwert_board_wachstum_trend,
        cp_min_pins_gesamt, cp_min_pins_ohne_aktuell, cp_tage_ohne_pin,
        cp_min_ctr_goldnugget, cp_max_pins_goldnugget,
-       strategie_soll_blog, strategie_soll_affiliate, strategie_soll_produkt,
-       ziel_soll_traffic, ziel_soll_lead, ziel_soll_sales,
-       format_soll_standard, format_soll_video, format_soll_collage, format_soll_carousel,
-       strategie_onboarding_abgeschlossen,
-       strategie_check_schwelle_gelb, strategie_check_schwelle_rot,
        status_update_intervall, status_update_vorwarnung`
       )
       .eq('user_id', user.id)
@@ -45,8 +41,13 @@ export default async function EinstellungenPage() {
     <div className="p-8">
       <header className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Einstellungen</h1>
-        <p className="mt-1 text-sm text-gray-600">
-          Persönliche Konfiguration und nutzerspezifische Anpassungen.
+        <p className="mt-1 max-w-3xl text-sm leading-relaxed text-gray-600">
+          Hier richtest du Pin-Flow für dich ein: deinen Profilnamen für die
+          Begrüßung, die Links zu deinem Pinterest-Konto und deinen Tools, und
+          die Signalwörter für deine Pin-Texte. Weiter unten kannst du in den
+          erweiterten Einstellungen die Schwellwerte anpassen, nach denen
+          Pin-Flow deine Pins, Boards und deinen Content bewertet. Wenn du dir
+          unsicher bist, lass die Standardwerte einfach stehen.
         </p>
       </header>
 
@@ -59,6 +60,9 @@ export default async function EinstellungenPage() {
       <EinstellungenClient
         initialProfilName={data?.profil_name ?? ''}
         initialEigeneSignalwoerter={data?.eigene_signalwoerter ?? ''}
+        initialSignalwoerterDeaktiviert={
+          data?.signalwoerter_deaktiviert ?? ''
+        }
         initialPinterestAnalyticsUrl={data?.pinterest_analytics_url ?? ''}
         initialPersoenlicheLinks={{
           pinterestAccountUrl: data?.pinterest_account_url ?? '',
@@ -128,28 +132,6 @@ export default async function EinstellungenPage() {
         initialStatusSchwellwerte={{
           intervall: data?.status_update_intervall ?? 31,
           vorwarnung: data?.status_update_vorwarnung ?? 7,
-        }}
-        initialStrategie={{
-          mix: [
-            data?.strategie_soll_blog ?? 0,
-            data?.strategie_soll_affiliate ?? 0,
-            data?.strategie_soll_produkt ?? 0,
-          ],
-          ziele: [
-            data?.ziel_soll_traffic ?? 0,
-            data?.ziel_soll_lead ?? 0,
-            data?.ziel_soll_sales ?? 0,
-          ],
-          format: [
-            data?.format_soll_standard ?? 60,
-            data?.format_soll_video ?? 20,
-            data?.format_soll_collage ?? 10,
-            data?.format_soll_carousel ?? 10,
-          ],
-          schwelleGelb: data?.strategie_check_schwelle_gelb ?? 5,
-          schwelleRot: data?.strategie_check_schwelle_rot ?? 15,
-          onboardingAbgeschlossen:
-            data?.strategie_onboarding_abgeschlossen === true,
         }}
       />
     </div>

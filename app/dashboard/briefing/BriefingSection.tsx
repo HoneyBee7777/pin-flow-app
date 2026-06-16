@@ -6,18 +6,25 @@
 // <details>-Toggles im Ziel und Highlight-Pulse auf der Ziel-Sektion.
 
 import { useCallback } from 'react'
-import type { BriefingItem, BriefingPrio } from './lib'
+import type { BriefingItem } from './lib'
+import { BRIEFING_ANCHORS } from './lib'
 
-// 3px Border-Left wie .coaching-box / .hinweis-box / .warn-box.
-// Prio-Farbtokens:
-//   sehr_hoch → orange (warn-Akzent)
-//   hoch / mittel → blau (hinweis-Akzent, beides Pin-Handlungsbedarf)
-//   niedrig → grau
-const BORDER_STYLE: Record<BriefingPrio, string> = {
-  sehr_hoch: '#ef4444', // red-500 / warn
-  hoch: '#60a5fa', // blue-400 / hinweis
-  mittel: '#60a5fa',
-  niedrig: '#9ca3af', // gray-400
+// 3px Border-Left wie .coaching-box / .hinweis-box / .warn-box. Die Farbe
+// signalisiert die Art des Punkts und leitet sich aus der Ziel-Sektion ab:
+//   Saison            → orange (terminkritisch, Event mit Deadline)
+//   Board / Strategie → rot    (kritisch, analytics-basierte Diagnose)
+//   Pins / Pipeline   → blau   (Aufbau-Schritt)
+//   sonst (Empty)     → grau   (neutral)
+const TONE_BY_SECTION: Record<string, string> = {
+  [BRIEFING_ANCHORS.saison]: '#f59e0b', // orange
+  [BRIEFING_ANCHORS.board]: '#ef4444', // red-500
+  [BRIEFING_ANCHORS.strategie]: '#ef4444', // red-500
+  [BRIEFING_ANCHORS.pinHandlung]: '#60a5fa', // blue-400
+  [BRIEFING_ANCHORS.pipeline]: '#60a5fa', // blue-400
+}
+
+function borderColor(item: BriefingItem): string {
+  return TONE_BY_SECTION[item.sectionId] ?? '#9ca3af' // gray-400 / neutral
 }
 
 function jumpTo(sectionId: string) {
@@ -65,11 +72,8 @@ export default function BriefingSection({
               <li
                 key={`${item.sectionId}-${i}`}
                 className="rounded-r bg-white/60 py-1 pl-3 pr-2 text-sm leading-snug text-gray-800"
-                style={{ borderLeft: `3px solid ${BORDER_STYLE[item.prio]}` }}
+                style={{ borderLeft: `3px solid ${borderColor(item)}` }}
               >
-                <span className="mr-1" aria-hidden="true">
-                  {item.icon}
-                </span>
                 {item.parts.map((part, idx) =>
                   part.kind === 'bold' ? (
                     <span key={idx} className="font-semibold text-gray-900">
@@ -102,11 +106,8 @@ export default function BriefingSection({
               <li
                 key={`next-${i}`}
                 className="rounded-r bg-white/60 py-1 pl-3 pr-2 text-sm leading-snug text-gray-800"
-                style={{ borderLeft: `3px solid ${BORDER_STYLE[item.prio]}` }}
+                style={{ borderLeft: `3px solid ${borderColor(item)}` }}
               >
-                <span className="mr-1" aria-hidden="true">
-                  {item.icon}
-                </span>
                 {item.parts.map((part, idx) =>
                   part.kind === 'bold' ? (
                     <span key={idx} className="font-semibold text-gray-900">

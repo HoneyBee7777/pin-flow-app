@@ -1,10 +1,13 @@
 'use client'
 
 import Link from 'next/link'
-import { useState, useTransition, type FormEvent } from 'react'
+import { useMemo, useState, useTransition, type FormEvent } from 'react'
 import { saveEinstellungen } from './actions'
-import { saveStrategieManual } from '../strategie/actions'
-import { adjustProportional } from '../strategie/lib'
+import {
+  SIGNALWOERTER,
+  parseSignalwoerterListe,
+  serializeSignalwoerterListe,
+} from '@/lib/signalwoerter'
 import type { UserPinBenchmark } from '../analytics/utils'
 import type { AccountNicheProfile } from '@/lib/account-niche-profile'
 import {
@@ -48,15 +51,6 @@ export type InitialContentPipelineSchwellwerte = {
   maxPinsGoldnugget: number | null
 }
 
-export type InitialStrategie = {
-  mix: [number, number, number]
-  ziele: [number, number, number]
-  format: [number, number, number, number]
-  schwelleGelb: number
-  schwelleRot: number
-  onboardingAbgeschlossen: boolean
-}
-
 export type InitialStatusSchwellwerte = {
   intervall: number
   vorwarnung: number
@@ -65,6 +59,7 @@ export type InitialStatusSchwellwerte = {
 export default function EinstellungenClient({
   initialProfilName,
   initialEigeneSignalwoerter,
+  initialSignalwoerterDeaktiviert,
   initialPinterestAnalyticsUrl,
   initialPersoenlicheLinks,
   initialSchwellwerte,
@@ -73,10 +68,10 @@ export default function EinstellungenClient({
   initialBoardSchwellwerte,
   initialContentPipelineSchwellwerte,
   initialStatusSchwellwerte,
-  initialStrategie,
 }: {
   initialProfilName: string
   initialEigeneSignalwoerter: string
+  initialSignalwoerterDeaktiviert: string
   initialPinterestAnalyticsUrl: string
   initialPersoenlicheLinks: InitialPersoenlicheLinks
   initialSchwellwerte: InitialSchwellwerte
@@ -85,14 +80,19 @@ export default function EinstellungenClient({
   initialBoardSchwellwerte: InitialBoardSchwellwerte
   initialContentPipelineSchwellwerte: InitialContentPipelineSchwellwerte
   initialStatusSchwellwerte: InitialStatusSchwellwerte
-  initialStrategie: InitialStrategie
 }) {
   return (
     <div className="space-y-6">
       <ProfilNameSection initial={initialProfilName} />
-      <SignalwoerterSection initial={initialEigeneSignalwoerter} />
       <PersoenlicheLinksSection initial={initialPersoenlicheLinks} />
       <AnalyticsLinkSection initial={initialPinterestAnalyticsUrl} />
+      <SignalwoerterSection
+        initialEigene={initialEigeneSignalwoerter}
+        initialDeaktiviert={initialSignalwoerterDeaktiviert}
+      />
+      <StrategieSection />
+
+      <ErweiterteEinstellungenTrenner />
       <SchwellwerteSection
         initial={initialSchwellwerte}
         benchmark={initialBenchmark}
@@ -103,7 +103,22 @@ export default function EinstellungenClient({
         initial={initialContentPipelineSchwellwerte}
       />
       <StatusSchwellwerteSection initial={initialStatusSchwellwerte} />
-      <StrategieSection initial={initialStrategie} />
+    </div>
+  )
+}
+
+// Dezenter Abschnitts-Trenner: bündelt die technischen Schwellwert-Sektionen
+// unten als „Erweiterte Einstellungen".
+function ErweiterteEinstellungenTrenner() {
+  return (
+    <div className="pt-4">
+      <h2 className="text-lg font-semibold text-gray-900">
+        Erweiterte Einstellungen
+      </h2>
+      <p className="mt-1 text-sm text-gray-600">
+        Diese Werte sind bereits sinnvoll voreingestellt. Du musst sie nur
+        anpassen, wenn du die Auswertung fein justieren willst.
+      </p>
     </div>
   )
 }
@@ -285,18 +300,137 @@ function UrlField({
   )
 }
 
-function SignalwoerterSection({ initial }: { initial: string }) {
-  const [text, setText] = useState(initial)
+function SignalwoerterChip({
+  label,
+  onRemove,
+  variant,
+}: {
+  label: string
+  onRemove: () => void
+  variant: 'standard' | 'eigen'
+}) {
+  const tone =
+    variant === 'eigen'
+      ? 'bg-red-50 text-red-700 ring-red-200'
+      : 'bg-white text-gray-700 ring-gray-200'
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs ring-1 ${tone}`}
+    >
+      {label}
+      <button
+        type="button"
+        onClick={onRemove}
+        aria-label={`„${label}" entfernen`}
+        title={`„${label}" entfernen`}
+        className="leading-none opacity-60 hover:opacity-100"
+      >
+        ×
+      </button>
+    </span>
+  )
+}
+
+function SignalwoerterSection({
+  initialEigene,
+  initialDeaktiviert,
+}: {
+  initialEigene: string
+  initialDeaktiviert: string
+}) {
+  const [eigene, setEigene] = useState<string[]>(() =>
+    parseSignalwoerterListe(initialEigene)
+  )
+  const [deaktiviert, setDeaktiviert] = useState<string[]>(() =>
+    parseSignalwoerterListe(initialDeaktiviert)
+  )
+  const [newWord, setNewWord] = useState('')
+  const [hint, setHint] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const [feedback, setFeedback] = useState<{
     saved?: boolean
     error?: string
   }>({})
 
-  function onSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const formData = new FormData(e.currentTarget)
+  const deaktiviertSet = useMemo(
+    () => new Set(deaktiviert.map((w) => w.toLowerCase())),
+    [deaktiviert]
+  )
+  // Aktive Standardwörter = alle außer den abgewählten; abgewählte separat.
+  const aktiveStandard = useMemo(
+    () => SIGNALWOERTER.filter((w) => !deaktiviertSet.has(w.toLowerCase())),
+    [deaktiviertSet]
+  )
+  const abgewaehlt = useMemo(
+    () => SIGNALWOERTER.filter((w) => deaktiviertSet.has(w.toLowerCase())),
+    [deaktiviertSet]
+  )
+  const standardLower = useMemo(
+    () => new Set(SIGNALWOERTER.map((w) => w.toLowerCase())),
+    []
+  )
+  const eigeneLower = useMemo(
+    () => new Set(eigene.map((w) => w.toLowerCase())),
+    [eigene]
+  )
+
+  const aktiveAnzahl = aktiveStandard.length + eigene.length
+
+  function abwaehlenStandard(w: string) {
+    setHint(null)
+    setDeaktiviert((prev) =>
+      prev.some((d) => d.toLowerCase() === w.toLowerCase())
+        ? prev
+        : [...prev, w]
+    )
+  }
+
+  function reaktivierenStandard(w: string) {
+    setHint(null)
+    setDeaktiviert((prev) =>
+      prev.filter((d) => d.toLowerCase() !== w.toLowerCase())
+    )
+  }
+
+  function entferneEigenes(w: string) {
+    setHint(null)
+    setEigene((prev) => prev.filter((e) => e !== w))
+  }
+
+  function addWord() {
+    const wort = newWord.trim()
+    if (!wort) return
+    const lower = wort.toLowerCase()
+    // Standardwort: schon aktiv → Hinweis, abgewählt → wieder aufnehmen.
+    if (standardLower.has(lower)) {
+      if (deaktiviertSet.has(lower)) {
+        setDeaktiviert((prev) =>
+          prev.filter((d) => d.toLowerCase() !== lower)
+        )
+        setNewWord('')
+        setHint(`„${wort}" war abgewählt und ist jetzt wieder aktiv.`)
+        return
+      }
+      setHint(`„${wort}" ist bereits als Standardwort enthalten.`)
+      return
+    }
+    if (eigeneLower.has(lower)) {
+      setHint(`„${wort}" steht schon in deiner Liste.`)
+      return
+    }
+    setEigene((prev) => [...prev, wort])
+    setNewWord('')
+    setHint(null)
+  }
+
+  function onSave() {
     setFeedback({})
+    const formData = new FormData()
+    formData.set('eigene_signalwoerter', serializeSignalwoerterListe(eigene))
+    formData.set(
+      'signalwoerter_deaktiviert',
+      serializeSignalwoerterListe(deaktiviert)
+    )
     startTransition(async () => {
       const result = await saveEinstellungen(formData)
       if (result.error) setFeedback({ error: result.error })
@@ -304,79 +438,125 @@ function SignalwoerterSection({ initial }: { initial: string }) {
     })
   }
 
-  const previewWords = text
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean)
-
   return (
     <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-      <h2 className="text-lg font-semibold text-gray-900">
-        Eigene Signalwörter
-      </h2>
+      <h2 className="text-lg font-semibold text-gray-900">Signalwörter</h2>
       <p className="mt-1 text-sm text-gray-600">
-        Ergänze den Standard-Signalwort-Pool um deine eigenen Wörter. Diese
-        werden bei der Pin-Produktion automatisch an den KI-Prompt angehängt.
+        Signalwörter sind Begriffe, die beim Betrachter sofort eine Reaktion
+        auslösen: Neugier, Dringlichkeit oder Vertrauen. Pin-Flow baut sie in
+        den KI-Vorschlag ein, wenn du auf der Pins-Seite neue Pins erstellst. So
+        werden deine Pin-Titel und Beschreibungen klickstärker. Diese Liste
+        steuert, welche Wörter dabei verwendet werden: entferne, was nicht zu
+        dir passt, oder ergänze eigene.
+      </p>
+      <p className="mt-2 text-sm">
+        <Link
+          href="/dashboard/strategie?tab=design&accordion=signalwoerter"
+          className="font-medium text-red-600 hover:underline"
+        >
+          Mehr dazu, wie Signalwörter wirken, im Pinterest-Wissen.
+        </Link>
       </p>
 
-      <form onSubmit={onSubmit} className="mt-4 space-y-4">
-        <div>
-          <label
-            htmlFor="eigene_signalwoerter"
-            className="block text-sm font-medium text-gray-700"
-          >
-            Signalwörter (kommagetrennt)
-          </label>
-          <textarea
-            id="eigene_signalwoerter"
-            name="eigene_signalwoerter"
-            rows={6}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="z.B. heimelig, gemütlich, kuschelig, behaglich"
-            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-          />
-          <p className="mt-1 text-xs text-gray-500">
-            Trenne deine Wörter mit Kommas. Leerzeichen rund um die Kommas
-            werden automatisch entfernt.
-          </p>
-        </div>
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <input
+          type="text"
+          value={newWord}
+          onChange={(e) => {
+            setNewWord(e.target.value)
+            setHint(null)
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              addWord()
+            }
+          }}
+          placeholder="Eigenes Signalwort hinzufügen"
+          className="block w-full max-w-xs rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+        />
+        <button
+          type="button"
+          onClick={addWord}
+          className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+        >
+          Hinzufügen
+        </button>
+      </div>
+      {hint && <p className="mt-2 text-xs text-gray-500">{hint}</p>}
 
-        {previewWords.length > 0 && (
-          <div className="rounded-md border border-gray-200 bg-gray-50 p-3">
-            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">
-              Erkannt: {previewWords.length}{' '}
-              {previewWords.length === 1 ? 'Wort' : 'Wörter'}
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              {previewWords.map((w, i) => (
-                <span
-                  key={`${w}-${i}`}
-                  className="inline-flex items-center rounded-full bg-white px-2.5 py-0.5 text-xs text-gray-700 ring-1 ring-gray-200"
-                >
-                  {w}
+      <div className="mt-4">
+        <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">
+          Aktive Signalwörter ({aktiveAnzahl})
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {aktiveStandard.map((w) => (
+            <SignalwoerterChip
+              key={`std-${w}`}
+              label={w}
+              variant="standard"
+              onRemove={() => abwaehlenStandard(w)}
+            />
+          ))}
+          {eigene.map((w) => (
+            <SignalwoerterChip
+              key={`own-${w}`}
+              label={w}
+              variant="eigen"
+              onRemove={() => entferneEigenes(w)}
+            />
+          ))}
+        </div>
+        <p className="mt-2 text-xs text-gray-400">
+          Helle Chips sind Standardwörter, rot markierte sind deine eigenen.
+          Mit dem „×" wählst du ein Wort ab.
+        </p>
+      </div>
+
+      {abgewaehlt.length > 0 && (
+        <details className="mt-4">
+          <summary className="cursor-pointer text-xs font-medium text-gray-700 hover:text-gray-900">
+            Abgewählte Wörter ({abgewaehlt.length})
+          </summary>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {abgewaehlt.map((w) => (
+              <button
+                key={`off-${w}`}
+                type="button"
+                onClick={() => reaktivierenStandard(w)}
+                title={`„${w}" wieder aktivieren`}
+                aria-label={`„${w}" wieder aktivieren`}
+                className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-0.5 text-xs text-gray-400 ring-1 ring-gray-200 hover:bg-gray-200 hover:text-gray-600"
+              >
+                {w}
+                <span aria-hidden className="font-semibold">
+                  +
                 </span>
-              ))}
-            </div>
+              </button>
+            ))}
           </div>
-        )}
+          <p className="mt-2 text-xs text-gray-400">
+            Tippe ein Wort an, um es wieder in die aktive Liste aufzunehmen.
+          </p>
+        </details>
+      )}
 
-        <div className="flex items-center gap-3">
-          <button
-            type="submit"
-            disabled={isPending}
-            className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
-          >
-            {isPending ? 'Speichert…' : 'Speichern'}
-          </button>
-          {feedback.saved && (
-            <span className="text-sm text-green-700">✓ Gespeichert</span>
-          )}
-          {feedback.error && (
-            <span className="text-sm text-red-700">{feedback.error}</span>
-          )}
-        </div>
-      </form>
+      <div className="mt-5 flex items-center gap-3">
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={isPending}
+          className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+        >
+          {isPending ? 'Speichert…' : 'Speichern'}
+        </button>
+        {feedback.saved && (
+          <span className="text-sm text-green-700">✓ Gespeichert</span>
+        )}
+        {feedback.error && (
+          <span className="text-sm text-red-700">{feedback.error}</span>
+        )}
+      </div>
     </section>
   )
 }
@@ -515,7 +695,7 @@ function SchwellwerteSection({
           whenToAdjust={'Bei kleinem Account (alle Pins unter 200 Impressionen): niedriger setzen, z. B. 200.\nBei großem Account mit viralen Pins: höher setzen, z. B. 1000.'}
         />
         <SchwellwertField
-          label="Mindest-Klicks für Top Performer"
+          label="Mindestzahl ausgehender Klicks für Top Performer"
           name="schwellwert_min_klicks"
           value={minKlicksTopPerformer}
           onChange={setMinKlicksTopPerformer}
@@ -524,7 +704,7 @@ function SchwellwerteSection({
           whenToAdjust={'Bei großem Account: höher setzen (z. B. 20).\nBei kleinem Account: 5 lassen — ist schon ein Erfolg.'}
         />
         <SchwellwertField
-          label="Mindest-Klicks für Nutzer-Signal"
+          label="Mindestzahl ausgehender Klicks für Nutzer-Signal"
           name="schwellwert_min_klicks_nutzer_signal"
           value={minKlicksNutzerSignal}
           onChange={setMinKlicksNutzerSignal}
@@ -1235,37 +1415,6 @@ function ContentPipelineSchwellwerteSection({
   )
 }
 
-// ============================================================
-// Strategie & Ausrichtung — manuelle Anpassung
-// ============================================================
-
-const STRATEGIE_ACCENTS = {
-  blue: 'accent-blue-500',
-  purple: 'accent-purple-500',
-  green: 'accent-green-500',
-  orange: 'accent-orange-500',
-  gray: 'accent-gray-500',
-  red: 'accent-red-500',
-  yellow: 'accent-yellow-400',
-  pink: 'accent-pink-500',
-  indigo: 'accent-indigo-500',
-  black: 'accent-black',
-} as const
-const STRATEGIE_FILL_HEX = {
-  blue: '#3b82f6',
-  purple: '#a855f7',
-  green: '#22c55e',
-  orange: '#f97316',
-  gray: '#6b7280',
-  red: '#ef4444',
-  yellow: '#facc15',
-  pink: '#ec4899',
-  indigo: '#6366f1',
-  black: '#000000',
-} as const
-const STRATEGIE_TRACK_GRAY = '#e5e7eb' // bg-gray-200
-type StrategieAccent = keyof typeof STRATEGIE_ACCENTS
-
 function StatusSchwellwerteSection({
   initial,
 }: {
@@ -1401,302 +1550,28 @@ function StatusSchwellwerteSection({
   )
 }
 
-function StrategieSection({ initial }: { initial: InitialStrategie }) {
-  const [mix, setMix] = useState<[number, number, number]>(initial.mix)
-  const [ziele, setZiele] = useState<[number, number, number]>(initial.ziele)
-  const [format, setFormat] = useState<[number, number, number, number]>(
-    initial.format
-  )
-  const [schwelleGelb, setSchwelleGelb] = useState<string>(
-    String(initial.schwelleGelb)
-  )
-  const [schwelleRot, setSchwelleRot] = useState<string>(
-    String(initial.schwelleRot)
-  )
-  const [isPending, startTransition] = useTransition()
-  const [feedback, setFeedback] = useState<{
-    saved?: boolean
-    error?: string
-  }>({})
-
-  const mixSum = mix[0] + mix[1] + mix[2]
-  const zieleSum = ziele[0] + ziele[1] + ziele[2]
-  const formatSum = format[0] + format[1] + format[2] + format[3]
-  const allOk = mixSum === 100 && zieleSum === 100 && formatSum === 100
-
-  const gelbN = Number(schwelleGelb)
-  const rotN = Number(schwelleRot)
-  const schwelleErr =
-    !Number.isInteger(gelbN) || gelbN < 0 || gelbN > 100
-      ? 'Diff-Schwelle Gelb muss eine ganze Zahl zwischen 0 und 100 sein.'
-      : !Number.isInteger(rotN) || rotN < 0 || rotN > 100
-        ? 'Diff-Schwelle Rot muss eine ganze Zahl zwischen 0 und 100 sein.'
-        : rotN <= gelbN
-          ? 'Diff-Schwelle Rot muss größer sein als Gelb.'
-          : null
-
-  function onSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    setFeedback({})
-    if (!allOk) {
-      setFeedback({
-        error: 'Alle drei Gruppen müssen jeweils 100% ergeben.',
-      })
-      return
-    }
-    if (schwelleErr) {
-      setFeedback({ error: schwelleErr })
-      return
-    }
-    const formData = new FormData()
-    formData.set('strategie_soll_blog', String(mix[0]))
-    formData.set('strategie_soll_affiliate', String(mix[1]))
-    formData.set('strategie_soll_produkt', String(mix[2]))
-    formData.set('ziel_soll_traffic', String(ziele[0]))
-    formData.set('ziel_soll_lead', String(ziele[1]))
-    formData.set('ziel_soll_sales', String(ziele[2]))
-    formData.set('format_soll_standard', String(format[0]))
-    formData.set('format_soll_video', String(format[1]))
-    formData.set('format_soll_collage', String(format[2]))
-    formData.set('format_soll_carousel', String(format[3]))
-    formData.set('strategie_check_schwelle_gelb', String(gelbN))
-    formData.set('strategie_check_schwelle_rot', String(rotN))
-    startTransition(async () => {
-      const result = await saveStrategieManual(formData)
-      if (result.error) setFeedback({ error: result.error })
-      else setFeedback({ saved: true })
-    })
-  }
-
+function StrategieSection() {
   return (
     <section
       id="strategie"
       className="scroll-mt-24 rounded-lg border border-gray-200 bg-white p-6 shadow-sm"
     >
       <h2 className="text-lg font-semibold text-gray-900">
-        Strategie &amp; Ausrichtung
+        Deine Pinterest-Strategie
       </h2>
       <p className="mt-1 text-sm text-gray-600">
-        Hier kannst du deine Pinterest-Strategie manuell anpassen. Beim
-        Speichern wird automatisch ein Snapshot deiner vorherigen Strategie
-        archiviert.
+        Deine Strategie legst du im geführten Setup fest: Business-Modell,
+        Pin-Ziele, Themen-Schwerpunkte und Pinning-Rhythmus. Dort bekommst du
+        auch eine Empfehlung, die du jederzeit anpassen kannst.
       </p>
-      {!initial.onboardingAbgeschlossen && (
-        <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-          Du hast das geführte Onboarding noch nicht durchlaufen.{' '}
-          <Link
-            href="/dashboard/strategie"
-            className="font-medium underline hover:text-amber-700"
-          >
-            Onboarding jetzt starten ↗
-          </Link>
-        </p>
-      )}
-
-      <form onSubmit={onSubmit} className="mt-4 space-y-6">
-        <StrategieSliderGroup
-          title="Strategie-Mix"
-          channels={[
-            { label: 'Blog/Content', color: 'blue' },
-            { label: 'Affiliate', color: 'purple' },
-            { label: 'Produkt', color: 'green' },
-          ]}
-          values={mix as unknown as number[]}
-          onChange={(v) =>
-            setMix(v as unknown as [number, number, number])
-          }
-        />
-
-        <StrategieSliderGroup
-          title="Conversion-Ziele"
-          channels={[
-            { label: 'Traffic', color: 'blue' },
-            { label: 'Lead', color: 'orange' },
-            { label: 'Sales', color: 'green' },
-          ]}
-          values={ziele as unknown as number[]}
-          onChange={(v) =>
-            setZiele(v as unknown as [number, number, number])
-          }
-        />
-
-        <StrategieSliderGroup
-          title="Pin-Format-Mix"
-          channels={[
-            { label: 'Standard', color: 'black' },
-            { label: 'Video', color: 'red' },
-            { label: 'Collage', color: 'yellow' },
-            { label: 'Carousel', color: 'pink' },
-          ]}
-          values={format as unknown as number[]}
-          onChange={(v) =>
-            setFormat(v as unknown as [number, number, number, number])
-          }
-        />
-
-        <div>
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-900">
-            Diff-Schwellen für Strategie-Check
-          </h3>
-          <p className="mt-1 text-xs text-gray-600">
-            Steuert die Farb-Bewertung im Strategie-Check auf dem Dashboard.
-            Abweichung |Ist − Soll| in Prozentpunkten.
-          </p>
-          <div className="mt-3 grid gap-4 sm:grid-cols-2">
-            <div>
-              <label
-                htmlFor="strategie_check_schwelle_gelb"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Diff-Schwelle Gelb (%)
-              </label>
-              <input
-                id="strategie_check_schwelle_gelb"
-                type="number"
-                min={0}
-                max={100}
-                step={1}
-                value={schwelleGelb}
-                onChange={(e) => setSchwelleGelb(e.target.value)}
-                className="mt-1 block w-32 rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-              />
-              <p className="mt-1 text-xs text-gray-500">
-                Ab dieser Abweichung wird der Wert gelb markiert (leicht außer
-                Plan). Standard: 5.
-              </p>
-            </div>
-            <div>
-              <label
-                htmlFor="strategie_check_schwelle_rot"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Diff-Schwelle Rot (%)
-              </label>
-              <input
-                id="strategie_check_schwelle_rot"
-                type="number"
-                min={0}
-                max={100}
-                step={1}
-                value={schwelleRot}
-                onChange={(e) => setSchwelleRot(e.target.value)}
-                className="mt-1 block w-32 rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-              />
-              <p className="mt-1 text-xs text-gray-500">
-                Ab dieser Abweichung wird der Wert rot markiert (deutlich außer
-                Plan). Muss größer sein als die gelbe Schwelle. Standard: 15.
-              </p>
-            </div>
-          </div>
-          {schwelleErr && (
-            <p className="mt-2 text-xs text-red-700">{schwelleErr}</p>
-          )}
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="submit"
-            disabled={isPending || !allOk || !!schwelleErr}
-            className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isPending ? 'Speichert…' : 'Strategie speichern'}
-          </button>
-          <Link
-            href="/dashboard/strategie"
-            className="text-sm font-medium text-red-600 hover:underline"
-          >
-            Onboarding wiederholen ↗
-          </Link>
-          {feedback.saved && (
-            <span className="text-sm text-green-700">
-              ✓ Gespeichert (Snapshot archiviert)
-            </span>
-          )}
-          {feedback.error && (
-            <span className="text-sm text-red-700">{feedback.error}</span>
-          )}
-        </div>
-      </form>
-    </section>
-  )
-}
-
-function StrategieSliderGroup({
-  title,
-  channels,
-  values,
-  onChange,
-}: {
-  title: string
-  channels: Array<{ label: string; color: StrategieAccent }>
-  values: number[]
-  onChange: (next: number[]) => void
-}) {
-  const sum = values.reduce((a, b) => a + b, 0)
-  const ok = sum === 100
-  return (
-    <div>
-      <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-900">
-        {title}
-      </h3>
-      <div className="mt-3 space-y-3">
-        {channels.map((c, i) => (
-          <div
-            key={c.label}
-            className="grid items-center gap-2 sm:grid-cols-[140px_1fr_80px]"
-          >
-            <span className="text-sm font-medium text-gray-700">
-              {c.label}
-            </span>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              step={5}
-              value={values[i]}
-              onChange={(e) =>
-                onChange(
-                  adjustProportional(values, i, Number(e.target.value))
-                )
-              }
-              className={`pf-slider w-full ${STRATEGIE_ACCENTS[c.color]}`}
-              style={{
-                background: `linear-gradient(to right, ${STRATEGIE_FILL_HEX[c.color]} 0%, ${STRATEGIE_FILL_HEX[c.color]} ${values[i]}%, ${STRATEGIE_TRACK_GRAY} ${values[i]}%, ${STRATEGIE_TRACK_GRAY} 100%)`,
-                borderRadius: '9999px',
-                color: STRATEGIE_FILL_HEX[c.color],
-              }}
-              aria-label={c.label}
-            />
-            <div className="relative w-20">
-              <input
-                type="number"
-                min={0}
-                max={100}
-                step={5}
-                value={values[i]}
-                onChange={(e) =>
-                  onChange(
-                    adjustProportional(values, i, Number(e.target.value))
-                  )
-                }
-                className="w-full rounded-md border border-gray-300 py-1 pl-2 pr-6 text-right text-sm tabular-nums shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-                aria-label={`${c.label} Prozent`}
-              />
-              <span
-                className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-sm text-gray-500"
-                aria-hidden
-              >
-                %
-              </span>
-            </div>
-          </div>
-        ))}
+      <div className="mt-4">
+        <Link
+          href="/dashboard/strategie?tab=meine"
+          className="inline-flex items-center rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+        >
+          Zur Strategie
+        </Link>
       </div>
-      <p
-        className={`mt-2 text-xs font-medium ${ok ? 'text-green-700' : 'text-red-700'}`}
-      >
-        Summe: {sum}% {ok ? '✓' : '— bitte auf 100% anpassen'}
-      </p>
-    </div>
+    </section>
   )
 }

@@ -213,7 +213,7 @@ export function extractPinterestPinId(url: string): string | null {
 }
 
 // Board-URL → Slug-Segment hinter dem Username.
-// Beispiel: https://www.pinterest.com/soulfulspaceyoga/yoga-zuhause-yogaraum/
+// Beispiel: https://www.pinterest.com/yogaflow-studio/yoga-zuhause-yogaraum/
 //          → "yoga-zuhause-yogaraum"
 // Pin-URLs (mit /pin/ als zweitem Segment) werden bewusst NICHT als Boards
 // erkannt.

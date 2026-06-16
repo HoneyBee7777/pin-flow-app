@@ -8,13 +8,8 @@ import {
   type FormEvent,
 } from 'react'
 import { useSearchParams } from 'next/navigation'
+import SortableTh from '@/components/SortableTh'
 import { addBoard, deleteBoard, updateBoard } from './actions'
-
-export type StrategieFokus =
-  | 'blog_content'
-  | 'affiliate'
-  | 'produkt'
-  | 'gemischt'
 
 export type KeywordOption = {
   id: string
@@ -38,16 +33,10 @@ export type Board = {
   beschreibung: string | null
   kategorie: string | null
   pinterest_url: string | null
-  geheim: boolean
-  strategie_fokus: StrategieFokus | null
-  impressionen: number
-  klicks_auf_pins: number
-  ausgehende_klicks: number
-  saves: number
   created_at: string
   keywords: Array<{ id: string; keyword: string }>
   contents: Array<{ id: string; titel: string }>
-  urls: Array<{ id: string; titel: string }>
+  urls: Array<{ id: string; titel: string; url: string }>
 }
 
 export type BoardPin = {
@@ -102,28 +91,43 @@ const KATEGORIEN = [
   'Sonstiges',
 ] as const
 
-const FOKUS_OPTIONS: Array<{ value: StrategieFokus; label: string }> = [
-  { value: 'blog_content', label: 'Blog-Content' },
-  { value: 'affiliate', label: 'Affiliate' },
-  { value: 'produkt', label: 'Produkt' },
-  { value: 'gemischt', label: 'Gemischt' },
-]
+type SortKey = 'name' | 'pins' | 'kategorie'
 
-const FOKUS_LABEL: Record<StrategieFokus, string> = Object.fromEntries(
-  FOKUS_OPTIONS.map((o) => [o.value, o.label])
-) as Record<StrategieFokus, string>
+// Baut aus einer verknüpften Ziel-URL einen kompakten Linktext. Ist der Titel
+// selbst eine volle URL, wird stattdessen der letzte sinnvolle Pfadabschnitt
+// angezeigt, sonst der echte Titel. Der Anker (#abschnitt) wird, falls
+// vorhanden, separat zurückgegeben. Alles robust mit Fallbacks. Gleiche Logik
+// wie auf der Seite „Dein Content".
+function buildUrlLabel(
+  titel: string,
+  url: string
+): { label: string; anker: string } {
+  const anker = (() => {
+    try {
+      return new URL(url).hash.replace(/^#/, '')
+    } catch {
+      return url.split('#')[1] || ''
+    }
+  })()
 
-const FOKUS_BADGE: Record<StrategieFokus, string> = {
-  blog_content: 'bg-blue-100 text-blue-700',
-  affiliate: 'bg-pink-100 text-pink-700',
-  produkt: 'bg-purple-100 text-purple-700',
-  gemischt: 'bg-gray-100 text-gray-700',
-}
+  const titelIstUrl = /^https?:\/\//i.test(titel.trim())
+  if (!titelIstUrl) {
+    return { label: titel, anker }
+  }
 
-const KEYWORD_TYP_LABEL: Record<KeywordOption['typ'], string> = {
-  haupt: 'Haupt',
-  mid_tail: 'Mid-Tail',
-  longtail: 'Longtail',
+  const label = (() => {
+    try {
+      const parsed = new URL(url)
+      const segments = parsed.pathname.split('/').filter(Boolean)
+      return segments[segments.length - 1] || parsed.hostname
+    } catch {
+      const ohneAnker = url.split('#')[0].split('?')[0]
+      const segments = ohneAnker.split('/').filter(Boolean)
+      return segments[segments.length - 1] || url
+    }
+  })()
+
+  return { label, anker }
 }
 
 function PencilIcon() {
@@ -180,12 +184,8 @@ export default function BoardsClient({
     }
   }, [editParam, boards, editing?.id])
   const [formError, setFormError] = useState<string | null>(null)
-  const [keywordFilter, setKeywordFilter] = useState('')
   const [contentFilter, setContentFilter] = useState('')
   const [urlFilter, setUrlFilter] = useState('')
-  const [selectedKeywordIds, setSelectedKeywordIds] = useState<Set<string>>(
-    new Set()
-  )
   const [selectedContentIds, setSelectedContentIds] = useState<Set<string>>(
     new Set()
   )
@@ -193,16 +193,59 @@ export default function BoardsClient({
   const [isPending, startTransition] = useTransition()
   const [expandedBoardId, setExpandedBoardId] = useState<string | null>(null)
   const [showAiModal, setShowAiModal] = useState(false)
+  const [expandedDescBoardId, setExpandedDescBoardId] = useState<string | null>(
+    null
+  )
+  const [beschreibungLen, setBeschreibungLen] = useState(
+    editing?.beschreibung?.length ?? 0
+  )
+  const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' } | null>(
+    null
+  )
 
   const formOpen = showAddForm || editing !== null
 
-  const filteredKeywords = useMemo(() => {
-    const q = keywordFilter.trim().toLowerCase()
-    if (!q) return availableKeywords
-    return availableKeywords.filter((k) =>
-      k.keyword.toLowerCase().includes(q)
-    )
-  }, [keywordFilter, availableKeywords])
+  function toggleSort(key: SortKey) {
+    setSort((cur) => {
+      if (!cur || cur.key !== key) return { key, dir: 'asc' }
+      if (cur.dir === 'asc') return { key, dir: 'desc' }
+      return null
+    })
+  }
+
+  function dirOf(key: SortKey): 'asc' | 'desc' | null {
+    return sort && sort.key === key ? sort.dir : null
+  }
+
+  // Ohne aktive Spaltensortierung bleibt die Reihenfolge aus der Query
+  // (created_at absteigend). Mit aktivem Sort wird nach der geklickten Spalte
+  // sortiert.
+  const sortedBoards = useMemo(() => {
+    if (!sort) return boards
+    const dir = sort.dir === 'asc' ? 1 : -1
+    const arr = [...boards]
+    arr.sort((a, b) => {
+      switch (sort.key) {
+        case 'name':
+          return a.name.localeCompare(b.name, 'de') * dir
+        case 'pins': {
+          const pa = (pinsByBoardId[a.id] ?? []).length
+          const pb = (pinsByBoardId[b.id] ?? []).length
+          return (pa - pb) * dir
+        }
+        case 'kategorie': {
+          const ka = a.kategorie ?? ''
+          const kb = b.kategorie ?? ''
+          if (ka === '' && kb !== '') return 1
+          if (kb === '' && ka !== '') return -1
+          return ka.localeCompare(kb, 'de') * dir
+        }
+        default:
+          return 0
+      }
+    })
+    return arr
+  }, [boards, sort, pinsByBoardId])
 
   const filteredContents = useMemo(() => {
     const q = contentFilter.trim().toLowerCase()
@@ -221,43 +264,31 @@ export default function BoardsClient({
   function openAdd() {
     setEditing(null)
     setShowAddForm(true)
-    setSelectedKeywordIds(new Set())
     setSelectedContentIds(new Set())
     setSelectedUrlIds(new Set())
-    setKeywordFilter('')
     setContentFilter('')
     setUrlFilter('')
+    setBeschreibungLen(0)
     setFormError(null)
   }
 
   function openEdit(board: Board) {
     setEditing(board)
     setShowAddForm(false)
-    setSelectedKeywordIds(new Set(board.keywords.map((k) => k.id)))
     setSelectedContentIds(new Set(board.contents.map((c) => c.id)))
     setSelectedUrlIds(new Set(board.urls.map((u) => u.id)))
-    setKeywordFilter('')
     setContentFilter('')
     setUrlFilter('')
+    setBeschreibungLen(board.beschreibung?.length ?? 0)
     setFormError(null)
   }
 
   function closeForm() {
     setShowAddForm(false)
     setEditing(null)
-    setSelectedKeywordIds(new Set())
     setSelectedContentIds(new Set())
     setSelectedUrlIds(new Set())
     setFormError(null)
-  }
-
-  function toggleKeyword(id: string) {
-    setSelectedKeywordIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
   }
 
   function toggleContent(id: string) {
@@ -283,10 +314,8 @@ export default function BoardsClient({
     setFormError(null)
     const form = e.currentTarget
     const formData = new FormData(form)
-    formData.delete('keyword_ids')
     formData.delete('content_ids')
     formData.delete('url_ids')
-    selectedKeywordIds.forEach((id) => formData.append('keyword_ids', id))
     selectedContentIds.forEach((id) => formData.append('content_ids', id))
     selectedUrlIds.forEach((id) => formData.append('url_ids', id))
 
@@ -326,9 +355,9 @@ export default function BoardsClient({
         <button
           type="button"
           onClick={() => setShowAiModal(true)}
-          className="rounded-md border border-red-600 bg-white px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50"
+          className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
         >
-          ✨ Board mit KI erstellen
+          KI-Prompt für Board
         </button>
       </div>
 
@@ -379,9 +408,14 @@ export default function BoardsClient({
               id="beschreibung"
               name="beschreibung"
               rows={3}
+              maxLength={500}
               defaultValue={editing?.beschreibung ?? ''}
+              onChange={(e) => setBeschreibungLen(e.target.value.length)}
               className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
             />
+            <p className="mt-1 text-right text-xs text-gray-400">
+              {beschreibungLen}/500
+            </p>
           </div>
 
           <div>
@@ -406,7 +440,7 @@ export default function BoardsClient({
             </select>
             <p className="mt-1 text-xs text-gray-500">
               Das ist die Kategorie die du bei Pinterest für dieses Board
-              ausgewählt hast — zu finden unter Board bearbeiten auf Pinterest.
+              ausgewählt hast, zu finden unter Board bearbeiten auf Pinterest.
             </p>
           </div>
 
@@ -421,7 +455,7 @@ export default function BoardsClient({
               id="pinterest_url"
               name="pinterest_url"
               type="url"
-              placeholder="https://www.pinterest.com/soulfulspaceyoga/yoga-zuhause-yogaraum/"
+              placeholder="https://www.pinterest.com/yogaflow-studio/yoga-zuhause-yogaraum/"
               defaultValue={editing?.pinterest_url ?? ''}
               className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
             />
@@ -430,93 +464,6 @@ export default function BoardsClient({
               beim Speichern automatisch ausgelesen und für das Matching
               beim Analytics-CSV-Import verwendet.
             </p>
-          </div>
-
-          <div>
-            <label className="flex items-start gap-2 text-sm">
-              <input
-                type="checkbox"
-                name="geheim"
-                defaultChecked={editing?.geheim ?? false}
-                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
-              />
-              <span>
-                <span className="font-medium text-gray-700">Geheim</span>
-                <span className="mt-0.5 block text-xs text-gray-500">
-                  Geheime Boards sind nur für dich sichtbar und beeinflussen
-                  deinen Algorithmus nicht.
-                </span>
-              </span>
-            </label>
-          </div>
-
-          <div>
-            <label
-              htmlFor="strategie_fokus"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Strategie-Fokus
-            </label>
-            <select
-              id="strategie_fokus"
-              name="strategie_fokus"
-              defaultValue={editing?.strategie_fokus ?? ''}
-              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-            >
-              <option value="">— keiner —</option>
-              {FOKUS_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <div className="mb-2 flex items-center justify-between gap-3">
-              <label className="block text-sm font-medium text-gray-700">
-                Keywords zuordnen
-              </label>
-              {availableKeywords.length > 0 && (
-                <input
-                  type="text"
-                  value={keywordFilter}
-                  onChange={(e) => setKeywordFilter(e.target.value)}
-                  placeholder="Filter…"
-                  className="w-48 rounded-md border border-gray-300 px-2 py-1 text-xs focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-                />
-              )}
-            </div>
-            <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border border-gray-300 p-3">
-              {availableKeywords.length === 0 ? (
-                <p className="text-sm text-gray-500">
-                  Noch keine Keywords vorhanden — lege erst welche unter
-                  „Keywords“ an.
-                </p>
-              ) : filteredKeywords.length === 0 ? (
-                <p className="text-sm text-gray-500">
-                  Keine Treffer für „{keywordFilter}“.
-                </p>
-              ) : (
-                filteredKeywords.map((k) => (
-                  <label
-                    key={k.id}
-                    className="flex items-center gap-2 rounded px-1 py-1 text-sm hover:bg-gray-50"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedKeywordIds.has(k.id)}
-                      onChange={() => toggleKeyword(k.id)}
-                      className="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
-                    />
-                    <span className="flex-1 text-gray-900">{k.keyword}</span>
-                    <span className="text-xs text-gray-500">
-                      {KEYWORD_TYP_LABEL[k.typ]}
-                    </span>
-                  </label>
-                ))
-              )}
-            </div>
           </div>
 
           <div>
@@ -537,7 +484,7 @@ export default function BoardsClient({
             <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border border-gray-300 p-3">
               {availableContents.length === 0 ? (
                 <p className="text-sm text-gray-500">
-                  Noch keine Content-Inhalte vorhanden — lege erst welche unter
+                  Noch keine Content-Inhalte vorhanden. Lege erst welche unter
                   „Content-Inhalte“ an.
                 </p>
               ) : filteredContents.length === 0 ? (
@@ -581,7 +528,7 @@ export default function BoardsClient({
             <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border border-gray-300 p-3">
               {availableUrls.length === 0 ? (
                 <p className="text-sm text-gray-500">
-                  Noch keine Ziel-URLs vorhanden — lege erst welche unter
+                  Noch keine Ziel-URLs vorhanden. Lege erst welche unter
                   „Ziel-URLs“ an.
                 </p>
               ) : filteredUrls.length === 0 ? (
@@ -631,24 +578,24 @@ export default function BoardsClient({
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="sticky top-0 z-10 bg-gray-50">
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+              <SortableTh
+                dir={dirOf('name')}
+                onClick={() => toggleSort('name')}
+              >
                 Name
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+              </SortableTh>
+              <SortableTh
+                dir={dirOf('pins')}
+                onClick={() => toggleSort('pins')}
+              >
                 Pins
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+              </SortableTh>
+              <SortableTh
+                dir={dirOf('kategorie')}
+                onClick={() => toggleSort('kategorie')}
+              >
                 Kategorie
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Strategie
-              </th>
-              <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Geheim
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Pinterest-URL
-              </th>
+              </SortableTh>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Keywords
               </th>
@@ -667,14 +614,14 @@ export default function BoardsClient({
             {boards.length === 0 ? (
               <tr>
                 <td
-                  colSpan={10}
+                  colSpan={7}
                   className="px-4 py-8 text-center text-sm text-gray-500"
                 >
                   Noch keine Boards. Erstelle dein erstes.
                 </td>
               </tr>
             ) : (
-              boards.flatMap((board) => {
+              sortedBoards.flatMap((board) => {
                 const isExpanded = expandedBoardId === board.id
                 const boardPins = pinsByBoardId[board.id] ?? []
                 const boardRow = (
@@ -682,10 +629,29 @@ export default function BoardsClient({
                     <td className="px-4 py-3 text-sm font-medium text-gray-900">
                       {board.name}
                       {board.beschreibung && (
-                        <p className="mt-1 text-xs font-normal text-gray-500">
-                          {board.beschreibung}
-                        </p>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setExpandedDescBoardId(
+                              expandedDescBoardId === board.id
+                                ? null
+                                : board.id
+                            )
+                          }
+                          aria-expanded={expandedDescBoardId === board.id}
+                          className="mt-1 block text-xs font-normal text-gray-400 hover:text-gray-600"
+                        >
+                          {expandedDescBoardId === board.id
+                            ? 'Beschreibung ausblenden'
+                            : 'Beschreibung anzeigen'}
+                        </button>
                       )}
+                      {board.beschreibung &&
+                        expandedDescBoardId === board.id && (
+                          <p className="mt-1 text-xs font-normal text-gray-500">
+                            {board.beschreibung}
+                          </p>
+                        )}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-700">
                       <button
@@ -713,41 +679,6 @@ export default function BoardsClient({
                     </td>
                   <td className="px-4 py-3 text-sm text-gray-700">
                     {board.kategorie ?? '—'}
-                  </td>
-                  <td className="px-4 py-3 text-sm">
-                    {board.strategie_fokus ? (
-                      <span
-                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${FOKUS_BADGE[board.strategie_fokus]}`}
-                      >
-                        {FOKUS_LABEL[board.strategie_fokus]}
-                      </span>
-                    ) : (
-                      <span className="text-gray-400">—</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-center text-sm">
-                    {board.geheim ? (
-                      <span title="Geheimes Board" aria-label="Geheim">
-                        🔒
-                      </span>
-                    ) : (
-                      <span className="text-gray-400">—</span>
-                    )}
-                  </td>
-                  <td className="max-w-xs px-4 py-3 text-sm">
-                    {board.pinterest_url ? (
-                      <a
-                        href={board.pinterest_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block truncate text-red-600 hover:text-red-700 hover:underline"
-                        title={board.pinterest_url}
-                      >
-                        {board.pinterest_url}
-                      </a>
-                    ) : (
-                      <span className="text-gray-400">—</span>
-                    )}
                   </td>
                   <td className="px-4 py-3 text-sm">
                     {board.keywords.length === 0 ? (
@@ -785,16 +716,30 @@ export default function BoardsClient({
                     {board.urls.length === 0 ? (
                       <span className="text-gray-400">—</span>
                     ) : (
-                      <div className="flex flex-wrap gap-1">
-                        {board.urls.map((u) => (
-                          <span
-                            key={u.id}
-                            className="inline-flex items-center rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-700"
-                          >
-                            {u.titel}
-                          </span>
-                        ))}
-                      </div>
+                      <ul className="space-y-1">
+                        {board.urls.map((u) => {
+                          const { label, anker } = buildUrlLabel(u.titel, u.url)
+                          return (
+                            <li key={u.id}>
+                              <a
+                                href={u.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-red-600 hover:text-red-700 hover:underline"
+                                title={u.url}
+                              >
+                                {label}
+                                {anker && (
+                                  <span className="text-gray-400">
+                                    {' '}
+                                    · {anker}
+                                  </span>
+                                )}
+                              </a>
+                            </li>
+                          )
+                        })}
+                      </ul>
                     )}
                   </td>
                   <td className="px-4 py-3 text-right text-sm">
@@ -827,7 +772,7 @@ export default function BoardsClient({
                     key={`${board.id}-pins`}
                     className="bg-gray-50/60"
                   >
-                    <td colSpan={10} className="px-4 py-3">
+                    <td colSpan={7} className="px-4 py-3">
                       {boardPins.length === 0 ? (
                         <p className="text-sm text-gray-500">
                           Noch keine Pins für dieses Board
@@ -929,8 +874,13 @@ function BoardAiPromptModal({
   function toggleKeyword(id: string) {
     setSelectedKeywordIds((prev) => {
       const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        // Abwählen bleibt immer möglich, Hinzufügen nur bis zur Obergrenze.
+        if (next.size >= 12) return prev
+        next.add(id)
+      }
       return next
     })
   }
@@ -974,15 +924,15 @@ Erstelle eine vollständige Board-Optimierung für Pinterest.
 
 1. BOARD-NAME
 - Haupt-Keyword möglichst am Anfang
-- Klar und beschreibend — kein kreativer oder witziger Name
-- STRIKT maximal 50 Zeichen inklusive Leerzeichen — das ist das Pinterest-Limit
+- Klar und beschreibend, kein kreativer oder witziger Name
+- STRIKT maximal 50 Zeichen inklusive Leerzeichen, das ist das Pinterest-Limit
 - Format: Haupt-Keyword: Unterthema & Ergänzung
 - Orientiere dich wenn möglich an offiziellen Pinterest-Kategorienamen
 
 2. BOARD-BESCHREIBUNG
-- 2–3 Sätze, maximal 500 Zeichen (gerne ausnutzen)
+- 2 bis 3 Sätze, maximal 500 Zeichen (gerne ausnutzen)
 - Haupt-Keyword im ersten Satz ganz vorne
-- So viele relevante Mid-Tail und Longtail-Keywords natürlich integrieren wie sinnvoll — kein Keyword-Stuffing, natürlich lesbar
+- So viele relevante Mid-Tail und Longtail-Keywords natürlich integrieren wie sinnvoll, kein Keyword-Stuffing, natürlich lesbar
 ${zielgruppeRule}
 - Kein Call-to-Action
 
@@ -992,7 +942,7 @@ ${zielgruppeRule}
 - Keine generischen Aussagen wie "Alles rund um..."
 - Pinterest SEO Logik: thematische Klarheit über Kreativität
 - Sprache: Deutsch
-- WICHTIG: Board-Name MUSS unter 50 Zeichen bleiben — zähle die Zeichen bevor du antwortest
+- WICHTIG: Board-Name MUSS unter 50 Zeichen bleiben, zähle die Zeichen bevor du antwortest
 
 === AUSGABEFORMAT ===
 Board-Name: [Name] ([Zeichenanzahl] Zeichen)
@@ -1009,7 +959,7 @@ Board-Beschreibung: [Beschreibung]`
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch {
-      // Clipboard nicht verfügbar — Nutzer kann den Prompt manuell markieren.
+      // Clipboard nicht verfügbar, Nutzer kann den Prompt manuell markieren.
     }
   }
 
@@ -1031,11 +981,12 @@ Board-Beschreibung: [Beschreibung]`
               id="board-ai-prompt-modal-title"
               className="text-lg font-semibold text-gray-900"
             >
-              ✨ Board mit KI erstellen
+              KI-Prompt für Board-Name und Beschreibung
             </h2>
             <p className="mt-1 text-sm text-gray-600">
-              Fülle die Felder aus — wir generieren daraus einen
-              Pinterest-SEO-Prompt für Board-Name und Beschreibung.
+              Fülle die Felder aus. Pin-Flow erzeugt daraus einen fertigen
+              Prompt für deine KI, der dir einen suchmaschinenoptimierten
+              Board-Namen und eine Beschreibung vorschlägt.
             </p>
           </div>
           <button
@@ -1062,7 +1013,7 @@ Board-Beschreibung: [Beschreibung]`
               rows={3}
               value={thema}
               onChange={(e) => setThema(e.target.value)}
-              placeholder="Beschreibe das Thema des Boards — z.B. Yoga zuhause für Anfänger: Morgenroutinen, Atemübungen und einfache Übungen für mehr Energie im Alltag"
+              placeholder="Beschreibe das Thema des Boards, z.B. Yoga zuhause für Anfänger: Morgenroutinen, Atemübungen und einfache Übungen für mehr Energie im Alltag"
               className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm placeholder-gray-400 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
             />
           </div>
@@ -1072,7 +1023,7 @@ Board-Beschreibung: [Beschreibung]`
               htmlFor="board-ai-content"
               className="block text-xs font-medium text-gray-700"
             >
-              Content-Inhalt auswählen (optional — lädt zugehörige Keywords)
+              Content-Inhalt auswählen (optional, lädt zugehörige Keywords)
             </label>
             <select
               id="board-ai-content"
@@ -1091,7 +1042,10 @@ Board-Beschreibung: [Beschreibung]`
 
           <div>
             <span className="block text-xs font-medium text-gray-700">
-              Keywords auswählen <span className="text-red-600">*</span>
+              Keywords auswählen <span className="text-red-600">*</span>{' '}
+              <span className="font-normal text-gray-400">
+                (bis zu 12, {selectedKeywordIds.size} gewählt)
+              </span>
             </span>
 
             {selectedKeywords.length > 0 && (
@@ -1125,16 +1079,23 @@ Board-Beschreibung: [Beschreibung]`
               ) : (
                 selectableKeywords.map((k) => {
                   const checked = selectedKeywordIds.has(k.id)
+                  const limitReached =
+                    !checked && selectedKeywordIds.size >= 12
                   return (
                     <label
                       key={k.id}
-                      className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-sm hover:bg-gray-50"
+                      className={`flex items-center gap-2 rounded px-1 py-0.5 text-sm ${
+                        limitReached
+                          ? 'cursor-not-allowed opacity-50'
+                          : 'cursor-pointer hover:bg-gray-50'
+                      }`}
                     >
                       <input
                         type="checkbox"
                         checked={checked}
+                        disabled={limitReached}
                         onChange={() => toggleKeyword(k.id)}
-                        className="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
+                        className="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500 disabled:cursor-not-allowed"
                       />
                       <span className="text-gray-700">{k.keyword}</span>
                     </label>
@@ -1156,7 +1117,7 @@ Board-Beschreibung: [Beschreibung]`
               type="text"
               value={zielgruppe}
               onChange={(e) => setZielgruppe(e.target.value)}
-              placeholder="z.B. Frauen 30–45 die Yoga zuhause praktizieren"
+              placeholder="z.B. Frauen 30 bis 45 die Yoga zuhause praktizieren"
               className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm placeholder-gray-400 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
             />
           </div>

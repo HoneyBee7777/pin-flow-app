@@ -9,83 +9,95 @@ import {
   type SaisonTyp,
 } from './utils'
 
-type DefaultEvent = {
+// ---------- Standard-Events fürs Seeding ----------
+//
+// Pro Event liefert `dateFor(year)` ein konkretes ISO-Datum für das gegebene
+// Jahr. Beim Seeding (s. unten) wird das für das aktuelle UND das nächste
+// Jahr aufgerufen → der neue Nutzer hat sofort einen 2-Jahres-Ausblick.
+//
+// `datum_variabel: true` heißt: das Datum verschiebt sich jährlich (Ostern,
+// Muttertag, Vatertag, Black Friday). Wir tragen einen korrekt berechneten
+// Default ein, markieren das Event aber als variabel, damit die UI das ⚠
+// anzeigt und der Nutzer im Zweifel nachjustieren kann.
+//
+// `suchbeginn_tage` = Tage zwischen Pin-Ende und Event-Datum. Pin-Fenster
+// und Produktionsfenster werden in utils.computeStatus daraus abgeleitet
+// (Pin-Fenster = 60 Tage vor Pin-Ende, Produktion = 31 Tage davor).
+
+type DefaultEventDef = {
   event_name: string
-  month: number
-  day: number
   saison_typ: Exclude<SaisonTyp, 'evergreen'>
   suchbeginn_tage: number
   datum_variabel: boolean
+  dateFor: (year: number) => string
 }
 
-const DEFAULT_DATED_EVENTS: DefaultEvent[] = [
-  { event_name: 'Valentinstag', month: 2, day: 14, saison_typ: 'feiertag', suchbeginn_tage: 45, datum_variabel: false },
-  { event_name: 'Frühling', month: 3, day: 20, saison_typ: 'jahreszeit', suchbeginn_tage: 60, datum_variabel: false },
-  { event_name: 'Ostern', month: 4, day: 5, saison_typ: 'feiertag', suchbeginn_tage: 45, datum_variabel: true },
-  { event_name: 'Muttertag', month: 5, day: 10, saison_typ: 'feiertag', suchbeginn_tage: 45, datum_variabel: true },
-  { event_name: 'Vatertag', month: 5, day: 14, saison_typ: 'feiertag', suchbeginn_tage: 45, datum_variabel: true },
-  { event_name: 'Sommer', month: 6, day: 21, saison_typ: 'jahreszeit', suchbeginn_tage: 60, datum_variabel: false },
-  { event_name: 'Herbst', month: 9, day: 23, saison_typ: 'jahreszeit', suchbeginn_tage: 60, datum_variabel: false },
-  { event_name: 'Halloween', month: 10, day: 31, saison_typ: 'feiertag', suchbeginn_tage: 60, datum_variabel: false },
-  { event_name: 'Black Friday', month: 11, day: 28, saison_typ: 'shopping_event', suchbeginn_tage: 90, datum_variabel: false },
-  { event_name: 'Winter', month: 12, day: 21, saison_typ: 'jahreszeit', suchbeginn_tage: 60, datum_variabel: false },
-  { event_name: 'Weihnachten', month: 12, day: 25, saison_typ: 'feiertag', suchbeginn_tage: 90, datum_variabel: false },
-  { event_name: 'Silvester', month: 12, day: 31, saison_typ: 'feiertag', suchbeginn_tage: 60, datum_variabel: false },
+function iso(year: number, month: number, day: number): string {
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
+
+// n-ter Wochentag im Monat (weekday 0=So…6=Sa, n=1..5).
+function nthWeekdayOfMonth(
+  year: number,
+  monthIdx0: number,
+  weekday: number,
+  n: number
+): number {
+  const firstDow = new Date(Date.UTC(year, monthIdx0, 1)).getUTCDay()
+  const offset = (weekday - firstDow + 7) % 7
+  return 1 + offset + (n - 1) * 7
+}
+
+// Letzter Wochentag im Monat (weekday 0=So…6=Sa).
+function lastWeekdayOfMonth(
+  year: number,
+  monthIdx0: number,
+  weekday: number
+): number {
+  const lastDay = new Date(Date.UTC(year, monthIdx0 + 1, 0)).getUTCDate()
+  const lastDow = new Date(Date.UTC(year, monthIdx0, lastDay)).getUTCDay()
+  const offset = (lastDow - weekday + 7) % 7
+  return lastDay - offset
+}
+
+// Gauß'sche Osterformel — gibt Ostersonntag-Datum als (month, day) zurück.
+function osterSonntag(year: number): { month: number; day: number } {
+  const a = year % 19
+  const b = Math.floor(year / 100)
+  const c = year % 100
+  const d = Math.floor(b / 4)
+  const e = b % 4
+  const f = Math.floor((b + 8) / 25)
+  const g = Math.floor((b - f + 1) / 3)
+  const h = (19 * a + b - d - g + 15) % 30
+  const i = Math.floor(c / 4)
+  const k = c % 4
+  const l = (32 + 2 * e + 2 * i - h - k) % 7
+  const m = Math.floor((a + 11 * h + 22 * l) / 451)
+  const month = Math.floor((h + l - 7 * m + 114) / 31)
+  const day = ((h + l - 7 * m + 114) % 31) + 1
+  return { month, day }
+}
+
+const DEFAULT_EVENTS: DefaultEventDef[] = [
+  // Feste Feiertage
+  { event_name: 'Valentinstag',  saison_typ: 'feiertag',       suchbeginn_tage: 14, datum_variabel: false, dateFor: (y) => iso(y, 2, 14) },
+  { event_name: 'Ostern',        saison_typ: 'feiertag',       suchbeginn_tage: 14, datum_variabel: true,  dateFor: (y) => { const { month, day } = osterSonntag(y); return iso(y, month, day) } },
+  { event_name: 'Muttertag',     saison_typ: 'feiertag',       suchbeginn_tage: 46, datum_variabel: true,  dateFor: (y) => iso(y, 5, nthWeekdayOfMonth(y, 4, 0, 2)) },
+  { event_name: 'Vatertag',      saison_typ: 'feiertag',       suchbeginn_tage: 76, datum_variabel: true,  dateFor: (y) => iso(y, 6, nthWeekdayOfMonth(y, 5, 0, 2)) },
+  { event_name: 'Halloween',     saison_typ: 'feiertag',       suchbeginn_tage: 60, datum_variabel: false, dateFor: (y) => iso(y, 10, 31) },
+  { event_name: 'Black Friday',  saison_typ: 'shopping_event', suchbeginn_tage: 90, datum_variabel: true,  dateFor: (y) => iso(y, 11, lastWeekdayOfMonth(y, 10, 5)) },
+  { event_name: 'Weihnachten',   saison_typ: 'feiertag',       suchbeginn_tage: 90, datum_variabel: false, dateFor: (y) => iso(y, 12, 25) },
+  { event_name: 'Silvester',     saison_typ: 'feiertag',       suchbeginn_tage: 60, datum_variabel: false, dateFor: (y) => iso(y, 12, 31) },
+  // Jahreszeiten
+  { event_name: 'Frühling',      saison_typ: 'jahreszeit',     suchbeginn_tage: 60, datum_variabel: false, dateFor: (y) => iso(y, 3, 20) },
+  { event_name: 'Sommer',        saison_typ: 'jahreszeit',     suchbeginn_tage: 60, datum_variabel: false, dateFor: (y) => iso(y, 6, 21) },
+  { event_name: 'Herbst',        saison_typ: 'jahreszeit',     suchbeginn_tage: 60, datum_variabel: false, dateFor: (y) => iso(y, 9, 23) },
+  { event_name: 'Winter',        saison_typ: 'jahreszeit',     suchbeginn_tage: 60, datum_variabel: false, dateFor: (y) => iso(y, 12, 21) },
 ]
-
-function nextOccurrenceIso(
-  month: number,
-  day: number,
-  todayIsoStr: string
-): string {
-  const thisYear = parseInt(todayIsoStr.slice(0, 4), 10)
-  const candidate = new Date(Date.UTC(thisYear, month - 1, day))
-    .toISOString()
-    .slice(0, 10)
-  if (candidate >= todayIsoStr) return candidate
-  return new Date(Date.UTC(thisYear + 1, month - 1, day))
-    .toISOString()
-    .slice(0, 10)
-}
 
 const SELECT_FIELDS =
   'id, event_name, event_datum, saison_typ, suchbeginn_tage, notizen, datum_variabel, created_at'
-
-const REMINDER_TITLE =
-  'Bitte prüfe und aktualisiere deine Saison-Events für die nächsten 6 Monate'
-
-type SupabaseInstance = ReturnType<typeof createClient>
-
-function currentHalfYearReminderDate(todayIsoStr: string): string {
-  const year = parseInt(todayIsoStr.slice(0, 4), 10)
-  const month = parseInt(todayIsoStr.slice(5, 7), 10)
-  return month <= 6 ? `${year}-01-31` : `${year}-07-31`
-}
-
-async function ensureReminderForCurrentHalfYear(
-  supabase: SupabaseInstance,
-  userId: string,
-  todayIsoStr: string
-): Promise<void> {
-  const faelligkeitsdatum = currentHalfYearReminderDate(todayIsoStr)
-
-  const { data: existing } = await supabase
-    .from('aufgaben')
-    .select('id')
-    .eq('user_id', userId)
-    .eq('titel', REMINDER_TITLE)
-    .eq('faelligkeitsdatum', faelligkeitsdatum)
-    .limit(1)
-
-  if (existing && existing.length > 0) return
-
-  await supabase.from('aufgaben').insert({
-    user_id: userId,
-    titel: REMINDER_TITLE,
-    faelligkeitsdatum,
-    erledigt: false,
-  })
-}
 
 export default async function SaisonKalenderPage() {
   const supabase = createClient()
@@ -96,23 +108,37 @@ export default async function SaisonKalenderPage() {
 
   const today = todayIso()
 
-  let { data, error } = await supabase
+  // Seeding-Gate: explizit pro user_id zählen, NICHT auf RLS verlassen.
+  // Wenn der Nutzer schon Events hat (auch nur einen), wird nichts geseedet —
+  // sonst würde z. B. das absichtliche Löschen eines Events beim nächsten
+  // Aufruf alles wieder zurückbringen.
+  const { count: existingCount, error: countError } = await supabase
     .from('saison_events')
-    .select(SELECT_FIELDS)
-    .order('event_datum', { ascending: true, nullsFirst: false })
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', user.id)
 
   let seedError: string | null = null
 
-  if (!error && (data ?? []).length === 0) {
-    const datedRows = DEFAULT_DATED_EVENTS.map((d) => ({
-      user_id: user.id,
-      event_name: d.event_name,
-      event_datum: nextOccurrenceIso(d.month, d.day, today),
-      saison_typ: d.saison_typ,
-      suchbeginn_tage: d.suchbeginn_tage,
-      notizen: null,
-      datum_variabel: d.datum_variabel,
-    }))
+  if (countError) {
+    console.error('[saison-kalender] count failed:', countError)
+  } else if ((existingCount ?? 0) === 0) {
+    const thisYear = parseInt(today.slice(0, 4), 10)
+    const nextYear = thisYear + 1
+
+    // Pro Event: ein Eintrag fürs aktuelle, ein Eintrag fürs nächste Jahr.
+    // → Nutzer bekommt sofort einen 2-Jahres-Ausblick.
+    const datedRows = DEFAULT_EVENTS.flatMap((def) =>
+      [thisYear, nextYear].map((year) => ({
+        user_id: user.id,
+        event_name: def.event_name,
+        event_datum: def.dateFor(year),
+        saison_typ: def.saison_typ,
+        suchbeginn_tage: def.suchbeginn_tage,
+        notizen: null,
+        datum_variabel: def.datum_variabel,
+      }))
+    )
+
     const evergreenRow = {
       user_id: user.id,
       event_name: 'Evergreen',
@@ -129,15 +155,20 @@ export default async function SaisonKalenderPage() {
 
     if (seedResult.error) {
       seedError = seedResult.error.message
-    } else {
-      const reload = await supabase
-        .from('saison_events')
-        .select(SELECT_FIELDS)
-        .order('event_datum', { ascending: true, nullsFirst: false })
-      data = reload.data
-      error = reload.error
+      // Auch ins Server-Log, damit der Bug im Vercel-/Dev-Log auftaucht und
+      // nicht nur als roter Banner im UI verschwindet.
+      console.error('[saison-kalender] seed failed:', seedResult.error)
     }
   }
+
+  // Anschließend immer mit user_id-Filter laden — egal ob geseedet oder
+  // existierende Daten. Kein Verlassen auf RLS, kein Risiko fremde Events
+  // zu sehen.
+  const { data, error } = await supabase
+    .from('saison_events')
+    .select(SELECT_FIELDS)
+    .eq('user_id', user.id)
+    .order('event_datum', { ascending: true, nullsFirst: false })
 
   const events = (data ?? []) as SaisonEvent[]
   const eventsWithStatus: EventWithStatus[] = events
@@ -167,26 +198,75 @@ export default async function SaisonKalenderPage() {
     <div className="p-8">
       <header className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">Saison-Kalender</h1>
-        <p className="mt-1 text-sm text-gray-600">
-          Plane deine Saison-Pins rechtzeitig — Status und Countdown werden
-          automatisch berechnet.
+        <p className="mb-4 mt-1 max-w-3xl text-sm leading-relaxed text-gray-600">
+          Hier planst du deine saisonalen Pins, von Feiertagen über Jahreszeiten
+          bis zu Shopping-Events wie dem Black Friday. Pin-Flow berechnet für
+          jedes Event automatisch, wann du produzieren und pinnen solltest, denn
+          auf Pinterest brauchst du saisonale Inhalte Wochen im Voraus. Status
+          und Countdown zeigen dir auf einen Blick, was als Nächstes ansteht.
         </p>
-        <p className="mt-1 text-[13px]">
-          <span aria-hidden>→ </span>
+        <p className="mb-4 text-[13px]">
           <Link
             href="/dashboard/strategie?tab=grundlagen&accordion=saisonalitaet"
-            className="text-red-600 underline hover:opacity-80"
+            className="font-medium text-red-600 hover:underline"
           >
             Mehr zur Saisonalität & Pinterest-Timing
           </Link>
         </p>
+        <details className="group max-w-3xl rounded-lg border border-gray-200 bg-white shadow-sm">
+          <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-4 text-base font-semibold text-gray-900 hover:bg-red-50 [&::-webkit-details-marker]:hidden">
+            <span
+              className="text-lg leading-none text-gray-400 transition-transform"
+              aria-hidden
+            >
+              <span className="inline group-open:hidden">▸</span>
+              <span className="hidden group-open:inline">▾</span>
+            </span>
+            <span className="flex-1">So arbeitest du mit dieser Seite</span>
+          </summary>
+          <div className="space-y-4 border-t border-gray-100 px-5 py-5 text-sm leading-relaxed text-gray-700">
+            <div>
+              <p className="font-semibold text-gray-900">Status verstehen</p>
+              <p>
+                Pin-Flow rechnet rückwärts vom Event-Datum: erst die
+                Produktionsphase, dann das Pin-Fenster, dann die Hochphase kurz
+                vor dem Event. Der Status sagt dir, in welcher Phase du gerade
+                bist, der Countdown, wie viel Zeit bleibt.
+              </p>
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900">
+                Einmal im Jahr vorausplanen
+              </p>
+              <p>
+                Plane einmal im Jahr voraus. Events mit wechselndem Datum
+                (Ostern, Muttertag) musst du für die kommenden Jahre pflegen,
+                sonst kann Pin-Flow Status und Countdown nicht rechtzeitig
+                berechnen. Diese Events erkennst du am Warnsymbol, über
+                „Nächstes Jahr planen“ pflegst du ihre Daten.
+              </p>
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900">Auch auf dem Dashboard</p>
+              <p>
+                Die anstehenden Events findest du auch auf deinem Dashboard,
+                damit du immer rechtzeitig erinnert wirst, was als Nächstes
+                produziert werden muss.
+              </p>
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900">
+                Events für deine Nische finden
+              </p>
+              <p>
+                Über „KI-Prompt für Saison-Events“ erzeugst du einen Prompt, mit
+                dem dir deine KI passende saisonale Anlässe für dein Thema
+                vorschlägt.
+              </p>
+            </div>
+          </div>
+        </details>
       </header>
-
-      <div className="mb-6 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
-        <span className="font-medium">Tipp:</span> Events mit ⚠️ haben ein
-        variables Datum, das sich jährlich ändert. Nutze den Button „Nächstes
-        Jahr planen", um diese Daten vorausschauend zu pflegen.
-      </div>
 
       {loadError && (
         <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">

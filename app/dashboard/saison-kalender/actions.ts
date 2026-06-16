@@ -9,6 +9,8 @@ const ALLOWED_TYPES: readonly SaisonTyp[] = [
   'jahreszeit',
   'shopping_event',
   'evergreen',
+  'anlass',
+  'saison',
 ] as const
 
 function isTyp(value: string): value is SaisonTyp {

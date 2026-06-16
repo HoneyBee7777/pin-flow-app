@@ -1,16 +1,8 @@
 'use client'
 
 import { useMemo, useState, useTransition, type FormEvent } from 'react'
+import SortableTh from '@/components/SortableTh'
 import { addContent, deleteContent, updateContent } from './actions'
-
-export type ContentTyp =
-  | 'blogpost'
-  | 'produkt'
-  | 'affiliate'
-  | 'landingpage'
-  | 'leadmagnet'
-
-export type StrategieTyp = 'traffic' | 'lead' | 'sales'
 
 export type KeywordOption = {
   id: string
@@ -32,8 +24,6 @@ export type BoardOption = {
 export type ContentItem = {
   id: string
   titel: string
-  typ: ContentTyp
-  strategie_typ: StrategieTyp
   notizen: string | null
   created_at: string
   keywords: Array<{ id: string; keyword: string }>
@@ -42,48 +32,47 @@ export type ContentItem = {
   pinCount: number
 }
 
-const TYP_OPTIONS: Array<{ value: ContentTyp; label: string }> = [
-  { value: 'blogpost', label: 'Blogpost' },
-  { value: 'produkt', label: 'Produkt' },
-  { value: 'affiliate', label: 'Affiliate' },
-  { value: 'landingpage', label: 'Landingpage' },
-  { value: 'leadmagnet', label: 'Lead-Magnet' },
-]
-
-const TYP_LABEL: Record<ContentTyp, string> = Object.fromEntries(
-  TYP_OPTIONS.map((o) => [o.value, o.label])
-) as Record<ContentTyp, string>
-
-const TYP_BADGE: Record<ContentTyp, string> = {
-  blogpost: 'bg-blue-100 text-blue-700',
-  produkt: 'bg-purple-100 text-purple-700',
-  affiliate: 'bg-pink-100 text-pink-700',
-  landingpage: 'bg-indigo-100 text-indigo-700',
-  leadmagnet: 'bg-amber-100 text-amber-800',
-}
-
-const STRATEGIE_OPTIONS: Array<{ value: StrategieTyp; label: string }> = [
-  { value: 'traffic', label: 'Traffic' },
-  { value: 'lead', label: 'Lead' },
-  { value: 'sales', label: 'Sales' },
-]
-
-const STRATEGIE_LABEL: Record<StrategieTyp, string> = {
-  traffic: 'Traffic',
-  lead: 'Lead',
-  sales: 'Sales',
-}
-
-const STRATEGIE_BADGE: Record<StrategieTyp, string> = {
-  traffic: 'bg-sky-100 text-sky-700',
-  lead: 'bg-amber-100 text-amber-800',
-  sales: 'bg-emerald-100 text-emerald-700',
-}
-
 const KEYWORD_TYP_LABEL: Record<KeywordOption['typ'], string> = {
   haupt: 'Haupt',
   mid_tail: 'Mid-Tail',
   longtail: 'Longtail',
+}
+
+// Baut aus einer verknüpften Ziel-URL einen kompakten Linktext. Ist der Titel
+// selbst eine volle URL, wird stattdessen der letzte sinnvolle Pfadabschnitt
+// angezeigt, sonst der echte Titel. Der Anker (#abschnitt) wird, falls
+// vorhanden, separat zurückgegeben, damit er in der Anzeige dezent abgesetzt
+// werden kann. Alles robust mit Fallbacks, falls die URL nicht parsbar ist.
+function buildUrlLabel(
+  titel: string,
+  url: string
+): { label: string; anker: string } {
+  const anker = (() => {
+    try {
+      return new URL(url).hash.replace(/^#/, '')
+    } catch {
+      return url.split('#')[1] || ''
+    }
+  })()
+
+  const titelIstUrl = /^https?:\/\//i.test(titel.trim())
+  if (!titelIstUrl) {
+    return { label: titel, anker }
+  }
+
+  const label = (() => {
+    try {
+      const parsed = new URL(url)
+      const segments = parsed.pathname.split('/').filter(Boolean)
+      return segments[segments.length - 1] || parsed.hostname
+    } catch {
+      const ohneAnker = url.split('#')[0].split('?')[0]
+      const segments = ohneAnker.split('/').filter(Boolean)
+      return segments[segments.length - 1] || url
+    }
+  })()
+
+  return { label, anker }
 }
 
 function PencilIcon() {
@@ -130,8 +119,38 @@ export default function ContentClient({
     new Set()
   )
   const [isPending, startTransition] = useTransition()
+  const [sort, setSort] = useState<{ key: 'pins'; dir: 'asc' | 'desc' } | null>(
+    null
+  )
 
   const formOpen = showAddForm || editing !== null
+
+  function toggleSort(key: 'pins') {
+    setSort((cur) => {
+      if (!cur || cur.key !== key) return { key, dir: 'asc' }
+      if (cur.dir === 'asc') return { key, dir: 'desc' }
+      return null
+    })
+  }
+
+  function dirOf(key: 'pins'): 'asc' | 'desc' | null {
+    return sort && sort.key === key ? sort.dir : null
+  }
+
+  const sortedItems = useMemo(() => {
+    if (!sort) return items
+    const dir = sort.dir === 'asc' ? 1 : -1
+    const arr = [...items]
+    arr.sort((a, b) => {
+      switch (sort.key) {
+        case 'pins':
+          return (a.pinCount - b.pinCount) * dir
+        default:
+          return 0
+      }
+    })
+    return arr
+  }, [items, sort])
 
   const filteredKeywords = useMemo(() => {
     const q = keywordFilter.trim().toLowerCase()
@@ -290,58 +309,6 @@ export default function ContentClient({
             />
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label
-                htmlFor="typ"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Typ <span className="text-red-600">*</span>
-              </label>
-              <select
-                id="typ"
-                name="typ"
-                required
-                defaultValue={editing?.typ ?? ''}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-              >
-                <option value="" disabled>
-                  Bitte wählen…
-                </option>
-                {TYP_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label
-                htmlFor="strategie_typ"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Strategie-Typ <span className="text-red-600">*</span>
-              </label>
-              <select
-                id="strategie_typ"
-                name="strategie_typ"
-                required
-                defaultValue={editing?.strategie_typ ?? ''}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-              >
-                <option value="" disabled>
-                  Bitte wählen…
-                </option>
-                {STRATEGIE_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
           <div>
             <div className="mb-2 flex items-center justify-between gap-3">
               <label className="block text-sm font-medium text-gray-700">
@@ -360,7 +327,7 @@ export default function ContentClient({
             <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border border-gray-300 p-3">
               {availableKeywords.length === 0 ? (
                 <p className="text-sm text-gray-500">
-                  Noch keine Keywords vorhanden — lege erst welche unter
+                  Noch keine Keywords vorhanden. Lege erst welche unter
                   „Keywords“ an.
                 </p>
               ) : filteredKeywords.length === 0 ? (
@@ -407,7 +374,7 @@ export default function ContentClient({
             <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border border-gray-300 p-3">
               {availableUrls.length === 0 ? (
                 <p className="text-sm text-gray-500">
-                  Noch keine Ziel-URLs vorhanden — lege erst welche unter
+                  Noch keine Ziel-URLs vorhanden. Lege erst welche unter
                   „Ziel-URLs“ an.
                 </p>
               ) : filteredUrls.length === 0 ? (
@@ -456,7 +423,7 @@ export default function ContentClient({
             <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border border-gray-300 p-3">
               {availableBoards.length === 0 ? (
                 <p className="text-sm text-gray-500">
-                  Noch keine Boards vorhanden — lege erst welche unter „Boards“
+                  Noch keine Boards vorhanden. Lege erst welche unter „Boards“
                   an.
                 </p>
               ) : filteredBoards.length === 0 ? (
@@ -525,15 +492,13 @@ export default function ContentClient({
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Titel
               </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Typ
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Strategie
-              </th>
-              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500">
+              <SortableTh
+                dir={dirOf('pins')}
+                onClick={() => toggleSort('pins')}
+                align="right"
+              >
                 Pins
-              </th>
+              </SortableTh>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Keywords
               </th>
@@ -552,14 +517,14 @@ export default function ContentClient({
             {items.length === 0 ? (
               <tr>
                 <td
-                  colSpan={8}
+                  colSpan={6}
                   className="px-4 py-8 text-center text-sm text-gray-500"
                 >
                   Noch keine Inhalte. Lege deinen ersten an.
                 </td>
               </tr>
             ) : (
-              items.map((item) => (
+              sortedItems.map((item) => (
                 <tr key={item.id} className="align-top hover:bg-gray-50">
                   <td className="px-4 py-3 text-sm font-medium text-gray-900">
                     {item.titel}
@@ -568,20 +533,6 @@ export default function ContentClient({
                         {item.notizen}
                       </p>
                     )}
-                  </td>
-                  <td className="px-4 py-3 text-sm">
-                    <span
-                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${TYP_BADGE[item.typ]}`}
-                    >
-                      {TYP_LABEL[item.typ]}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-sm">
-                    <span
-                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${STRATEGIE_BADGE[item.strategie_typ]}`}
-                    >
-                      {STRATEGIE_LABEL[item.strategie_typ]}
-                    </span>
                   </td>
                   <td className="px-4 py-3 text-right text-sm font-medium tabular-nums text-gray-900">
                     {item.pinCount}
@@ -607,19 +558,31 @@ export default function ContentClient({
                       <span className="text-gray-400">—</span>
                     ) : (
                       <ul className="space-y-1">
-                        {item.urls.map((u) => (
-                          <li key={u.id}>
-                            <a
-                              href={u.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-red-600 hover:text-red-700 hover:underline"
-                              title={u.url}
-                            >
-                              {u.titel}
-                            </a>
-                          </li>
-                        ))}
+                        {item.urls.map((u) => {
+                          const { label, anker } = buildUrlLabel(
+                            u.titel,
+                            u.url
+                          )
+                          return (
+                            <li key={u.id}>
+                              <a
+                                href={u.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-red-600 hover:text-red-700 hover:underline"
+                                title={u.url}
+                              >
+                                {label}
+                                {anker && (
+                                  <span className="text-gray-400">
+                                    {' '}
+                                    · {anker}
+                                  </span>
+                                )}
+                              </a>
+                            </li>
+                          )
+                        })}
                       </ul>
                     )}
                   </td>

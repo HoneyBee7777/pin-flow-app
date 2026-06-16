@@ -101,12 +101,48 @@ export const SIGNALWOERTER: readonly string[] = [
   'Zeit sparen',
 ] as const
 
-export function mergeSignalwoerter(custom: string | null | undefined): string[] {
-  const standard = [...SIGNALWOERTER]
-  if (!custom) return standard
-  const customList = custom
+// Parst eine kommagetrennte Signalwort-Liste (eigene_signalwoerter oder
+// signalwoerter_deaktiviert) in ein bereinigtes String-Array.
+export function parseSignalwoerterListe(
+  value: string | null | undefined
+): string[] {
+  if (!value) return []
+  return value
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean)
-  return [...standard, ...customList]
+}
+
+// Serialisiert eine Signalwort-Liste zurück ins kommagetrennte DB-Format.
+export function serializeSignalwoerterListe(list: readonly string[]): string {
+  return list
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .join(', ')
+}
+
+// Baut den finalen, aktiven Signalwort-Pool für den Pin-Prompt:
+//   1. Start mit den festen Standard-Signalwörtern.
+//   2. Entfernt die vom Nutzer abgewählten Standardwörter (deaktiviert).
+//   3. Hängt die eigenen Wörter des Nutzers hinten an.
+// Der Abgleich der Abwahl ist case-insensitiv, damit die Schreibweise aus der
+// gespeicherten Liste nicht exakt mit dem Standard übereinstimmen muss.
+export function baueAktiveSignalwoerter(
+  eigene: string | null | undefined,
+  deaktiviert: string | null | undefined
+): string[] {
+  const abgewaehlt = new Set(
+    parseSignalwoerterListe(deaktiviert).map((w) => w.toLowerCase())
+  )
+  const standard = SIGNALWOERTER.filter(
+    (w) => !abgewaehlt.has(w.toLowerCase())
+  )
+  return [...standard, ...parseSignalwoerterListe(eigene)]
+}
+
+// Bestand: hängt eigene Wörter an den vollständigen Standard-Pool an (ohne
+// Abwahl). Intern auf baueAktiveSignalwoerter umgestellt, damit der bestehende
+// Aufruf unverändert weiterläuft.
+export function mergeSignalwoerter(custom: string | null | undefined): string[] {
+  return baueAktiveSignalwoerter(custom, null)
 }

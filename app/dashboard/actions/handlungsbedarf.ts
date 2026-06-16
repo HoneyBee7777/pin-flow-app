@@ -22,7 +22,7 @@ export async function produceVariant(
     .from('pins')
     .select(
       `content_id, canva_vorlage_id, ziel_url_id, board_id, saison_event_id,
-       titel, hook, beschreibung, call_to_action,
+       titel, hook, beschreibung,
        strategie_typ, conversion_ziel, hook_art, pin_format`
     )
     .eq('id', originalPinId)
@@ -44,7 +44,6 @@ export async function produceVariant(
       titel: original.titel,
       hook: original.hook,
       beschreibung: original.beschreibung,
-      call_to_action: original.call_to_action,
       strategie_typ: original.strategie_typ,
       conversion_ziel: original.conversion_ziel,
       hook_art: original.hook_art,
