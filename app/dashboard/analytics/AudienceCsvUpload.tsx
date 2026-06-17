@@ -5,6 +5,7 @@ import {
   importAudienceCsv,
   type ImportAudienceCsvResult,
 } from './audience-actions'
+import { HinweisBox } from '@/components/HinweisBox'
 
 // V3.0 Phase 2a — rechte Spalte im „Schritt 2"-Block der Eingabe-Tab.
 // Sitzt visuell parallel zum Top-Pins-Import, aber bewusst eigenständig:
@@ -52,25 +53,16 @@ export default function AudienceCsvUpload() {
   const canSubmit = file !== null && !isPending
 
   return (
-    <section className="space-y-3">
-      <div>
-        <h2 className="text-lg font-semibold text-gray-900">
-          2b) Zielgruppe importieren
-        </h2>
-        <p className="mt-0.5 text-sm text-gray-600">
-          Empfohlen: 1× pro Monat.
-        </p>
-      </div>
-
-      <div className="rounded-md border border-teal-200 border-l-[3px] border-l-teal-400 bg-teal-50 p-3 text-[13px] text-teal-900">
+    <div className="space-y-3">
+      <HinweisBox variant="tipp">
         Wähle in Pinterest &bdquo;Interagierende Zielgruppe&ldquo; (nicht
         &bdquo;Gesamte Zielgruppe&ldquo;), diese Daten sind strategisch
         wertvoller.
-      </div>
+      </HinweisBox>
 
       <form
         onSubmit={onSubmit}
-        className="space-y-4 rounded-lg border border-gray-200 bg-white p-6 shadow-sm"
+        className="space-y-4"
       >
         <div className="rounded-md border border-gray-200 bg-gray-50 p-3">
           <label className="block text-sm font-medium text-gray-700">
@@ -125,7 +117,7 @@ export default function AudienceCsvUpload() {
         )}
 
         {!result && (
-          <div className="flex items-center justify-end">
+          <div className="flex items-center">
             <button
               type="submit"
               disabled={!canSubmit}
@@ -137,10 +129,10 @@ export default function AudienceCsvUpload() {
         )}
 
         <p className="text-xs text-gray-500">
-          ℹ️ Das Stichdatum kommt aus der CSV. Bei wiederholtem Import für
+          Das Stichdatum kommt aus der CSV. Bei wiederholtem Import für
           denselben Stichtag wird der vorhandene Snapshot ersetzt.
         </p>
       </form>
-    </section>
+    </div>
   )
 }

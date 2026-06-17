@@ -8,6 +8,7 @@ import type { PinAnalyticsThresholds } from '../analytics/utils'
 import AudienceWissen from './AudienceWissen'
 import MyStrategy from './MyStrategy'
 import PinLifecycleSection from './PinLifecycleSection'
+import { HinweisBox } from '@/components/HinweisBox'
 
 type TabKey =
   | 'faktoren'
@@ -233,28 +234,6 @@ function CopyPromptBlock({
         </pre>
       </div>
       {steps}
-    </div>
-  )
-}
-
-type HinweisVariant = 'tipp' | 'merke'
-
-function HinweisBox({
-  children,
-  variant = 'tipp',
-}: {
-  children: ReactNode
-  variant?: HinweisVariant
-}) {
-  // Tipp = amber (Handlungsempfehlung), Merke = teal (Prinzip / Wissen).
-  // Beide nutzen einen left-border als visueller Akzent.
-  const cls =
-    variant === 'merke'
-      ? 'border border-teal-200 border-l-[3px] border-l-teal-400 bg-teal-50 text-teal-800'
-      : 'border border-amber-200 border-l-[3px] border-l-amber-400 bg-amber-50 text-amber-900'
-  return (
-    <div className={`rounded-md p-4 text-sm leading-relaxed ${cls}`}>
-      {children}
     </div>
   )
 }
@@ -3836,9 +3815,10 @@ function TabAnalytics({
             ein Top Performer voraussichtlich noch in dieser starken Phase ist.
             Das bedeutet nicht, dass der Pin danach wertlos wird: Gute Pins
             liefern oft über Monate, Evergreen-Themen sogar über Jahre. Erst
-            wenn ein früher starker Pin deutlich älter wird (ab etwa sechs
-            Monaten) und an Aktualität verliert, stuft Pin-Flow ihn als
-            Eingeschlafenen Gewinner ein, dann lohnt sich das Recyceln.
+            wenn ein früher starker Pin von Pinterest immer weniger ausgespielt
+            wird — seine Reichweite über die letzten Monate deutlich einbricht —
+            stuft Pin-Flow ihn als Eingeschlafenen Gewinner ein, dann lohnt sich
+            das Recyceln.
           </Para>
         </div>
 
@@ -3930,8 +3910,8 @@ function TabAnalytics({
           <Para>
             <strong>Was die Daten zeigen:</strong> Was gut läuft: Das Thema hat
             sich bewiesen, der Pin hatte historisch starke Zahlen. Das Problem
-            ist allein das Alter (älter als {t.schlafenderGewinnerAlter} Tage),
-            deshalb lohnt sich das Recyceln.
+            ist die einbrechende Reichweite — Pinterest spielt den Pin kaum noch
+            aus, deshalb lohnt sich das Recyceln.
           </Para>
           <Para>
             <strong>Deine Handlung:</strong> Recyceln. Erstelle eine neue

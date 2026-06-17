@@ -253,6 +253,7 @@ type CoachingKategorie =
   | 'hidden_gem'
   | 'reichweite_ohne_wirkung'
   | 'eingeschlafener_gewinner'
+  | 'save_magnet'
 
 type BoardKey =
   | 'top'
@@ -282,18 +283,18 @@ const COACHING_MATRIX: Record<
     kein: 'Starker Pin ohne Board-Zuordnung – einem thematisch passenden Board zuordnen, um den Algorithmus-Push zu verstärken.',
   },
   hidden_gem: {
-    top: 'Top-Board pusht das Umfeld, aber dieser Pin wird nicht in der Suche gefunden – stärkere Keywords sind der Hebel.',
+    top: 'Das Board pusht sein Umfeld, aber dieser Pin wird in der Suche nicht gefunden. Erstelle einen neuen Pin mit stärkeren Keywords in Titel und Beschreibung.',
     wachstum:
-      'Board wächst, aber dieser Pin findet keine Suchen – Keywords nachschärfen.',
+      'Das Board wächst, aber der Pin findet keine Suchtreffer. Ein neuer Pin mit präziseren Keywords bringt ihn in die richtige Zielgruppe.',
     solide:
-      'Solides Board, aber Pin-Suchbarkeit fehlt – Keywords sind der Hebel.',
+      'Solides Board, aber dem Pin fehlt die Auffindbarkeit. Ein neuer Pin mit stärkeren Keywords ist der Hebel.',
     schlafend:
-      'Doppel-Hebel: Pin braucht Keywords UND Board braucht neue Pins, um wieder zu pushen.',
+      'Doppelter Ansatzpunkt: Der Pin braucht bessere Keywords als neuer Pin, das Board braucht neue Pins, um wieder zu pushen.',
     inaktiv:
-      'Inaktives Board hält den Pin klein – reaktiviere mit 2-3 neuen Pins, dann kann dieser Hidden Gem wachsen.',
+      'Das inaktive Board hält den Pin klein. Reaktiviere es mit 2-3 neuen Pins, dann kann dieser starke Pin über bessere Keywords wachsen.',
     schwach:
-      'Schwaches Board limitiert den Pin – überlege, ob ein stärkeres Board zur Pin-Thematik passen könnte.',
-    kein: 'Hidden Gem ohne Board-Zuordnung – einem thematisch passenden Board zuordnen, dann können Keywords und Board gemeinsam wirken.',
+      'Das schwache Board begrenzt den Pin. Prüfe, ob ein stärkeres Board besser zum Thema passt, und erstelle einen neuen Pin mit präziseren Keywords.',
+    kein: 'Dieser Pin hat noch kein Board. Ordne ihn einem thematisch passenden Board zu und erstelle einen neuen Pin mit stärkeren Keywords.',
   },
   reichweite_ohne_wirkung: {
     top: 'Top-Board liefert Reichweite, aber Hook und Design konvertieren nicht – erstelle einen neuen Pin mit gleichem Titel und gleicher Beschreibung, aber anderem Hook und Design.',
@@ -309,6 +310,20 @@ const COACHING_MATRIX: Record<
       'Schwaches Board und schwache Pin-Performance – erstelle einen neuen Pin mit gleichem Titel und gleicher Beschreibung, aber anderem Hook und Design. Oder Pin auf stärkeres Board verschieben.',
     kein: 'Pin ohne Board-Zuordnung und Optimierungsbedarf – erst Board zuordnen, dann neuen Pin mit gleichem Titel und gleicher Beschreibung aber anderem Hook und Design erstellen.',
   },
+  save_magnet: {
+    top: 'Top-Board liefert Reichweite, der Pin wird gespeichert – aber nicht geklickt. Erstelle einen neuen Pin mit klarem Call-to-Action, damit aus Interesse ein Website-Besuch wird.',
+    wachstum:
+      'Wachstums-Board bringt Sichtbarkeit, der Pin wird gespeichert. Ein neuer Pin mit deutlichem Call-to-Action holt die Klicks ab.',
+    solide:
+      'Solides Board, der Pin zieht Saves. Was fehlt, ist der Klick-Anreiz – erstelle einen neuen Pin mit klarem Call-to-Action.',
+    schlafend:
+      'Der Pin wird gespeichert, das Board braucht aber neue Pins. Beides angehen: neuer Pin mit Call-to-Action, und das Board mit frischen Pins beleben.',
+    inaktiv:
+      'Inaktives Board, aber der Pin wird gespeichert – das Thema trägt. Erstelle einen neuen Pin mit Call-to-Action und reaktiviere das Board mit ein paar neuen Pins.',
+    schwach:
+      'Der Pin wird trotz schwachem Board gespeichert – ein gutes Zeichen. Erstelle einen neuen Pin mit klarem Call-to-Action, und prüfe, ob ein stärkeres Board besser passt.',
+    kein: 'Dieser Save-Magnet hat noch kein Board. Ordne ihn einem thematisch passenden Board zu und erstelle einen neuen Pin mit klarem Call-to-Action.',
+  },
   eingeschlafener_gewinner: {
     top: 'Top-Board ist da, aber Pin-Frische fehlt – ein Recycling-Pin mit aktualisiertem Design weckt den Algorithmus.',
     wachstum:
@@ -320,7 +335,7 @@ const COACHING_MATRIX: Record<
     inaktiv:
       'Inaktives Board hält den eingeschlafenen Pin tot – Recycling-Pin als Reaktivierungs-Trigger nutzen.',
     schwach:
-      'Schwaches Board und alter Pin – prüfe, ob das Recycling auf einem stärkeren Board sinnvoller ist.',
+      'Schwaches Board und ein Pin, der kaum noch läuft – prüfe, ob sich das Recycling auf einem stärkeren Board mehr lohnt.',
     kein: 'Eingeschlafener Pin ohne Board – einem aktiven Board zuordnen und Recycling-Pin erstellen.',
   },
 }
@@ -351,7 +366,8 @@ function isCoachingKategorie(k: string): k is CoachingKategorie {
     k === 'aktiver_top_performer' ||
     k === 'hidden_gem' ||
     k === 'reichweite_ohne_wirkung' ||
-    k === 'eingeschlafener_gewinner'
+    k === 'eingeschlafener_gewinner' ||
+    k === 'save_magnet'
   )
 }
 

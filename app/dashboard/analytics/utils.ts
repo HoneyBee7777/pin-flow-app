@@ -233,32 +233,6 @@ export function withGrowth(
   })
 }
 
-export type UpdateStatus = {
-  lastUpdate: string | null
-  nextDue: string | null
-  isOverdue: boolean
-  daysSinceUpdate: number | null
-}
-
-export function calcUpdateStatus(lastUpdate: string | null): UpdateStatus {
-  if (!lastUpdate) {
-    return {
-      lastUpdate: null,
-      nextDue: null,
-      isOverdue: true,
-      daysSinceUpdate: null,
-    }
-  }
-  const today = todayIso()
-  const nextDue = addDays(lastUpdate, 30)
-  return {
-    lastUpdate,
-    nextDue,
-    isOverdue: today > nextDue,
-    daysSinceUpdate: diffDays(lastUpdate, today),
-  }
-}
-
 // =====================================================
 // Tri-State Update-Status (Dashboard Hero)
 // Drei Zonen mit konfigurierbaren Schwellwerten aus den Einstellungen.
@@ -427,7 +401,7 @@ export type PinAnalyticsThresholds = {
 }
 
 export const PIN_ANALYTICS_THRESHOLD_DEFAULTS = {
-  beobachtungszeitraum: 65,
+  beobachtungszeitraum: 90,
   minImpCtrUrteil: 300,
   minImpReichweiteStark: 500,
   minKlicksTopPerformer: 10,

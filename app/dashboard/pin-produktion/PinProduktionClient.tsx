@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
+import { HinweisBox } from '@/components/HinweisBox'
 import {
   useEffect,
   useMemo,
@@ -280,6 +281,20 @@ export default function PinProduktionClient(props: Props) {
       setShowAddForm(false)
     }
   }, [editParam, props.pins, editing?.id])
+
+  // Beim Öffnen eines Pins zum Bearbeiten nach oben zum Formular scrollen —
+  // egal ob über ?edit= (Dashboard) oder den Bearbeiten-Button in der Liste.
+  // editingId als Dep, damit es nach dem Render des Formulars und auch beim
+  // Wechsel zwischen Pins feuert.
+  const editingId = editing?.id
+  useEffect(() => {
+    if (editingId) {
+      document
+        .getElementById('pin-edit-form')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [editingId])
+
   const [showManualForm, setShowManualForm] = useState(false)
   const [showCsvImport, setShowCsvImport] = useState(false)
   const [isPending, startTransition] = useTransition()
@@ -396,29 +411,31 @@ export default function PinProduktionClient(props: Props) {
       )}
 
       {formOpen && (
-        <PinForm
-          key={editing?.id ?? 'new'}
-          editing={editing}
-          defaultBoardId={
-            editing ? null : (searchParams?.get('board') ?? null)
-          }
-          defaultSaisonEventId={
-            editing ? null : (searchParams?.get('saison_event_id') ?? null)
-          }
-          defaultContentId={
-            editing ? null : (searchParams?.get('content_id') ?? null)
-          }
-          contents={props.contents}
-          keywords={props.keywords}
-          boards={props.boards}
-          urls={props.urls}
-          vorlagen={props.vorlagen}
-          saisonEvents={props.saisonEvents}
-          comboCount={props.comboCount}
-          customSignalwoerter={props.customSignalwoerter}
-          deaktivierteSignalwoerter={props.deaktivierteSignalwoerter}
-          onClose={closeForm}
-        />
+        <div id="pin-edit-form">
+          <PinForm
+            key={editing?.id ?? 'new'}
+            editing={editing}
+            defaultBoardId={
+              editing ? null : (searchParams?.get('board') ?? null)
+            }
+            defaultSaisonEventId={
+              editing ? null : (searchParams?.get('saison_event_id') ?? null)
+            }
+            defaultContentId={
+              editing ? null : (searchParams?.get('content_id') ?? null)
+            }
+            contents={props.contents}
+            keywords={props.keywords}
+            boards={props.boards}
+            urls={props.urls}
+            vorlagen={props.vorlagen}
+            saisonEvents={props.saisonEvents}
+            comboCount={props.comboCount}
+            customSignalwoerter={props.customSignalwoerter}
+            deaktivierteSignalwoerter={props.deaktivierteSignalwoerter}
+            onClose={closeForm}
+          />
+        </div>
       )}
 
       {showManualForm && (
@@ -1711,6 +1728,30 @@ function PinForm({
             : 'Stufe 1: wähle Inhalt, Keywords und Angebotsart. Dann „Prompt generieren" klicken.'}
         </p>
       </div>
+
+      {isEdit && editing?.variante_typ && (
+        <HinweisBox variant="tipp">
+          {editing.variante_typ === 'recycling' ? (
+            <>
+              {editing.variante_von_titel
+                ? `Neuauflage von „${editing.variante_von_titel}". `
+                : 'Neuauflage eines eingeschlafenen Pins. '}
+              Gib ihm ein frisches Cover und einen neuen Hook, behalte aber Link
+              und Board — so erkennt Pinterest ihn als neuen Pin und spielt ihn
+              wieder aus.
+            </>
+          ) : (
+            <>
+              {editing.variante_von_titel
+                ? `Variante von „${editing.variante_von_titel}". `
+                : 'Das ist eine Variante von einem Pin, der schon läuft. '}
+              Ändere Cover und Hook deutlich genug, damit ein eigenständiger Pin
+              entsteht — Pinterest spielt frische Pins aus, fast identische
+              Kopien dagegen kaum.
+            </>
+          )}
+        </HinweisBox>
+      )}
 
       {/* ============= STUFE 1 ============= */}
       <fieldset className="space-y-4 rounded-md border border-gray-200 p-4">

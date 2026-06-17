@@ -983,12 +983,80 @@ export async function importPinterestCsv(
       zeitraum_bis: periodOk.bis,
     })
   }
+  // Same-Period-Überschreibung: den vorhandenen Pending-Stand DIESER Periode
+  // leeren, BEVOR der Upsert darunter die aktuellen unmatched neu schreibt.
+  // Ein erneuter Upload derselben Periode ersetzt damit den alten Stand
+  // komplett, statt zu akkumulieren (Pins aus Upload 1, die in Upload 2 fehlen,
+  // bleiben sonst als Pending-Leichen liegen). Der Upsert direkt danach stellt
+  // alle Überlebenden sofort wieder her → Endzustand: pending(Periode) = exakt
+  // die unmatched der aktuellen CSV. matched Pins sind nicht in pendingRows
+  // (sie liegen in pins_analytics), kommen also nicht zurück ins Pending.
+  // Guards ZWINGEND: ein reiner Pin-Upload (kein Board-Block) darf die
+  // Board-Pending dieser Periode NICHT löschen (Delete ohne nachfolgenden
+  // Board-Upsert = Datenverlust) — und umgekehrt.
+  if (merged.size > 0) {
+    await supabase
+      .from('csv_import_pending')
+      .delete()
+      .eq('user_id', user.id)
+      .eq('type', 'pin')
+      .eq('zeitraum_von', periodOk.von)
+  }
+  if (boardsParsed && !('error' in boardsParsed) && boardsParsed.rows.length > 0) {
+    await supabase
+      .from('csv_import_pending')
+      .delete()
+      .eq('user_id', user.id)
+      .eq('type', 'board')
+      .eq('zeitraum_von', periodOk.von)
+  }
+
   if (pendingRows.length > 0) {
     await supabase
       .from('csv_import_pending')
       .upsert(pendingRows, {
         onConflict: 'user_id,pinterest_url,zeitraum_von',
       })
+  }
+
+  // Aufräumen: aus den Top 50 gefallene, nie zugeordnete Pending-Einträge
+  // verwerfen. Ein unmatched Pin/Board aus einer STRIKT älteren Periode, der
+  // in der aktuellen CSV gar nicht mehr vorkommt, soll nicht ewig liegenbleiben
+  // (Pareto: war nie wichtig genug zum Zuordnen). Strikt `<` schützt dabei
+  // Korrektur-Uploads (gleiche Periode) und Backfills (neuere Periode); die
+  // NOT-IN-Menge verschont alles, was weiterhin geliefert wird (matched Pins
+  // landen ohnehin nicht im Pending — getroffen werden nur alte unmatched).
+  // Werte werden gequotet/escaped, damit Sonderzeichen die in-Liste nicht brechen.
+  const toPgInList = (values: string[]) =>
+    `(${values
+      .map((v) => `"${String(v).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`)
+      .join(',')})`
+
+  // Pins: NUR wenn die CSV überhaupt Pins enthält — sonst wäre die NOT-IN-Menge
+  // leer und „nicht in leerer Menge = alle" würde ALLE älteren Pin-Pending löschen.
+  if (merged.size > 0) {
+    const csvPinIds = Array.from(merged.keys())
+    await supabase
+      .from('csv_import_pending')
+      .delete()
+      .eq('user_id', user.id)
+      .eq('type', 'pin')
+      .lt('zeitraum_von', periodOk.von)
+      .not('pinterest_id', 'in', toPgInList(csvPinIds))
+  }
+
+  // Boards: analog, NUR wenn die CSV Board-Zeilen enthält.
+  if (boardsParsed && !('error' in boardsParsed) && boardsParsed.rows.length > 0) {
+    const csvBoardSlugs = Array.from(
+      new Set(boardsParsed.rows.map((r) => r.boardSlug))
+    )
+    await supabase
+      .from('csv_import_pending')
+      .delete()
+      .eq('user_id', user.id)
+      .eq('type', 'board')
+      .lt('zeitraum_von', periodOk.von)
+      .not('pinterest_id', 'in', toPgInList(csvBoardSlugs))
   }
 
   // Benchmark neu berechnen + alle Pins re-klassifizieren. Macht den
@@ -1038,23 +1106,6 @@ export async function assignPinAndImportMetrics(
     formData.get('pinterest_pin_url') ?? ''
   ).trim()
 
-  const zeitraum_von = String(formData.get('zeitraum_von') ?? '').trim()
-  const zeitraum_bis = String(formData.get('zeitraum_bis') ?? '').trim()
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(zeitraum_von))
-    return { error: 'Ungültiges „Von"-Datum.' }
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(zeitraum_bis))
-    return { error: 'Ungültiges „Bis"-Datum.' }
-
-  function num(name: string): number | null {
-    const raw = String(formData.get(name) ?? '').trim()
-    if (!raw) return null
-    const n = Number(raw)
-    return Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : null
-  }
-  const impressionen = num('impressionen')
-  const klicks = num('klicks')
-  const saves = num('saves')
-
   // Pin-Zuordnung speichern. URL nur schreiben, wenn echter http(s)-Wert
   // mitkommt — Legacy-Caller ohne URL bleiben unverändert.
   const pinUpdate: {
@@ -1071,33 +1122,62 @@ export async function assignPinAndImportMetrics(
     .eq('user_id', user.id)
   if (pinErr) return { error: pinErr.message }
 
-  // Bestehende Werte für (pin_id, datum) holen, gemerged speichern —
-  // gleiche Logik wie der Bulk-Import.
-  const { data: existingRows, error: exErr } = await supabase
-    .from('pins_analytics')
-    .select('impressionen, klicks, saves')
+  // ALLE offenen Pending-Perioden dieses Pins holen. Metriken UND Zeiträume
+  // kommen jetzt aus der DB (nicht mehr aus dem Formular), damit beim Zuordnen
+  // die vollständige Historie importiert wird — jede Periode als eigene
+  // pins_analytics-Zeile mit ihrem korrekten Datum.
+  const { data: pendingRows, error: pendErr } = await supabase
+    .from('csv_import_pending')
+    .select('zeitraum_von, zeitraum_bis, impressionen, klicks, saves')
     .eq('user_id', user.id)
-    .eq('pin_id', pin_id)
-    .eq('datum', zeitraum_bis)
-    .is('deleted_at', null)
-    .maybeSingle()
-  if (exErr) return { error: exErr.message }
-  const existing = existingRows ?? { impressionen: 0, klicks: 0, saves: 0 }
+    .eq('type', 'pin')
+    .eq('pinterest_id', pinterest_pin_id)
+  if (pendErr) return { error: pendErr.message }
 
-  const { error: upErr } = await supabase.from('pins_analytics').upsert(
-    {
-      user_id: user.id,
-      pin_id,
-      datum: zeitraum_bis,
-      zeitraum_von,
-      zeitraum_bis,
-      impressionen: impressionen ?? existing.impressionen,
-      klicks: klicks ?? existing.klicks,
-      saves: saves ?? existing.saves,
-    },
-    { onConflict: 'pin_id,datum' }
-  )
-  if (upErr) return { error: upErr.message }
+  type PendingPinRow = {
+    zeitraum_von: string | null
+    zeitraum_bis: string | null
+    impressionen: number | null
+    klicks: number | null
+    saves: number | null
+  }
+  const periods = (pendingRows ?? []) as PendingPinRow[]
+
+  // Pro Periode eine pins_analytics-Zeile schreiben (datum = deren
+  // zeitraum_bis). Findet die Abfrage keine Zeile, läuft die Schleife einfach
+  // nicht — die Pin↔ID-Zuordnung oben ist trotzdem gesetzt, kein Crash.
+  for (const r of periods) {
+    // Ohne gültiges Bis-Datum kein datum-Schlüssel → Periode überspringen.
+    if (!r.zeitraum_bis || !/^\d{4}-\d{2}-\d{2}$/.test(r.zeitraum_bis)) continue
+
+    // Bestehende Werte für (pin_id, datum) holen, gemerged speichern —
+    // gleiche Logik wie der Bulk-Import.
+    const { data: existingRow, error: exErr } = await supabase
+      .from('pins_analytics')
+      .select('impressionen, klicks, saves')
+      .eq('user_id', user.id)
+      .eq('pin_id', pin_id)
+      .eq('datum', r.zeitraum_bis)
+      .is('deleted_at', null)
+      .maybeSingle()
+    if (exErr) return { error: exErr.message }
+    const existing = existingRow ?? { impressionen: 0, klicks: 0, saves: 0 }
+
+    const { error: upErr } = await supabase.from('pins_analytics').upsert(
+      {
+        user_id: user.id,
+        pin_id,
+        datum: r.zeitraum_bis,
+        zeitraum_von: r.zeitraum_von,
+        zeitraum_bis: r.zeitraum_bis,
+        impressionen: r.impressionen ?? existing.impressionen,
+        klicks: r.klicks ?? existing.klicks,
+        saves: r.saves ?? existing.saves,
+      },
+      { onConflict: 'pin_id,datum' }
+    )
+    if (upErr) return { error: upErr.message }
+  }
 
   await supabase
     .from('dashboard_erledigt')
@@ -1105,9 +1185,10 @@ export async function assignPinAndImportMetrics(
     .eq('user_id', user.id)
     .eq('pin_id', pin_id)
 
-  // Persistente Pending-Zeile(n) für diesen Pin entfernen — die Pin↔ID-
-  // Zuordnung steht jetzt in pins.pinterest_pin_id, beim nächsten Import
-  // wird der Pin automatisch erkannt.
+  // Erst NACH dem Import ALLER Perioden die Pending-Zeilen entfernen — der
+  // DELETE ohne Zeitraum-Filter ist jetzt korrekt, weil oben jede Periode
+  // schon importiert wurde. Die Pin↔ID-Zuordnung steht in
+  // pins.pinterest_pin_id, beim nächsten Import wird der Pin automatisch erkannt.
   await supabase
     .from('csv_import_pending')
     .delete()
@@ -1144,24 +1225,6 @@ export async function assignBoardAndImportMetrics(
   if (!pinterest_board_slug)
     return { error: 'Pinterest-Board-Slug fehlt.' }
 
-  const datum = String(formData.get('datum') ?? '').trim()
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(datum))
-    return { error: 'Ungültiges Datum.' }
-
-  function num(name: string): number {
-    const raw = String(formData.get(name) ?? '').trim()
-    if (!raw) return 0
-    const n = Number(raw)
-    return Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : 0
-  }
-  const fields = {
-    impressionen: num('impressionen'),
-    engagement: num('engagement'),
-    klicks_auf_pins: num('klicks_auf_pins'),
-    ausgehende_klicks: num('ausgehende_klicks'),
-    saves: num('saves'),
-  }
-
   // pinterest_url nur schreiben, wenn ein echter URL-Wert mitkommt — nicht
   // jeder Caller hat die URL parat (z.B. Legacy-Pending-Zeilen, in denen das
   // Feld nur den Slug enthielt).
@@ -1179,28 +1242,71 @@ export async function assignBoardAndImportMetrics(
     .eq('user_id', user.id)
   if (bErr) return { error: bErr.message }
 
-  const { data: existing, error: exErr } = await supabase
-    .from('board_analytics')
-    .select('anzahl_pins')
+  // ALLE offenen Pending-Perioden dieses Boards holen. Metriken UND Zeiträume
+  // kommen jetzt aus der DB (nicht mehr aus dem Formular), damit beim Zuordnen
+  // die vollständige Historie importiert wird — jede Periode als eigene
+  // board_analytics-Zeile mit ihrem korrekten Datum. Board-Traffic-Metrik liegt
+  // in ausgehende_klicks (die generische klicks-Spalte ist für Boards null).
+  const { data: pendingRows, error: pendErr } = await supabase
+    .from('csv_import_pending')
+    .select(
+      'zeitraum_von, zeitraum_bis, impressionen, engagement, klicks_auf_pins, ausgehende_klicks, saves'
+    )
     .eq('user_id', user.id)
-    .eq('board_id', board_id)
-    .eq('datum', datum)
-    .maybeSingle()
-  if (exErr) return { error: exErr.message }
+    .eq('type', 'board')
+    .eq('pinterest_id', pinterest_board_slug)
+  if (pendErr) return { error: pendErr.message }
 
-  const { error: upErr } = await supabase.from('board_analytics').upsert(
-    {
-      user_id: user.id,
-      board_id,
-      datum,
-      ...fields,
-      anzahl_pins: existing?.anzahl_pins ?? 0,
-    },
-    { onConflict: 'board_id,datum' }
-  )
-  if (upErr) return { error: upErr.message }
+  type PendingBoardRow = {
+    zeitraum_von: string | null
+    zeitraum_bis: string | null
+    impressionen: number | null
+    engagement: number | null
+    klicks_auf_pins: number | null
+    ausgehende_klicks: number | null
+    saves: number | null
+  }
+  const periods = (pendingRows ?? []) as PendingBoardRow[]
 
-  // Persistente Pending-Zeile für diesen Board-Slug entfernen.
+  // Pro Periode eine board_analytics-Zeile schreiben (datum = deren
+  // zeitraum_bis). Findet die Abfrage keine Zeile, läuft die Schleife einfach
+  // nicht — die Board↔Slug-Zuordnung oben ist trotzdem gesetzt, kein Crash.
+  for (const r of periods) {
+    // Ohne gültiges Bis-Datum kein datum-Schlüssel → Periode überspringen.
+    if (!r.zeitraum_bis || !/^\d{4}-\d{2}-\d{2}$/.test(r.zeitraum_bis)) continue
+
+    // anzahl_pins pro (board_id, datum) aus der bestehenden Zeile holen — wird
+    // beim CSV-Import nicht geliefert. Die 5 Metriken werden direkt aus der
+    // Pending-Zeile übernommen (kein Merge — Board überschrieb nie).
+    const { data: existing, error: exErr } = await supabase
+      .from('board_analytics')
+      .select('anzahl_pins')
+      .eq('user_id', user.id)
+      .eq('board_id', board_id)
+      .eq('datum', r.zeitraum_bis)
+      .maybeSingle()
+    if (exErr) return { error: exErr.message }
+
+    const { error: upErr } = await supabase.from('board_analytics').upsert(
+      {
+        user_id: user.id,
+        board_id,
+        datum: r.zeitraum_bis,
+        impressionen: r.impressionen ?? 0,
+        engagement: r.engagement ?? 0,
+        klicks_auf_pins: r.klicks_auf_pins ?? 0,
+        ausgehende_klicks: r.ausgehende_klicks ?? 0,
+        saves: r.saves ?? 0,
+        anzahl_pins: existing?.anzahl_pins ?? 0,
+      },
+      { onConflict: 'board_id,datum' }
+    )
+    if (upErr) return { error: upErr.message }
+  }
+
+  // Erst NACH dem Import ALLER Perioden die Pending-Zeilen entfernen — der
+  // DELETE ohne Zeitraum-Filter ist jetzt korrekt, weil oben jede Periode
+  // schon importiert wurde.
   await supabase
     .from('csv_import_pending')
     .delete()

@@ -12,7 +12,6 @@ import {
   boardThresholdsFromSettings,
   calcBoardEngagementRate,
   calcCtr,
-  calcUpdateStatus,
   calcUpdateStatusTri,
   diagnoseBoard,
   diffDays,
@@ -386,11 +385,15 @@ const HANDLUNGS_CATEGORIES: HandlungsCategory[] = [
     emoji: '💎',
     label: 'Hidden Gem',
     subtitle:
-      'Hohe CTR bei wenig Reichweite – Hook und Design funktionieren, aber Pinterest findet ihn nicht.',
+      'Hohe Klickrate, aber wenig Reichweite — das Cover überzeugt, nur findet Pinterest den Pin kaum. Die Keywords sind der Hebel.',
     tooltip: PIN_DIAGNOSE_TOOLTIP.hidden_gem,
     iconBg: 'bg-blue-100 text-blue-700',
     counterBg: 'bg-blue-100 text-blue-700',
-    primaryAction: { type: 'edit', label: 'Keywords optimieren' },
+    primaryAction: {
+      type: 'variante',
+      varianteTyp: 'variante',
+      label: 'Neuen Pin erstellen',
+    },
     metrics: ['ctr', 'impressionen', 'klicks', 'saves'],
     metricLabels: {
       ctr: 'CTR',
@@ -411,7 +414,7 @@ const HANDLUNGS_CATEGORIES: HandlungsCategory[] = [
     primaryAction: {
       type: 'variante',
       varianteTyp: 'variante',
-      label: 'Hook & Design optimieren',
+      label: 'Neuen Pin erstellen',
     },
     metrics: ['impressionen', 'ctr', 'klicks', 'saves'],
     metricLabels: {
@@ -422,11 +425,33 @@ const HANDLUNGS_CATEGORIES: HandlungsCategory[] = [
     },
   },
   {
+    diagnose: 'save_magnet',
+    emoji: '🧲',
+    label: 'Save-Magnet',
+    subtitle:
+      'Wird oft gespeichert, aber selten geklickt – das Cover zieht, der Klick fehlt.',
+    tooltip: PIN_DIAGNOSE_TOOLTIP.save_magnet,
+    iconBg: 'bg-purple-100 text-purple-700',
+    counterBg: 'bg-purple-100 text-purple-700',
+    primaryAction: {
+      type: 'variante',
+      varianteTyp: 'variante',
+      label: 'Neuen Pin mit Call-to-Action',
+    },
+    metrics: ['saves', 'impressionen', 'ctr', 'klicks'],
+    metricLabels: {
+      saves: 'Saves',
+      impressionen: 'Impressionen',
+      ctr: 'CTR',
+      klicks: 'Ausg. Klicks',
+    },
+  },
+  {
     diagnose: 'eingeschlafener_gewinner',
     emoji: '♻️',
     label: 'Eingeschlafener Gewinner',
     subtitle:
-      'Pins die früher stark liefen – jetzt Zeit fürs Recycling mit frischem Design.',
+      'Pins, die früher stark liefen — Pinterest spielt sie kaum noch aus. Zeit für einen frischen Pin.',
     tooltip: PIN_DIAGNOSE_TOOLTIP.eingeschlafener_gewinner,
     iconBg: 'bg-amber-100 text-amber-800',
     counterBg: 'bg-amber-100 text-amber-800',
@@ -611,9 +636,6 @@ export default async function DashboardPage() {
   const latest = profilRows[0] ?? null
   const previous = profilRows[1] ?? null
 
-  const updateStatus = calcUpdateStatus(
-    settingsRes.data?.analytics_update_datum ?? null
-  )
   // Tri-State (grün/gelb/rot) für Hero-Section. Nutzt User-Schwellwerte
   // aus Einstellungen (Defaults: 31 Tage Intervall, 7 Tage Vorwarnung).
   type RawStatusSettings = {
@@ -742,6 +764,8 @@ export default async function DashboardPage() {
       pinAlter: hatDatum ? alterTage : null,
       hatDatum,
       thresholds,
+      // periods ist DESC nach datum (Index 0 = jüngste Periode).
+      impressionenVerlauf: periods.map((r) => r.impressionen),
     })
 
     actionable.push({

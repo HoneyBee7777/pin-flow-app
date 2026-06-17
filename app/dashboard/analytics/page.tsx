@@ -67,6 +67,7 @@ export default async function AnalyticsPage() {
       .from('einstellungen')
       .select(
         `pinterest_analytics_url, analytics_update_datum,
+         status_update_intervall, status_update_vorwarnung,
          schwellwert_beobachtung, schwellwert_min_klicks,
          schwellwert_ctr,
          schwellwert_min_imp_ctr_urteil, schwellwert_min_imp_reichweite_stark,
@@ -407,6 +408,8 @@ export default async function AnalyticsPage() {
             analyticsUpdateDatum={
               settingsRes.data?.analytics_update_datum ?? null
             }
+            intervall={settingsRes.data?.status_update_intervall ?? null}
+            vorwarnung={settingsRes.data?.status_update_vorwarnung ?? null}
           />
         </div>
       </header>

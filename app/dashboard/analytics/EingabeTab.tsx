@@ -32,6 +32,7 @@ import {
   type ProfilAnalyticsWithGrowth,
 } from './utils'
 import AudienceCsvUpload from './AudienceCsvUpload'
+import { HinweisBox } from '@/components/HinweisBox'
 
 const inputCls =
   'mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500'
@@ -102,34 +103,16 @@ export default function EingabeTab({
 }) {
   return (
     <div className="space-y-8">
-      <div>
-        <a
-          href={pinterestAnalyticsUrl ?? 'https://analytics.pinterest.com'}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700"
-        >
-          Pinterest Analytics öffnen ↗
-        </a>
-        <div className="mt-3">
-          <ZeitraumHeader
-            von={expectedZeitraumVon}
-            bis={expectedZeitraumBis}
-          />
-        </div>
-        <p className="mt-2 text-[13px] text-gray-500">
-          Du trägst deine Daten immer für einen einzelnen Zeitraum ein.
-          Auf dem Dashboard, im Tab Profil-Entwicklung sowie in Top Pins und
-          Boards werden alle Perioden kumuliert ausgewertet, so siehst du
-          deine All-Time-Werte und die Entwicklung über die Zeit.
-        </p>
-      </div>
+      <p className="text-sm text-gray-700">
+        Hier trägst du deine Pinterest-Zahlen ein. Immer für einen einzelnen
+        Zeitraum. Ausgewertet werden sie im Dashboard und in den Tabs
+        Profil-Entwicklung, Top Pins und Boards, dort werden alle Zeiträume
+        zusammengerechnet, sodass du deine Gesamtwerte und die Entwicklung über
+        die Zeit siehst.
+      </p>
 
       {pendingNotice && (
-        <div className="rounded-md border-l-4 border-amber-400 bg-amber-50 p-3 text-sm leading-relaxed text-amber-800">
-          <span className="mr-1" aria-hidden>
-            ⚠️
-          </span>
+        <HinweisBox variant="tipp">
           Du hast noch <strong>{pendingNotice.count}</strong> nicht
           zugeordnete{' '}
           {pendingNotice.count === 1 ? 'Eintrag' : 'Einträge'}
@@ -158,23 +141,57 @@ export default function EingabeTab({
             Boards
           </button>
           .
-        </div>
+        </HinweisBox>
       )}
 
-      <CombinedHowToToggle
-        von={expectedZeitraumVon}
-        bis={expectedZeitraumBis}
-      />
+      <ZeitraumHeader von={expectedZeitraumVon} bis={expectedZeitraumBis} />
 
-      <Schritt1ProfilForm
-        profilAnalytics={profilAnalytics}
-        latestZeitraumBis={latestZeitraumBis}
-      />
+      <div>
+        <a
+          href={pinterestAnalyticsUrl ?? 'https://analytics.pinterest.com'}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700"
+        >
+          Pinterest Analytics öffnen ↗
+        </a>
+        <div className="mt-3">
+          <CombinedHowToToggle
+            von={expectedZeitraumVon}
+            bis={expectedZeitraumBis}
+          />
+        </div>
+      </div>
 
-      {/* V3.0: Zwei-Spalten-Layout — Top Pins + Audience parallel.
-          lg-Breakpoint, weil die einzelnen Importer-Boxen jeweils zu eng
-          würden, sobald die Spalten schmaler als ~480 px werden. */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      {/* Karte 1 — Profil-Performance */}
+      <section className="space-y-4 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900">
+            1. Profil-Performance eintragen
+          </h2>
+          <p className="mt-0.5 text-sm text-gray-600">
+            Trag die Gesamtzahlen deines Profils für den Zeitraum ein. Diese
+            erfasst du von Hand, weil Pinterest dafür keinen Export anbietet.
+          </p>
+        </div>
+        <Schritt1ProfilForm
+          profilAnalytics={profilAnalytics}
+          latestZeitraumBis={latestZeitraumBis}
+        />
+      </section>
+
+      {/* Karte 2 — Top Pins und Boards */}
+      <section className="space-y-4 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900">
+            2. Top Pins und Boards importieren
+          </h2>
+          <p className="mt-0.5 text-sm text-gray-600">
+            Lade die drei Pinterest-Exporte hoch. Daraus entstehen deine
+            Auswertungen für Top Pins und Boards. Falls kein Export möglich
+            ist, kannst du sie weiter unten auch von Hand eintragen.
+          </p>
+        </div>
         <Schritt2CsvUpload
           expectedZeitraumVon={expectedZeitraumVon}
           expectedZeitraumBis={expectedZeitraumBis}
@@ -182,8 +199,20 @@ export default function EingabeTab({
           onJumpToUnmatchedPins={onJumpToUnmatchedPins}
           onJumpToUnmatchedBoards={onJumpToUnmatchedBoards}
         />
+      </section>
+
+      {/* Karte 3 — Zielgruppe */}
+      <section className="space-y-4 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900">
+            3. Zielgruppe importieren
+          </h2>
+          <p className="mt-0.5 text-sm text-gray-600">
+            Einmal im Monat: zeigt, wer deine Inhalte tatsächlich nutzt.
+          </p>
+        </div>
         <AudienceCsvUpload />
-      </div>
+      </section>
 
       <ManualEntryToggle
         pins={pins}
@@ -208,30 +237,28 @@ function ZeitraumHeader({
   // nicht abgeschlossen). Sonst: Empfehlung + Hinweis auf gleich lange Monate.
   const aktuellerStand = !von || !bis
   return (
-    <div className="flex flex-wrap items-start justify-between gap-3 rounded-md border border-teal-200 border-l-[3px] border-l-teal-400 bg-teal-50 p-3 text-sm leading-relaxed text-teal-900">
-      <div className="min-w-0 flex-1">
-        {aktuellerStand ? (
+    <HinweisBox variant="merke">
+      {aktuellerStand ? (
+        <p>
+          <strong>Du bist auf dem aktuellen Stand.</strong> Der laufende Monat
+          ist noch nicht abgeschlossen, trag ihn ein, sobald er vorbei ist.
+        </p>
+      ) : (
+        <>
           <p>
-            <strong>Du bist auf dem aktuellen Stand.</strong> Der laufende Monat
-            ist noch nicht abgeschlossen, trag ihn ein, sobald er vorbei ist.
+            <strong>Empfohlener nächster Zeitraum:</strong>{' '}
+            {formatDateDe(von)} bis {formatDateDe(bis)}. Stelle in Pinterest
+            Analytics unter „Benutzerdefiniert" genau diesen Zeitraum ein.
           </p>
-        ) : (
-          <>
-            <p>
-              <strong>Empfohlener nächster Zeitraum:</strong>{' '}
-              {formatDateDe(von)} bis {formatDateDe(bis)}. Stelle in Pinterest
-              Analytics unter „Benutzerdefiniert" genau diesen Zeitraum ein.
-            </p>
-            <p className="mt-1 text-[12px] text-teal-700">
-              Trag am besten immer gleich lange Zeiträume ein, idealerweise
-              ganze Monate. Nur so lassen sich die Zeiträume im Tab
-              Profil-Entwicklung fair vergleichen. Den laufenden Monat trägst du
-              erst ein, wenn er abgeschlossen ist.
-            </p>
-          </>
-        )}
-      </div>
-    </div>
+          <p className="mt-1 text-[12px] text-teal-700">
+            Trag am besten immer gleich lange Zeiträume ein, idealerweise
+            ganze Monate. Nur so lassen sich die Zeiträume im Tab
+            Profil-Entwicklung fair vergleichen. Den laufenden Monat trägst du
+            erst ein, wenn er abgeschlossen ist.
+          </p>
+        </>
+      )}
+    </HinweisBox>
   )
 }
 
@@ -248,11 +275,18 @@ function CombinedHowToToggle({
   const vonStr = von ? formatDateDe(von) : '—'
   const bisStr = bis ? formatDateDe(bis) : '—'
   return (
-    <details className="rounded-md border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
-      <summary className="cursor-pointer font-medium text-gray-900">
-        So findest du alle Zahlen
+    <details className="group max-w-3xl rounded-lg border border-gray-200 bg-white shadow-sm">
+      <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-4 text-base font-semibold text-gray-900 hover:bg-red-50 [&::-webkit-details-marker]:hidden">
+        <span
+          className="text-lg leading-none text-gray-400 transition-transform"
+          aria-hidden
+        >
+          <span className="inline group-open:hidden">▸</span>
+          <span className="hidden group-open:inline">▾</span>
+        </span>
+        <span className="flex-1">So findest du alle Zahlen</span>
       </summary>
-      <div className="mt-3 space-y-4 text-gray-600">
+      <div className="space-y-4 border-t border-gray-100 px-5 py-5 text-sm leading-relaxed text-gray-700">
         <div>
           <p className="font-semibold text-gray-900">Profil-Performance</p>
           <ol className="mt-1 list-decimal space-y-1 pl-5">
@@ -316,11 +350,11 @@ function CombinedHowToToggle({
             </li>
           </ol>
         </div>
-        <div className="border-l-4 border-amber-400 bg-amber-50 px-3 py-2 text-[13px] text-amber-800">
-          ⚠️ Pinterest speichert Analytics nur max. 6 Monate. Dieses System
+        <HinweisBox variant="tipp">
+          Pinterest speichert Analytics nur max. 6 Monate. Dieses System
           speichert deine historischen Daten dauerhaft: trage monatlich ein
           damit keine Daten verloren gehen.
-        </div>
+        </HinweisBox>
       </div>
     </details>
   )
@@ -388,22 +422,11 @@ function Schritt1ProfilForm({
   }
 
   return (
-    <section className="space-y-3">
-      <div>
-        <h2 className="text-lg font-semibold text-gray-900">
-          1) Profil-Performance eintragen
-        </h2>
-        <p className="mt-0.5 text-sm text-gray-600">
-          Muss monatlich manuell eingetragen werden, Pinterest bietet hier
-          keinen CSV-Export.
-        </p>
-      </div>
-
-      <form
-        id="analytics-profil-form"
-        onSubmit={onSubmit}
-        className="space-y-4 rounded-lg border border-gray-200 bg-white p-6 shadow-sm scroll-mt-6"
-      >
+    <form
+      id="analytics-profil-form"
+      onSubmit={onSubmit}
+      className="space-y-4 scroll-mt-6"
+    >
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           <Field label="Von" htmlFor="profil_zeitraum_von">
             <input
@@ -543,8 +566,7 @@ function Schritt1ProfilForm({
             <span className="text-sm text-red-700">{feedback.error}</span>
           )}
         </div>
-      </form>
-    </section>
+    </form>
   )
 }
 
@@ -773,24 +795,15 @@ function Schritt2CsvUpload({
   }
 
   return (
-    <section className="space-y-3">
-      <div>
-        <h2 className="text-lg font-semibold text-gray-900">
-          2a) Top Pins & Boards importieren
-        </h2>
-        <p className="mt-0.5 text-sm text-gray-600">
-          Empfohlen: CSV-Import. Optional: manuelle Eingabe weiter unten.
-        </p>
-      </div>
-
-      <div className="rounded-md border border-teal-200 border-l-[3px] border-l-teal-400 bg-teal-50 p-3 text-[13px] text-teal-900">
+    <div className="space-y-3">
+      <HinweisBox variant="tipp">
         Lade die CSVs direkt von Pinterest herunter, nicht vorher in Excel
         öffnen.
-      </div>
+      </HinweisBox>
 
       <form
         onSubmit={onSubmit}
-        className="space-y-4 rounded-lg border border-gray-200 bg-white p-6 shadow-sm"
+        className="space-y-4"
       >
         <div className="space-y-3">
           {SLOT_ORDER.map((slot) => (
@@ -808,7 +821,7 @@ function Schritt2CsvUpload({
 
         {slotWithBadFilename && (
           <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-            ⚠️ Dateiname „{slotWithBadFilename}" entspricht nicht dem
+            Dateiname „{slotWithBadFilename}" entspricht nicht dem
             Pinterest-Schema („Pinterest Analytics overview
             YYYYMMDD-YYYYMMDD.csv").
           </div>
@@ -816,7 +829,7 @@ function Schritt2CsvUpload({
 
         {!slotWithBadFilename && crossFileMismatch && (
           <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-            ⚠️ Die hochgeladenen Dateien haben unterschiedliche Zeiträume.
+            Die hochgeladenen Dateien haben unterschiedliche Zeiträume.
             Bitte nur CSVs desselben Zeitraums hochladen.
           </div>
         )}
@@ -826,7 +839,7 @@ function Schritt2CsvUpload({
           snapshotMismatch && (
             <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
               <p>
-                ⚠️ Der Zeitraum dieser CSV (
+                Der Zeitraum dieser CSV (
                 {formatDateDe(snapshotMismatch.csvVon)} –{' '}
                 {formatDateDe(snapshotMismatch.csvBis)}) weicht vom
                 erwarteten nächsten Zeitraum (
@@ -870,7 +883,7 @@ function Schritt2CsvUpload({
         )}
 
         {!snapshotMismatch && !result && (
-          <div className="flex items-center justify-end">
+          <div className="flex items-center">
             <button
               type="submit"
               disabled={!canSubmit || isPending}
@@ -882,12 +895,12 @@ function Schritt2CsvUpload({
         )}
 
         <p className="text-xs text-gray-500">
-          ⚠️ Nach dem Import: Neue Pins und Boards müssen einmalig per URL
+          Nach dem Import: Neue Pins und Boards müssen einmalig per URL
           zugeordnet werden, die Zuordnungs-Dialoge erscheinen dann auf den
           Tabs „Top Pins" und „Boards".
         </p>
       </form>
-    </section>
+    </div>
   )
 }
 
@@ -953,7 +966,7 @@ function FileSlotInput({
       )}
       {file && metricMismatch && (
         <div className="mt-1 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
-          ⚠️ Diese Datei enthält{' '}
+          Diese Datei enthält{' '}
           <strong>{METRIC_LABEL[detectedMetric as PinMetric]}</strong>,
           dieses Feld erwartet <strong>{METRIC_LABEL[expectedMetric]}</strong>
           . Bitte die richtige CSV hochladen.
@@ -998,11 +1011,11 @@ function ImportSummary({
     <div className="space-y-3">
       <div className="space-y-1 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-800">
         <p>
-          ✅ {pinsImported} Pin{pinsImported === 1 ? '' : 's'} erfolgreich
+          {pinsImported} Pin{pinsImported === 1 ? '' : 's'} erfolgreich
           importiert
         </p>
         <p>
-          ✅ {boardsImported} Board{boardsImported === 1 ? '' : 's'}{' '}
+          {boardsImported} Board{boardsImported === 1 ? '' : 's'}{' '}
           erfolgreich importiert
         </p>
         {result.zeitraum_von && result.zeitraum_bis && (
@@ -1016,7 +1029,7 @@ function ImportSummary({
       {pinsUnmatched > 0 && (
         <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
           <p>
-            ⚠️ {pinsUnmatched} Pin{pinsUnmatched === 1 ? '' : 's'}{' '}
+            {pinsUnmatched} Pin{pinsUnmatched === 1 ? '' : 's'}{' '}
             {pinsUnmatched === 1 ? 'wurde' : 'wurden'} importiert aber noch
             keinem Pin-Titel zugeordnet. Bitte einmalig verknüpfen, beim
             nächsten Import werden diese Pins automatisch erkannt.
@@ -1035,7 +1048,7 @@ function ImportSummary({
       {boardsUnmatched > 0 && (
         <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
           <p>
-            ⚠️ {boardsUnmatched} Board
+            {boardsUnmatched} Board
             {boardsUnmatched === 1 ? '' : 's'}{' '}
             {boardsUnmatched === 1 ? 'wurde' : 'wurden'} importiert aber noch
             keinem Board zugeordnet.

@@ -571,7 +571,7 @@ function SchwellwerteSection({
   nicheProfile: AccountNicheProfile
 }) {
   const [beobachtung, setBeobachtung] = useState(
-    initial.beobachtung !== null ? String(initial.beobachtung) : '65'
+    initial.beobachtung !== null ? String(initial.beobachtung) : '90'
   )
   const [minImpCtrUrteil, setMinImpCtrUrteil] = useState(
     initial.minImpCtrUrteil !== null
@@ -673,7 +673,7 @@ function SchwellwerteSection({
           value={beobachtung}
           onChange={setBeobachtung}
           step={1}
-          help={'Wie lange ist ein Pin „zu jung" für eine Bewertung?\nPinterest spielt neue Pins langsam an. Erst nach ~65 Tagen ist eine Aussage stabil.'}
+          help={'Wie lange ist ein Pin „zu jung" für eine Bewertung?\nPinterest spielt neue Pins langsam an. Erst nach ~90 Tagen ist eine Aussage stabil.'}
           whenToAdjust={'Niedriger (z. B. 45) → schnellere Diagnose, aber unsicherer.\nHöher (z. B. 90) → vorsichtiger, aber spätere Reaktion.'}
         />
         <SchwellwertField

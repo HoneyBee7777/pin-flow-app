@@ -7,6 +7,7 @@ import {
   type UnmatchedPin,
 } from './actions'
 import { formatDateDe, type PinOption } from './utils'
+import { HinweisBox } from '@/components/HinweisBox'
 
 type Props = {
   unmatchedPins: UnmatchedPin[]
@@ -164,6 +165,8 @@ export default function UnmatchedPinsSection({
         </p>
       </div>
 
+      <UnmatchedPinsExplainer />
+
       <div className="mb-3 rounded-md border border-gray-200 bg-white p-3">
         <p className="text-xs font-medium text-gray-700">
           Pins anzeigen die mindestens eines der folgenden Kriterien
@@ -245,6 +248,106 @@ export default function UnmatchedPinsSection({
         </p>
       )}
     </section>
+  )
+}
+
+// Ausblendbarer Erklär-Baustein nach dem ClassificationExplainerBanner-Muster:
+// startet versteckt (SSR-safe), blendet nach Mount ein, wenn das localStorage-
+// Flag fehlt. „Verstanden"/X setzt das Flag und blendet dauerhaft aus. Sitzt
+// innerhalb der Section, wird also mit ihr ausgeblendet, wenn keine unmatched
+// Pins existieren (Section-Guard oben unberührt).
+function UnmatchedPinsExplainer() {
+  const STORAGE_KEY = 'unmatched_pins_explainer_seen'
+  const [visible, setVisible] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const seen = window.localStorage.getItem(STORAGE_KEY)
+      if (!seen) setVisible(true)
+    } catch {
+      // localStorage nicht verfügbar — Hinweis einfach zeigen.
+      setVisible(true)
+    }
+  }, [])
+
+  if (!visible) return null
+
+  function dismiss() {
+    setVisible(false)
+    try {
+      window.localStorage.setItem(STORAGE_KEY, '1')
+    } catch {
+      // ignore
+    }
+  }
+
+  return (
+    <div className="mb-3">
+      <HinweisBox variant="merke">
+        <div className="flex items-start gap-3">
+          <div className="flex-1 space-y-2">
+            <p className="font-semibold">
+              Nicht jeder Pin muss zugeordnet werden
+            </p>
+            <p>
+              Pinterest liefert dir die Zahlen deiner Top-Pins, aber nur über
+              die Pin-ID, nicht über den Titel. Damit Pin-Flow die Zahlen einem
+              deiner Pins zuordnen kann, verknüpfst du die ID einmalig über{' '}
+              {'„Zuordnen & importieren"'}. Danach wird der Pin bei jedem
+              weiteren Import automatisch erkannt.
+            </p>
+            <p>
+              Konzentrier dich dabei auf deine starken Pins. Ein kleiner Teil
+              deiner Pins bringt den Großteil der Ergebnisse, und genau die
+              lohnen die Zuordnung. Ein Pin mit wenigen Impressionen und kaum
+              Klicks sagt wenig aus, kostet aber Zeit beim Verknüpfen.
+            </p>
+            <p>
+              Bei schwachen Pins hast du zwei Möglichkeiten: Du kannst sie
+              einfach liegen lassen, dann bleiben sie in der Liste stehen. Oder
+              du klickst {'„Überspringen"'}, dann verschwinden sie sofort und
+              du arbeitest die Liste leerer. Beides ist in Ordnung.
+            </p>
+            <p>
+              Wird ein liegengelassener Pin in einem der nächsten Monate stärker
+              und sammelt mehr Impressionen, Klicks und Saves, ordnest du ihn
+              dann zu. Ab da fließen seine Zahlen in deine Auswertungen ein.
+              Pins, die du nicht zuordnest und die in einem späteren Import nicht
+              mehr unter deinen Top-Pins sind, verschwinden hier von selbst, du
+              musst also nichts aufräumen.
+            </p>
+            <p>
+              Mit den Feldern oben blendest du dir gezielt die Pins ein, die
+              sich lohnen. Jeder Account entwickelt sich anders, deshalb gibst du
+              die Schwellen selbst vor. Wer mag, ordnet alle Pins zu, dann sind
+              die Auswertungen komplett, ein Muss ist es nicht.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={dismiss}
+            className="shrink-0 rounded-md p-1 text-teal-700 hover:bg-teal-100"
+            aria-label="Hinweis schließen"
+            title="Schließen"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              className="h-4 w-4"
+              aria-hidden
+            >
+              <path
+                fillRule="evenodd"
+                d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                clipRule="evenodd"
+              />
+            </svg>
+          </button>
+        </div>
+      </HinweisBox>
+    </div>
   )
 }
 

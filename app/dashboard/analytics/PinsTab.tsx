@@ -42,12 +42,6 @@ import {
   PIN_DIAGNOSE_TOOLTIP,
   type PinDiagnose,
 } from './diagnosePinAggregated'
-import type { AccountNicheProfile } from '@/lib/account-niche-profile'
-import {
-  getEinordnung,
-  type Einordnung,
-  type Range,
-} from '@/lib/niche-benchmarks'
 
 // Spalten-Tooltips für die Top-Pins-Tabelle — Klartext-Erklärung was die
 // Kennzahl bedeutet und warum sie wichtig ist. Werden über InfoTooltip neben
@@ -81,7 +75,6 @@ export default function PinsTab({
   pins,
   thresholds,
   benchmark,
-  nicheProfile,
   unmatchedPins,
   unmatchedZeitraumVon,
   unmatchedZeitraumBis,
@@ -94,7 +87,6 @@ export default function PinsTab({
   pins: PinOption[]
   thresholds: PinAnalyticsThresholds
   benchmark: UserPinBenchmark | null
-  nicheProfile: AccountNicheProfile
   unmatchedPins: UnmatchedPin[]
   unmatchedZeitraumVon: string
   unmatchedZeitraumBis: string
@@ -145,6 +137,8 @@ export default function PinsTab({
         pinAlter: hatDatum ? latest.alter_tage : null,
         hatDatum,
         thresholds,
+        // rows ist DESC nach datum (Index 0 = jüngste Periode).
+        impressionenVerlauf: rows.map((r) => r.impressionen),
       })
       return {
         pinId,
@@ -240,9 +234,7 @@ export default function PinsTab({
         onSkipped={onUnmatchedPinResolved}
       />
 
-      <p className="text-sm text-gray-500">
-        Halte den Mauszeiger über die Spaltenüberschriften für Erklärungen.
-      </p>
+      <ThresholdInfo thresholds={thresholds} benchmark={benchmark} />
 
       <PinAnalyticsTable
         rows={aggregatedPins}
@@ -252,12 +244,6 @@ export default function PinsTab({
       />
 
       <DeletedPinsSection deletedEntries={deletedPinAnalytics} />
-
-      <ThresholdInfo
-        thresholds={thresholds}
-        benchmark={benchmark}
-        nicheProfile={nicheProfile}
-      />
 
       <PinAnalyticsEditModal
         open={editEntry !== null}
@@ -455,8 +441,10 @@ function PinAnalyticsTable({
               dir={sortDir}
               onSort={toggleSort}
             >
-              <span className="whitespace-nowrap">
-                Ausg. Klicks ∑<InfoTooltip text={COLUMN_TOOLTIPS.klicks} />
+              <span>
+                Ausg.
+                <br />
+                Klicks ∑<InfoTooltip text={COLUMN_TOOLTIPS.klicks} />
               </span>
             </SortableTh>
             <SortableTh
@@ -495,18 +483,10 @@ function PinAnalyticsTable({
               dir={sortDir}
               onSort={toggleSort}
             >
-              <span className="whitespace-nowrap">
-                Save-Rate<InfoTooltip text={COLUMN_TOOLTIPS.saveRate} />
-              </span>
-            </SortableTh>
-            <SortableTh
-              sortKey="engagementRate"
-              current={sortKey}
-              dir={sortDir}
-              onSort={toggleSort}
-            >
-              <span className="whitespace-nowrap">
-                ER<InfoTooltip text={COLUMN_TOOLTIPS.er} />
+              <span>
+                Save-
+                <br />
+                Rate<InfoTooltip text={COLUMN_TOOLTIPS.saveRate} />
               </span>
             </SortableTh>
             <SortableTh
@@ -527,16 +507,6 @@ function PinAnalyticsTable({
             >
               <span className="whitespace-nowrap">
                 Handlung<InfoTooltip text={COLUMN_TOOLTIPS.handlung} />
-              </span>
-            </SortableTh>
-            <SortableTh
-              sortKey="perioden"
-              current={sortKey}
-              dir={sortDir}
-              onSort={toggleSort}
-            >
-              <span className="whitespace-nowrap">
-                Perioden<InfoTooltip text={COLUMN_TOOLTIPS.perioden} />
               </span>
             </SortableTh>
             <SortableTh
@@ -610,9 +580,6 @@ function PinAnalyticsTable({
                   <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">
                     {hasPeriods ? formatPercent(agg.saveRate, 2) : '—'}
                   </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">
-                    {hasPeriods ? formatPercent(agg.engagementRate, 2) : '—'}
-                  </td>
                   <td className="px-4 py-3 text-sm">
                     <span
                       className={`inline-flex cursor-help items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${PIN_DIAGNOSE_BADGE[agg.diagnose]}`}
@@ -622,7 +589,7 @@ function PinAnalyticsTable({
                       {PIN_DIAGNOSE_LABEL[agg.diagnose]}
                     </span>
                   </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-800">
+                  <td className="px-4 py-3 text-sm font-medium text-gray-800">
                     {agg.diagnose === 'kein_datum' ? (
                       <Link
                         href={`/dashboard/pin-produktion?edit=${row.pin_id}`}
@@ -633,9 +600,6 @@ function PinAnalyticsTable({
                     ) : (
                       agg.handlung
                     )}
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">
-                    {hasPeriods ? agg.perioden : '—'}
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">
                     {formatPinAge(agg.pinAlter)}
@@ -664,7 +628,7 @@ function PinAnalyticsTable({
                 </tr>
                 {hasPeriods && isOpen && (
                   <tr className="bg-gray-50">
-                    <td colSpan={13} className="px-4 py-3">
+                    <td colSpan={11} className="px-4 py-3">
                       <PinTimeline history={agg.history} pin={row.pin} />
                     </td>
                   </tr>
@@ -717,9 +681,6 @@ function PinTimeline({
             <th className="px-3 py-2 text-left font-semibold uppercase tracking-wide text-gray-500">
               Save-Rate
             </th>
-            <th className="px-3 py-2 text-left font-semibold uppercase tracking-wide text-gray-500">
-              ER
-            </th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
@@ -736,10 +697,6 @@ function PinTimeline({
               prev && prev.impressionen > 0
                 ? (prev.saves / prev.impressionen) * 100
                 : null
-            const er = calcEngagement(row.klicks, row.saves, row.impressionen)
-            const prevEr = prev
-              ? calcEngagement(prev.klicks, prev.saves, prev.impressionen)
-              : null
             return (
               <tr key={row.id} className="text-gray-700">
                 <td className="whitespace-nowrap px-3 py-2 font-medium text-gray-900">
@@ -773,13 +730,6 @@ function PinTimeline({
                   <InlineMetricDelta
                     value={saveRate}
                     prev={prevSaveRate}
-                    format="percent"
-                  />
-                </td>
-                <td className="whitespace-nowrap px-3 py-2">
-                  <InlineMetricDelta
-                    value={er}
-                    prev={prevEr}
                     format="percent"
                   />
                 </td>
@@ -893,11 +843,9 @@ function SortableTh({
 function ThresholdInfo({
   thresholds: t,
   benchmark,
-  nicheProfile,
 }: {
   thresholds: PinAnalyticsThresholds
   benchmark: UserPinBenchmark | null
-  nicheProfile: AccountNicheProfile
 }) {
   const fmt = (v: number | null, digits = 2): string =>
     v === null || !Number.isFinite(v) ? '—' : v.toFixed(digits)
@@ -911,199 +859,151 @@ function ThresholdInfo({
   )
     .toFixed(2)
     .replace('.', ',')
-  // Nischen-Einordnung nur wenn klare Hauptnische erkennbar ist —
-  // sonst vergleichen wir uns gegen Branchenwerte, die nichts mit dem
-  // Account zu tun haben.
-  const useNicheVergleich =
-    nicheProfile.primaryNiche !== null && !nicheProfile.isMixed
-  const nicheLabel = nicheProfile.primaryNiche?.label ?? null
   return (
-    <details className="rounded-md border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600">
-      <summary className="cursor-pointer text-sm font-medium text-gray-900">
-        So funktioniert die Diagnose
+    <details className="group max-w-3xl rounded-lg border border-gray-200 bg-white shadow-sm">
+      <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-4 text-base font-semibold text-gray-900 hover:bg-red-50 [&::-webkit-details-marker]:hidden">
+        <span
+          className="text-lg leading-none text-gray-400 transition-transform"
+          aria-hidden
+        >
+          <span className="inline group-open:hidden">▸</span>
+          <span className="hidden group-open:inline">▾</span>
+        </span>
+        <span className="flex-1">So funktioniert die Diagnose</span>
       </summary>
 
-      <p className="mt-3">
-        Wir vergleichen jeden Pin mit deinem eigenen Durchschnitt. Performt er
-        besser oder schlechter? Plus ein paar Sicherheits-Schwellen, damit
-        Zufalls-Klicks nicht überbewertet werden.
-      </p>
+      <div className="space-y-4 border-t border-gray-100 px-5 py-5 text-sm leading-relaxed text-gray-700">
+        <div>
+          <p>
+            Pin-Flow vergleicht jeden Pin mit deinem eigenen Durchschnitt, nicht
+            mit fremden Werten. Läuft er besser oder schwächer als deine anderen
+            Pins? Dazu kommen ein paar Sicherheits-Schwellen, damit einzelne
+            Zufallsklicks das Urteil nicht verfälschen.
+          </p>
+        </div>
 
-      <ul className="mt-3 space-y-1">
-        <li>
-          ⭐ <strong>Aktiver Top Performer:</strong> Beide Signale stark —
-          Pinterest und Nutzer reagieren positiv.
-        </li>
-        <li>
-          💎 <strong>Hidden Gem:</strong> Hohe Klickrate, aber wenig Reichweite.
-          Hook gut, SEO schwach.
-        </li>
-        <li>
-          🔧 <strong>Reichweite ohne Wirkung:</strong> Viel Reichweite, wenig
-          Klicks. SEO gut, Hook schwach.
-        </li>
-        <li>
-          ♻️ <strong>Eingeschlafener Gewinner:</strong> Früher stark, jetzt zu
-          alt — Zeit fürs Recycling.
-        </li>
-        <li>
-          💤 <strong>Stiller Pin:</strong> Kein Signal — archivieren oder neu
-          aufsetzen.
-        </li>
-        <li>
-          ⏳ <strong>Noch zu früh:</strong> Zu wenig Daten — abwarten.
-        </li>
-      </ul>
+        <div className="space-y-2">
+          <div className="rounded-md border border-gray-200 bg-white p-3">
+            <p>
+              <span aria-hidden>⭐</span> <strong>Aktiver Top Performer:</strong>{' '}
+              Viel Reichweite und eine starke Klickrate. Pinterest spielt ihn
+              aus, und die Menschen klicken zu dir durch.
+            </p>
+          </div>
+          <div className="rounded-md border border-gray-200 bg-white p-3">
+            <p>
+              <span aria-hidden>🧲</span> <strong>Save-Magnet:</strong> Wird oft
+              gespeichert, aber selten geklickt. Das Cover zieht, der Klick zur
+              Website fehlt.
+            </p>
+          </div>
+          <div className="rounded-md border border-gray-200 bg-white p-3">
+            <p>
+              <span aria-hidden>🔧</span>{' '}
+              <strong>Reichweite ohne Wirkung:</strong> Viel Reichweite, aber
+              kaum Klicks und kaum Saves. Pinterest zeigt ihn, doch er löst
+              nichts aus.
+            </p>
+          </div>
+          <div className="rounded-md border border-gray-200 bg-white p-3">
+            <p>
+              <span aria-hidden>💎</span> <strong>Hidden Gem:</strong> Ein
+              starkes Signal bei noch wenig Reichweite. Wer ihn sieht, klickt
+              oder speichert. Mit besseren Keywords wird er sichtbarer.
+            </p>
+          </div>
+          <div className="rounded-md border border-gray-200 bg-white p-3">
+            <p>
+              <span aria-hidden>♻️</span>{' '}
+              <strong>Eingeschlafener Gewinner:</strong> Lief früher stark, jetzt
+              fallen die Impressionen deutlich. Zeit für einen frischen Pin.
+            </p>
+          </div>
+          <div className="rounded-md border border-gray-200 bg-white p-3">
+            <p>
+              <span aria-hidden>💤</span> <strong>Stiller Pin:</strong> Hatte
+              genug Zeit, aber nichts passiert. Steck deine Energie lieber in
+              neue Pins.
+            </p>
+          </div>
+          <div className="rounded-md border border-gray-200 bg-white p-3">
+            <p>
+              <span aria-hidden>⏳</span> <strong>Noch zu früh:</strong> Zu wenig
+              Daten für ein verlässliches Urteil. Abwarten.
+            </p>
+          </div>
+          <div className="rounded-md border border-gray-200 bg-white p-3">
+            <p>
+              <span aria-hidden>📊</span>{' '}
+              <strong>Noch keine Vergleichsdaten:</strong> Es liegen noch nicht
+              genug ausgewertete Pins vor, um deinen persönlichen Durchschnitt zu
+              berechnen.
+            </p>
+          </div>
+        </div>
 
-      <div className="mt-3 border-t border-gray-200 pt-2">
-        <p className="font-medium text-gray-900">
-          Womit wir vergleichen — deine persönliche Benchmark
-        </p>
-        {useNicheVergleich && nicheLabel ? (
-          <p className="mt-0.5 text-[11px] text-gray-500">
-            Hauptnische: {nicheLabel} (
-            {Math.round(nicheProfile.primaryShare * 100)} % deiner Pins) —
-            Einordnung gegen Branchenschnitt.
+        <div>
+          <p className="font-semibold text-gray-900">
+            Womit Pin-Flow vergleicht: dein eigener Durchschnitt
           </p>
-        ) : (
-          <p className="mt-0.5 text-[11px] text-gray-500">
-            Keine klare Hauptnische erkannt — Branchenvergleich ist
-            ausgeblendet, Account-Median bleibt aktiv.
-          </p>
-        )}
-        {t.medianCtr === null &&
-        t.medianSaveRate === null &&
-        t.medianImpressionen === null ? (
-          <p className="mt-1 text-gray-500">
-            Noch keine Benchmark berechnet — solange weniger als 10
-            qualifizierte Pins vorliegen, greift der Fallback-CTR{' '}
-            {t.fallbackMindestCtr}%.
-          </p>
-        ) : (
-          <ul className="mt-1 space-y-1">
-            <li>
-              <strong>Median CTR:</strong> {fmt(t.medianCtr)}% — das ist deine
-              durchschnittliche Klickrate. Pins müssen {ctrBoostProzent}%
-              drüber liegen, um als klickstark zu gelten (also ab {ctrBoosted}
-              %).
-              <InlineNicheEinordnung
-                value={t.medianCtr}
-                range={
-                  useNicheVergleich
-                    ? nicheProfile.primaryNiche!.ctr
-                    : null
-                }
-                nicheLabel={nicheLabel}
-              />
-            </li>
-            <li>
-              <strong>Median Save-Rate:</strong> {fmt(t.medianSaveRate)}% — das
-              ist deine durchschnittliche Speicher-Rate. Liegt ein Pin drüber,
-              mag Pinterest ihn.
-              <InlineNicheEinordnung
-                value={t.medianSaveRate}
-                range={
-                  useNicheVergleich
-                    ? nicheProfile.primaryNiche!.save_rate
-                    : null
-                }
-                nicheLabel={nicheLabel}
-              />
-            </li>
-            <li>
-              <strong>Median Impressionen:</strong> {fmtImp(t.medianImpressionen)}{' '}
-              — Referenzwert (Reichweite ist account-spezifisch und wird nicht
-              für Branchen-Vergleiche genutzt).
-            </li>
-            {benchmark?.qualifiziertePins != null && (
-              <li className="text-gray-500">
-                Berechnet aus {benchmark.qualifiziertePins} Pins, die jünger als
-                90 Tage sind und mindestens 100 Impressionen haben.
+          {t.medianCtr === null &&
+          t.medianSaveRate === null &&
+          t.medianImpressionen === null ? (
+            <p className="mt-1 text-gray-500">
+              Solange noch keine 10 ausgewerteten Pins vorliegen, bewertet
+              Pin-Flow nichts gegen feste Werte – dann erscheint{' '}
+              {'„Noch keine Vergleichsdaten"'}, bis genug Daten da sind.
+            </p>
+          ) : (
+            <ul className="mt-1 space-y-1">
+              <li>
+                Deine durchschnittliche Klickrate (CTR): {fmt(t.medianCtr)}%. Ein
+                Pin gilt als klickstark, wenn er {ctrBoostProzent}% darüber liegt
+                (ab {ctrBoosted}%).
               </li>
-            )}
-          </ul>
-        )}
-      </div>
+              <li>
+                Deine durchschnittliche Save-Rate: {fmt(t.medianSaveRate)}%.
+                Liegt ein Pin darüber, sprechen die Menschen besonders gut auf
+                ihn an.
+              </li>
+              <li>
+                Deine durchschnittliche Reichweite:{' '}
+                {fmtImp(t.medianImpressionen)} Impressionen. Ein Pin gilt als
+                reichweitenstark, wenn er darüber liegt und mindestens{' '}
+                {t.minImpReichweiteStark} Impressionen hat.
+              </li>
+              {benchmark?.qualifiziertePins != null && (
+                <li className="text-gray-500">
+                  Berechnet aus {benchmark.qualifiziertePins} Pins, die jünger
+                  als 90 Tage sind und mindestens 100 Impressionen haben.
+                </li>
+              )}
+            </ul>
+          )}
+        </div>
 
-      <div className="mt-3 border-t border-gray-200 pt-2">
-        <p className="font-medium text-gray-900">Sicherheits-Schwellen</p>
-        <p className="mt-1">
-          Damit kleine Stichproben nicht fehlinterpretiert werden, gelten diese
-          Mindestwerte:
-        </p>
-        <ul className="mt-1 space-y-0.5">
-          <li>
-            – Mindestens {t.minImpCtrUrteil} Impressionen, bevor wir eine
-            Klickrate bewerten
-          </li>
-          <li>
-            – Mindestens {t.minImpReichweiteStark} Impressionen, bevor wir
-            sagen „Pinterest pusht den Pin"
-          </li>
-          <li>
-            – Mindestens {t.minKlicksNutzerSignal} Klicks, bevor wir sagen
-            „Menschen klicken den Pin gerne"
-          </li>
-          <li>
-            – Mindestens {t.minKlicksTopPerformer} Klicks für Top Performer-Status
-          </li>
-        </ul>
-      </div>
+        <div>
+          <p className="font-semibold text-gray-900">Sicherheits-Schwellen</p>
+          <p className="mt-1">
+            Damit eine Bewertung wirklich etwas aussagt, wartet Pin-Flow, bis ein
+            Pin oft genug gesehen wurde (Impressionen = wie oft Pinterest ihn
+            angezeigt hat). Bei sehr wenigen Aufrufen sagt eine Zahl nichts aus:
+            ein einziger Klick auf 10 Impressionen wären rechnerisch schon 10
+            Prozent Klickrate, reiner Zufall.
+          </p>
+          <p className="mt-1">
+            Deshalb urteilt Pin-Flow erst, wenn genug Daten da sind: über die
+            Klickrate (CTR) ab {t.minImpCtrUrteil} Impressionen, über die
+            Reichweite ab {t.minImpReichweiteStark} Impressionen, und über die
+            Klick-Stärke erst ab {t.minKlicksNutzerSignal} echten Klicks.
+          </p>
+        </div>
 
-      <p className="mt-3 text-xs text-gray-500">
-        Schwellen ändern? →{' '}
-        <Link
-          href="/dashboard/einstellungen#pin-schwellwerte"
-          className="font-medium text-red-600 hover:underline"
-        >
-          Einstellungen
-        </Link>
-      </p>
+      </div>
     </details>
   )
 }
 
-// Inline-Nischen-Einordnung neben einem Median-Wert. Zeigt nur etwas an,
-// wenn eine Nischen-Range vorliegt UND der Wert auswertbar ist — sonst still.
-const INLINE_EINORDNUNG_COLOR: Record<Einordnung['color'], string> = {
-  green: 'text-green-700',
-  gray: 'text-gray-500',
-  orange: 'text-orange-700',
-}
-const INLINE_EINORDNUNG_LABEL: Record<Einordnung['label'], string> = {
-  'top-performer': 'Top-Performer',
-  überdurchschnittlich: 'überdurchschnittlich',
-  durchschnittlich: 'durchschnittlich',
-  'unter-durchschnitt': 'unter Branchenschnitt',
-}
-
-function InlineNicheEinordnung({
-  value,
-  range,
-  nicheLabel,
-}: {
-  value: number | null
-  range: Range | null
-  nicheLabel: string | null
-}) {
-  if (
-    !range ||
-    !nicheLabel ||
-    value === null ||
-    !Number.isFinite(value)
-  ) {
-    return null
-  }
-  const e = getEinordnung(value, range)
-  return (
-    <span
-      className={`ml-1 whitespace-nowrap text-[11px] font-medium ${INLINE_EINORDNUNG_COLOR[e.color]}`}
-    >
-      {' '}
-      — {e.icon} {INLINE_EINORDNUNG_LABEL[e.label]} für {nicheLabel}
-    </span>
-  )
-}
 
 function PencilIcon() {
   return (

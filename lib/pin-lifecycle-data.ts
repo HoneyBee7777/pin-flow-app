@@ -3,8 +3,10 @@
 // Strategie-Seite (Vollversion) und vom Analytics-Top-Pins-Tab (Compact-
 // Variante) gelesen.
 //
-// Schwellenwerte (65 Tage, 300 Impressionen, 500 Impressionen, 180 Tage…)
-// sind Settings-gesteuert. Die Konstanten unten enthalten Platzhalter-Texte
+// Schwellenwerte (90 Tage Reifezeit, 300 Impressionen, 500 Impressionen…)
+// sind Settings-gesteuert; der Schläfer-Übergang läuft inzwischen über den
+// fallenden Impressionen-Trend, nicht mehr über ein festes Alter.
+// Die Konstanten unten enthalten Platzhalter-Texte
 // nur für statische Bestandteile; die zahlenhaltigen Texte werden über
 // `getLifecycleDetails(thresholds)` und `getArrowLabels(thresholds)` zur
 // Laufzeit gerendert.
@@ -207,7 +209,7 @@ export function getLifecycleDetails(
       slug: 'eingeschlafener-gewinner',
       was: 'Dieser Pin lief früher stark, aber Pinterest priorisiert frische Inhalte.',
       wieKommtEr: [
-        `Aus „Aktiver Top Performer", sobald Pin älter als ${t.schlafenderGewinnerAlter} Tage`,
+        `Aus „Aktiver Top Performer", wenn die Impressionen über mehrere Monate deutlich fallen`,
         'Pin muss historisch Mindest-Klicks erfüllt haben',
       ],
       wasPassiert: [
