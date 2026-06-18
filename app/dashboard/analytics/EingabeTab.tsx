@@ -14,7 +14,11 @@ import {
   saveProfilAnalytics,
   saveBoardAnalytics,
   type ImportPinterestCsvResult,
+  type UnmatchedPin,
+  type UnmatchedBoard,
 } from './actions'
+import UnmatchedPinsSection from './UnmatchedPinsSection'
+import UnmatchedBoardsSection from './UnmatchedBoardsSection'
 import {
   detectPinsCsvMetric,
   parseFilenamePeriod,
@@ -25,7 +29,7 @@ import {
   formatDateDe,
   PIN_STATUS_BADGE,
   PIN_STATUS_LABEL,
-  recommendedNextZeitraum,
+  naechsterMonatZeitraum,
   todayIso,
   type BoardOption,
   type PinOption,
@@ -80,6 +84,12 @@ export default function EingabeTab({
   onJumpToUnmatchedPins,
   onJumpToUnmatchedBoards,
   pendingNotice,
+  unmatchedPins,
+  unmatchedZeitraumVon,
+  unmatchedZeitraumBis,
+  onUnmatchedPinResolved,
+  unmatchedBoards,
+  onUnmatchedBoardResolved,
 }: {
   profilAnalytics: ProfilAnalyticsWithGrowth[]
   pins: PinOption[]
@@ -100,47 +110,83 @@ export default function EingabeTab({
     zeitraum_von: string
     zeitraum_bis: string
   } | null
+  // Nicht zugeordnete Pins aus dem letzten CSV-Import. Optional, weil die
+  // Verdrahtung in AnalyticsClient erst in einem späteren Schritt erfolgt —
+  // solange die Props fehlen, bleibt die Section inert (rendert nicht).
+  unmatchedPins?: UnmatchedPin[]
+  unmatchedZeitraumVon?: string
+  unmatchedZeitraumBis?: string
+  onUnmatchedPinResolved?: (pinterestPinId: string) => void
+  // Nicht zugeordnete Boards aus dem letzten CSV-Import. Teilen sich den
+  // Import-Zeitraum (unmatchedZeitraumVon/Bis) mit den Pins. Optional, bis
+  // AnalyticsClient sie verdrahtet.
+  unmatchedBoards?: UnmatchedBoard[]
+  onUnmatchedBoardResolved?: (boardSlug: string) => void
 }) {
+  // Getrennte Pin-/Board-Zähler für die Hinweis-Box — aus den bereits
+  // übergebenen Listen abgeleitet, ohne zusätzliche Durchreichung.
+  const pendingPinCount = unmatchedPins?.length ?? 0
+  const pendingBoardCount = unmatchedBoards?.length ?? 0
   return (
     <div className="space-y-8">
       <p className="text-sm text-gray-700">
-        Hier trägst du deine Pinterest-Zahlen ein. Immer für einen einzelnen
+        Hier trägst du deine Pinterest-Zahlen ein, immer für einen einzelnen
         Zeitraum. Ausgewertet werden sie im Dashboard und in den Tabs
-        Profil-Entwicklung, Top Pins und Boards, dort werden alle Zeiträume
-        zusammengerechnet, sodass du deine Gesamtwerte und die Entwicklung über
-        die Zeit siehst.
+        Profil-Entwicklung, Top Pins, Boards und Zielgruppe, dort werden alle
+        Zeiträume zusammengerechnet, sodass du deine Gesamtwerte und die
+        Entwicklung über die Zeit siehst. Pins und Boards aus dem Import, die
+        Pin-Flow noch nicht kennt, ordnest du weiter unten einmalig deinen
+        angelegten Pins und Boards zu.
       </p>
 
       {pendingNotice && (
         <HinweisBox variant="tipp">
-          Du hast noch <strong>{pendingNotice.count}</strong> nicht
-          zugeordnete{' '}
-          {pendingNotice.count === 1 ? 'Eintrag' : 'Einträge'}
-          {pendingNotice.zeitraum_von && pendingNotice.zeitraum_bis && (
-            <>
-              {' '}aus dem letzten Import (
-              {formatDateDe(pendingNotice.zeitraum_von)} –{' '}
-              {formatDateDe(pendingNotice.zeitraum_bis)})
-            </>
-          )}
-          . Bitte Zuordnung abschließen oder überspringen, die Zuordnung
-          erfolgt in den Tabs →{' '}
-          <button
-            type="button"
-            onClick={onJumpToUnmatchedPins}
-            className="font-medium text-amber-900 underline underline-offset-2 hover:text-amber-950"
-          >
-            Top Pins
-          </button>{' '}
-          und →{' '}
-          <button
-            type="button"
-            onClick={onJumpToUnmatchedBoards}
-            className="font-medium text-amber-900 underline underline-offset-2 hover:text-amber-950"
-          >
-            Boards
-          </button>
-          .
+          <div className="space-y-2">
+            {pendingPinCount > 0 && (
+              <p>
+                Du hast noch <strong>{pendingPinCount}</strong> nicht
+                zugeordnete {pendingPinCount === 1 ? 'Pin' : 'Pins'} aus dem
+                letzten Import
+                {pendingNotice.zeitraum_von && pendingNotice.zeitraum_bis && (
+                  <>
+                    {' '}(Zeitraum {formatDateDe(pendingNotice.zeitraum_von)} bis{' '}
+                    {formatDateDe(pendingNotice.zeitraum_bis)})
+                  </>
+                )}
+                . Du kannst sie{' '}
+                <button
+                  type="button"
+                  onClick={onJumpToUnmatchedPins}
+                  className="font-medium text-amber-900 underline underline-offset-2 hover:text-amber-950"
+                >
+                  weiter unten
+                </button>{' '}
+                zuordnen oder überspringen.
+              </p>
+            )}
+            {pendingBoardCount > 0 && (
+              <p>
+                Du hast noch <strong>{pendingBoardCount}</strong> nicht
+                zugeordnete {pendingBoardCount === 1 ? 'Board' : 'Boards'} aus
+                dem letzten Import
+                {pendingNotice.zeitraum_von && pendingNotice.zeitraum_bis && (
+                  <>
+                    {' '}(Zeitraum {formatDateDe(pendingNotice.zeitraum_von)} bis{' '}
+                    {formatDateDe(pendingNotice.zeitraum_bis)})
+                  </>
+                )}
+                . Du kannst sie{' '}
+                <button
+                  type="button"
+                  onClick={onJumpToUnmatchedBoards}
+                  className="font-medium text-amber-900 underline underline-offset-2 hover:text-amber-950"
+                >
+                  weiter unten
+                </button>{' '}
+                zuordnen oder überspringen.
+              </p>
+            )}
+          </div>
         </HinweisBox>
       )}
 
@@ -201,6 +247,32 @@ export default function EingabeTab({
         />
       </section>
 
+      {/* Nicht zugeordnete Pins — verschoben aus dem Top-Pins-Tab. Rendert
+          nur, wenn die Props verdrahtet sind (Häppchen B); bis dahin inert. */}
+      {unmatchedPins && unmatchedPins.length > 0 && onUnmatchedPinResolved && (
+        <UnmatchedPinsSection
+          unmatchedPins={unmatchedPins}
+          pins={pins}
+          zeitraumVon={unmatchedZeitraumVon ?? ''}
+          zeitraumBis={unmatchedZeitraumBis ?? ''}
+          onAssigned={onUnmatchedPinResolved}
+          onSkipped={onUnmatchedPinResolved}
+        />
+      )}
+
+      {/* Nicht zugeordnete Boards — verschoben aus dem Boards-Tab. Teilt den
+          Import-Zeitraum mit den Pins; rendert nur bei verdrahteten Props. */}
+      {unmatchedBoards && unmatchedBoards.length > 0 && onUnmatchedBoardResolved && (
+        <UnmatchedBoardsSection
+          unmatchedBoards={unmatchedBoards}
+          boards={boards}
+          zeitraumVon={unmatchedZeitraumVon ?? ''}
+          zeitraumBis={unmatchedZeitraumBis ?? ''}
+          onAssigned={onUnmatchedBoardResolved}
+          onSkipped={onUnmatchedBoardResolved}
+        />
+      )}
+
       {/* Karte 3 — Zielgruppe */}
       <section className="space-y-4 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
         <div>
@@ -233,31 +305,21 @@ function ZeitraumHeader({
   von: string | null
   bis: string | null
 }) {
-  // von/bis null → Nutzer ist auf dem aktuellen Stand (laufender Monat noch
-  // nicht abgeschlossen). Sonst: Empfehlung + Hinweis auf gleich lange Monate.
-  const aktuellerStand = !von || !bis
+  // von/bis null → Nutzer ist auf dem aktuellen Stand. Diese Info trägt schon
+  // der Status-Banner oben (UpdateStatusBanner) → hier nichts rendern, um die
+  // Dopplung zu vermeiden. Nur bei empfohlenem Zeitraum die Box zeigen.
+  if (!von || !bis) return null
   return (
     <HinweisBox variant="merke">
-      {aktuellerStand ? (
-        <p>
-          <strong>Du bist auf dem aktuellen Stand.</strong> Der laufende Monat
-          ist noch nicht abgeschlossen, trag ihn ein, sobald er vorbei ist.
-        </p>
-      ) : (
-        <>
-          <p>
-            <strong>Empfohlener nächster Zeitraum:</strong>{' '}
-            {formatDateDe(von)} bis {formatDateDe(bis)}. Stelle in Pinterest
-            Analytics unter „Benutzerdefiniert" genau diesen Zeitraum ein.
-          </p>
-          <p className="mt-1 text-[12px] text-teal-700">
-            Trag am besten immer gleich lange Zeiträume ein, idealerweise
-            ganze Monate. Nur so lassen sich die Zeiträume im Tab
-            Profil-Entwicklung fair vergleichen. Den laufenden Monat trägst du
-            erst ein, wenn er abgeschlossen ist.
-          </p>
-        </>
-      )}
+      <p>
+        <strong>Empfohlener nächster Zeitraum:</strong>{' '}
+        {formatDateDe(von)} bis {formatDateDe(bis)}. Pin-Flow schlägt dir
+        immer den nächsten vollen Monat vor, damit du saubere Monatswerte
+        sammelst und im Tab Profil-Entwicklung fair vergleichen kannst.
+        Stelle in Pinterest Analytics unter {'„Benutzerdefiniert"'} genau
+        diesen Zeitraum ein und trag ihn erst ein, wenn der Monat
+        abgeschlossen ist.
+      </p>
     </HinweisBox>
   )
 }
@@ -387,8 +449,9 @@ function Schritt1ProfilForm({
   }>({})
 
   useEffect(() => {
-    const { von, bis } = recommendedNextZeitraum(latestZeitraumBis)
-    // null/null = aktueller Stand → Felder nicht zwangs-vorbefüllen.
+    const { von, bis } = naechsterMonatZeitraum(latestZeitraumBis)
+    // Immer der nächste volle Monat (auch der laufende) — der prev-Guard
+    // überschreibt bereits getippte Werte nicht.
     if (von) setZeitraumVon((prev) => prev || von)
     if (bis) setZeitraumBis((prev) => prev || bis)
   }, [latestZeitraumBis])
@@ -898,9 +961,9 @@ function Schritt2CsvUpload({
         )}
 
         <p className="text-xs text-gray-500">
-          Nach dem Import: Neue Pins und Boards müssen einmalig per URL
-          zugeordnet werden, die Zuordnungs-Dialoge erscheinen dann auf den
-          Tabs „Top Pins" und „Boards".
+          Nach dem Import erscheinen neue, noch nicht zugeordnete Pins und
+          Boards weiter unten auf dieser Seite. Dort verknüpfst du sie einmalig
+          mit deinen angelegten Pins und Boards.
         </p>
       </form>
     </div>
@@ -1033,9 +1096,9 @@ function ImportSummary({
         <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
           <p>
             {pinsUnmatched} Pin{pinsUnmatched === 1 ? '' : 's'}{' '}
-            {pinsUnmatched === 1 ? 'wurde' : 'wurden'} importiert aber noch
-            keinem Pin-Titel zugeordnet. Bitte einmalig verknüpfen, beim
-            nächsten Import werden diese Pins automatisch erkannt.
+            {pinsUnmatched === 1 ? 'wurde' : 'wurden'} importiert, aber noch
+            keinem deiner Pins zugeordnet. Verknüpfe sie einmalig, dann erkennt
+            Pin-Flow sie bei jedem weiteren Import automatisch.
           </p>
           <p className="mt-1.5">
             <button
@@ -1043,7 +1106,7 @@ function ImportSummary({
               onClick={onJumpToUnmatchedPins}
               className="font-medium text-amber-900 underline hover:opacity-80"
             >
-              → Jetzt zuordnen im Tab Top Pins
+              Jetzt zuordnen
             </button>
           </p>
         </div>
@@ -1053,8 +1116,9 @@ function ImportSummary({
           <p>
             {boardsUnmatched} Board
             {boardsUnmatched === 1 ? '' : 's'}{' '}
-            {boardsUnmatched === 1 ? 'wurde' : 'wurden'} importiert aber noch
-            keinem Board zugeordnet.
+            {boardsUnmatched === 1 ? 'wurde' : 'wurden'} importiert, aber noch
+            keinem deiner Boards zugeordnet. Verknüpfe sie einmalig, dann
+            erkennt Pin-Flow sie bei jedem weiteren Import automatisch.
           </p>
           <p className="mt-1.5">
             <button
@@ -1062,7 +1126,7 @@ function ImportSummary({
               onClick={onJumpToUnmatchedBoards}
               className="font-medium text-amber-900 underline hover:opacity-80"
             >
-              → Jetzt zuordnen im Tab Boards
+              Jetzt zuordnen
             </button>
           </p>
         </div>
@@ -1135,8 +1199,9 @@ function PinManualForm({
   }>({})
 
   useEffect(() => {
-    const { von, bis } = recommendedNextZeitraum(latestZeitraumBis)
-    // null/null = aktueller Stand → Felder nicht zwangs-vorbefüllen.
+    const { von, bis } = naechsterMonatZeitraum(latestZeitraumBis)
+    // Immer der nächste volle Monat (auch der laufende) — der prev-Guard
+    // überschreibt bereits getippte Werte nicht.
     if (von) setZeitraumVon((prev) => prev || von)
     if (bis) setZeitraumBis((prev) => prev || bis)
   }, [latestZeitraumBis])

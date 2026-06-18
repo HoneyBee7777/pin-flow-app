@@ -501,7 +501,9 @@ export async function updateBoardAnalyticsEntry(
   if (!/^\d{4}-\d{2}-\d{2}$/.test(datum))
     return { error: 'Bitte ein gültiges Datum wählen.' }
 
-  // anzahl_pins bleibt unverändert (wird automatisch aus den Pins abgeleitet).
+  // anzahl_pins bleibt hier bewusst unverändert: Die Pinterest-CSV liefert keine
+  // Pin-Anzahl pro Board, und die Anzeige im Boards-Tab wird ohnehin aus der
+  // internen pins-Tabelle abgeleitet (Pflegestand), nicht aus dieser Spalte.
   // Daher nur die fünf editierbaren Metriken aus dem Form-Data lesen.
   const editableFields = {
     impressionen: parseInt0(formData.get('impressionen')),

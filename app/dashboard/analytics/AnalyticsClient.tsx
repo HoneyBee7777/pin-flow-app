@@ -211,14 +211,10 @@ export default function AnalyticsClient({
         <nav className="flex gap-6" aria-label="Tabs">
           {TABS.map((t) => {
             const active = tab === t.id
-            const badge =
-              t.id === 'pins'
-                ? pinsPending.length
-                : t.id === 'boards'
-                  ? boardsPending.length
-                  : t.id === 'eingabe'
-                    ? totalPending
-                    : 0
+            // Badge nur noch am Eingabe-Tab (dort findet die Zuordnung statt).
+            // Top-Pins-/Boards-Tabs zeigen keinen Handlungs-Badge mehr, weil
+            // die Zuordnung dorthin verschoben wurde.
+            const badge = t.id === 'eingabe' ? totalPending : 0
             const label = t.label
             return (
               <button
@@ -258,12 +254,18 @@ export default function AnalyticsClient({
           expectedZeitraumBis={expectedZeitraumBis}
           onImported={onImportFinished}
           onJumpToUnmatchedPins={() =>
-            switchTab('pins', 'unmatched-pins')
+            switchTab('eingabe', 'unmatched-pins')
           }
           onJumpToUnmatchedBoards={() =>
-            switchTab('boards', 'unmatched-boards')
+            switchTab('eingabe', 'unmatched-boards')
           }
           pendingNotice={eingabePendingNotice}
+          unmatchedPins={pinsPending}
+          unmatchedZeitraumVon={pendingImport?.zeitraum_von ?? ''}
+          unmatchedZeitraumBis={pendingImport?.zeitraum_bis ?? ''}
+          onUnmatchedPinResolved={removeUnmatchedPin}
+          unmatchedBoards={boardsPending}
+          onUnmatchedBoardResolved={removeUnmatchedBoard}
         />
       )}
 
@@ -278,10 +280,6 @@ export default function AnalyticsClient({
           pins={pins}
           thresholds={thresholds}
           benchmark={benchmark}
-          unmatchedPins={pinsPending}
-          unmatchedZeitraumVon={pendingImport?.zeitraum_von ?? ''}
-          unmatchedZeitraumBis={pendingImport?.zeitraum_bis ?? ''}
-          onUnmatchedPinResolved={removeUnmatchedPin}
         />
       )}
       {tab === 'boards' && (
@@ -291,10 +289,6 @@ export default function AnalyticsClient({
           boardHistory={boardHistory}
           thresholds={boardThresholds}
           publicBoardsWithoutAnalytics={publicBoardsWithoutAnalytics}
-          unmatchedBoards={boardsPending}
-          unmatchedZeitraumVon={pendingImport?.zeitraum_von ?? ''}
-          unmatchedZeitraumBis={pendingImport?.zeitraum_bis ?? ''}
-          onUnmatchedBoardResolved={removeUnmatchedBoard}
         />
       )}
       {tab === 'audience' && (

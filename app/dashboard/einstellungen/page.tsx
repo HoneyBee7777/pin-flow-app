@@ -28,8 +28,7 @@ export default async function EinstellungenPage() {
        schwellwert_board_top_er, schwellwert_board_top_prozent,
        schwellwert_board_schwach_er, schwellwert_board_wachstum_trend,
        cp_min_pins_gesamt, cp_min_pins_ohne_aktuell, cp_tage_ohne_pin,
-       cp_min_ctr_goldnugget, cp_max_pins_goldnugget,
-       status_update_intervall, status_update_vorwarnung`
+       cp_min_ctr_goldnugget, cp_max_pins_goldnugget`
       )
       .eq('user_id', user.id)
       .maybeSingle(),
@@ -128,10 +127,6 @@ export default async function EinstellungenPage() {
               ? null
               : Number(data.cp_min_ctr_goldnugget),
           maxPinsGoldnugget: data?.cp_max_pins_goldnugget ?? null,
-        }}
-        initialStatusSchwellwerte={{
-          intervall: data?.status_update_intervall ?? 31,
-          vorwarnung: data?.status_update_vorwarnung ?? 7,
         }}
       />
     </div>

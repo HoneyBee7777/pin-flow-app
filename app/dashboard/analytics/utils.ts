@@ -89,12 +89,15 @@ export function lastOfMonthIso(iso: string): string {
   return last.toISOString().slice(0, 10)
 }
 
-// Empfohlener nächster Eingabe-Zeitraum als Monatsscheibe.
+// Empfohlener nächster Eingabe-Zeitraum als VOLLER Monat.
 //   von = Tag nach dem letzten erfassten Ende (oder letzter abgeschlossener
 //         Monat beim allerersten Update).
-//   bis = Monatsende von "von", aber höchstens gestern (laufender Monat → gestern).
-// Gibt {von:null, bis:null} wenn der Nutzer auf dem aktuellen Stand ist
-// (von läge nach gestern → kein offener Zeitraum mehr, Edge-Case c).
+//   bis = Monatsende von "von" — immer der volle Monat, nie gekappt.
+// Gibt {von:null, bis:null}, wenn kein abgeschlossener Monat ansteht:
+//   - von läge schon in der Zukunft (Nutzer ist auf dem aktuellen Stand), oder
+//   - der Monat von "von" ist noch nicht abgeschlossen (Monatsende > gestern).
+// So wird nie ein Teilmonat oder ein Zeitraum mit Zukunfts-Ende vorgeschlagen;
+// der laufende Monat erscheint erst als Vorschlag, sobald er vorbei ist.
 export function recommendedNextZeitraum(latestZeitraumBis: string | null): {
   von: string | null
   bis: string | null
@@ -107,8 +110,64 @@ export function recommendedNextZeitraum(latestZeitraumBis: string | null): {
     return { von: null, bis: null }
   }
   const monatsEnde = lastOfMonthIso(von)
-  const bis = monatsEnde <= yesterday ? monatsEnde : yesterday
-  return { von, bis }
+  // Monat noch nicht abgeschlossen → kein Vorschlag (voller Monat erst danach).
+  if (monatsEnde > yesterday) {
+    return { von: null, bis: null }
+  }
+  return { von, bis: monatsEnde }
+}
+
+// Wie recommendedNextZeitraum, aber OHNE den „läuft noch"-Cap: liefert IMMER
+// einen konkreten vollen Monat (nie null) — auch wenn dieser Monat noch läuft.
+// Genutzt für die Feld-Vorbelegung im Eingabe-Tab, damit die Datumsfelder stets
+// den nächsten vollen Monat zeigen. Der Banner-TEXT nutzt weiter
+// recommendedNextZeitraum (mit Cap) und darf „aktueller Stand" sagen.
+export function naechsterMonatZeitraum(latestZeitraumBis: string | null): {
+  von: string
+  bis: string
+} {
+  const von = latestZeitraumBis
+    ? addDays(latestZeitraumBis, 1)
+    : firstOfMonthIso(addDays(firstOfCurrentMonthIso(), -1)) // Erst-Update: Vormonat
+  return { von, bis: lastOfMonthIso(von) } // immer voller Monat, auch wenn er noch läuft
+}
+
+// Monatsbasierter Analytics-Status (Ersatz für die intervallbasierte
+// calcUpdateStatusTri auf der Analytics-Seite). Basis ist das Ende des letzten
+// erfassten Zeitraums, NICHT das Speicherdatum.
+//   - 'leer'  → noch nie erfasst (Willkommens-Hinweis greift).
+//   - 'rot'   → der nächste volle Monat ist abgeschlossen und noch nicht erfasst.
+//   - 'gruen' → der nächste Monat läuft noch (noch nichts fällig).
+// ISO-Strings (YYYY-MM-DD) werden lexikografisch verglichen = chronologisch.
+export type UpdateStatusMonat = {
+  state: 'gruen' | 'rot' | 'leer'
+  faelligerMonatVon: string | null // erster Tag des nächsten zu erfassenden Monats
+  faelligerMonatBis: string | null // letzter Tag desselben Monats
+  eintragbarAb: string | null // erster Tag NACH faelligerMonatBis
+}
+
+export function calcUpdateStatusMonat(
+  latestZeitraumBis: string | null
+): UpdateStatusMonat {
+  if (!latestZeitraumBis) {
+    return {
+      state: 'leer',
+      faelligerMonatVon: null,
+      faelligerMonatBis: null,
+      eintragbarAb: null,
+    }
+  }
+  const { von, bis } = naechsterMonatZeitraum(latestZeitraumBis)
+  const yesterday = addDays(todayIso(), -1)
+  const eintragbarAb = addDays(bis, 1)
+  // Monat abgeschlossen (bis in der Vergangenheit) und noch nicht erfasst → fällig.
+  const state = bis <= yesterday ? 'rot' : 'gruen'
+  return {
+    state,
+    faelligerMonatVon: von,
+    faelligerMonatBis: bis,
+    eintragbarAb,
+  }
 }
 
 export function diffDays(fromIso: string, toIso: string): number {
@@ -231,77 +290,6 @@ export function withGrowth(
           : null,
     }
   })
-}
-
-// =====================================================
-// Tri-State Update-Status (Dashboard Hero)
-// Drei Zonen mit konfigurierbaren Schwellwerten aus den Einstellungen.
-// =====================================================
-export type UpdateStatusState = 'gruen' | 'gelb' | 'rot' | 'leer'
-
-export type UpdateStatusTri = {
-  state: UpdateStatusState
-  lastUpdate: string | null
-  nextDue: string | null
-  daysSinceUpdate: number | null
-  // Positiv = Update ist in X Tagen fällig; negativ = Update ist seit X Tagen überfällig.
-  daysUntilDue: number | null
-  intervall: number
-  vorwarnung: number
-}
-
-export const STATUS_DEFAULT_INTERVALL = 31
-export const STATUS_DEFAULT_VORWARNUNG = 7
-
-export function calcUpdateStatusTri(
-  lastUpdate: string | null,
-  intervall: number = STATUS_DEFAULT_INTERVALL,
-  vorwarnung: number = STATUS_DEFAULT_VORWARNUNG
-): UpdateStatusTri {
-  const safeIntervall = Number.isFinite(intervall) && intervall > 0
-    ? intervall
-    : STATUS_DEFAULT_INTERVALL
-  const safeVorwarnung =
-    Number.isFinite(vorwarnung) && vorwarnung >= 0 && vorwarnung < safeIntervall
-      ? vorwarnung
-      : STATUS_DEFAULT_VORWARNUNG
-
-  if (!lastUpdate) {
-    return {
-      state: 'leer',
-      lastUpdate: null,
-      nextDue: null,
-      daysSinceUpdate: null,
-      daysUntilDue: null,
-      intervall: safeIntervall,
-      vorwarnung: safeVorwarnung,
-    }
-  }
-
-  const today = todayIso()
-  const nextDue = addDays(lastUpdate, safeIntervall)
-  const daysSinceUpdate = diffDays(lastUpdate, today)
-  const daysUntilDue = diffDays(today, nextDue)
-
-  // Reihenfolge wichtig: rot vor gelb vor grün.
-  let state: UpdateStatusState
-  if (daysSinceUpdate >= safeIntervall) {
-    state = 'rot'
-  } else if (daysUntilDue <= safeVorwarnung) {
-    state = 'gelb'
-  } else {
-    state = 'gruen'
-  }
-
-  return {
-    state,
-    lastUpdate,
-    nextDue,
-    daysSinceUpdate,
-    daysUntilDue,
-    intervall: safeIntervall,
-    vorwarnung: safeVorwarnung,
-  }
 }
 
 // ===========================================================
@@ -522,9 +510,9 @@ export type BoardThresholds = {
 }
 
 export const BOARD_THRESHOLDS: BoardThresholds = {
-  // Aktiv = letzter Pin <14 Tage; Wenig aktiv = 15–30; Inaktiv = >30.
-  wenigAktiv: 14,
-  inaktiv: 30,
+  // Aktiv = letzter Pin < 30 Tage; Wenig aktiv = 30–90; Eingeschlafen = > 90.
+  wenigAktiv: 30,
+  inaktiv: 90,
   topEr: 3.0,
   topProzent: 30.0,
   schwachEr: 1.5,
@@ -783,11 +771,197 @@ export type BoardAnalyticsRow = {
   latest: BoardAnalyticsEntry
   lastPinDatum: string | null
   lastPinAlterTage: number | null
+  // Aktivität (unverändert via diagnoseBoard)
   status: BoardStatus
-  score: BoardScore
-  engagementRate: number | null
-  engagementRateVormonat: number | null
-  trendPct: number | null
-  dataInsufficient: boolean
-  handlung: string | null
+  // Neue Wirkungs-Logik (Häppchen 2) — ersetzt die alte ER-basierte Bewertung.
+  wirkung: BoardWirkung
+  outboundClickRate: number
+  saveRate: number
+  sammeltSaves: boolean
+  handlungNeu: BoardHandlungNeu
+  // true, wenn das Datenmengen-Gate (zu wenige qualifizierte Boards für einen
+  // belastbaren Median) NICHT erfüllt ist → Tab zeigt Hinweis statt Handlung.
+  // Global gleich für alle Rows (Gate gilt fürs ganze Profil).
+  wirkungGated: boolean
+  // Pflegestand: wie viele Pins der Nutzer in Pin-Flow diesem Board zugeordnet
+  // hat (aus der internen pins-Tabelle, NICHT aus der CSV — die liefert es nicht).
+  anzahlPinsIntern: number
+}
+
+// ===========================================================
+// Board-Wirkungs-Logik V2 (NEU, parallel zur alten ER-basierten Bewertung)
+//
+// Wirkung wird über die Outbound-Click-Rate (Hauptanker) + Save-Rate (zweites
+// Signal) bestimmt, beide gegen den EIGENEN Board-Median des Nutzers,
+// größenneutral. Bewusst getrennt von der alten scoreBoardHybrid/diagnoseBoard-
+// Logik, die unverändert weiterläuft. Noch NICHT in der UI angezeigt.
+// ===========================================================
+
+// Robuster Median. Leeres Array → 0. Bei gerader Anzahl: Mittel der zwei
+// mittleren Werte. (Der vorhandene median-Helfer in benchmark.ts ist
+// modul-privat und liefert null bei leer — hier brauchen wir 0 + Export.)
+export function median(values: number[]): number {
+  if (values.length === 0) return 0
+  const sorted = [...values].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  return sorted.length % 2 === 0
+    ? (sorted[mid - 1] + sorted[mid]) / 2
+    : sorted[mid]
+}
+
+// Outbound-Click-Rate eines Boards: ausgehende Klicks je 100 Impressionen.
+// Bewusst 0 (nicht null) bei fehlenden Impressionen, damit Median-/Faktor-
+// Rechnung sauber bleibt (calcCtr gäbe hier null zurück).
+export function boardOutboundClickRate(entry: {
+  ausgehende_klicks: number
+  impressionen: number
+}): number {
+  return entry.impressionen > 0
+    ? (entry.ausgehende_klicks / entry.impressionen) * 100
+    : 0
+}
+
+// Save-Rate eines Boards: Saves je 100 Impressionen. Ebenfalls 0 bei 0 Imp.
+export function boardSaveRate(entry: {
+  saves: number
+  impressionen: number
+}): number {
+  return entry.impressionen > 0 ? (entry.saves / entry.impressionen) * 100 : 0
+}
+
+// Schwellwerte der neuen Wirkungs-Logik. Fest verdrahtet (wie die Pin-
+// Schwellwerte nach dem Umbau); Einstellungs-Anbindung folgt in Häppchen 4.
+export type BoardWirkungSchwellen = {
+  // Unter so vielen Impressionen ist die Klickrate statistisch nicht belastbar
+  // → „zu wenig Daten". (Pin-Anzahl wird bewusst nicht genutzt: die Board-CSV
+  // liefert sie nicht; die Verlässlichkeit hängt am Impressionen-Nenner.)
+  mindestImpressionen: number
+  // Unter so vielen qualifizierten Boards (>= mindestImpressionen) trägt der
+  // Median nicht — die Wirkungs-Diagnose ruht dann (Gate, greift in der
+  // Anzeige-Schicht, nicht in boardWirkung selbst).
+  mindestQualifizierteBoards: number
+  starkFaktor: number // ≥ starkFaktor × Median = stark
+  schwachFaktor: number // ≤ schwachFaktor × Median = schwach
+}
+
+export const BOARD_WIRKUNG_DEFAULTS: BoardWirkungSchwellen = {
+  mindestImpressionen: 750,
+  mindestQualifizierteBoards: 5,
+  starkFaktor: 1.2,
+  schwachFaktor: 0.8,
+}
+
+export type BoardWirkung = 'stark' | 'solide' | 'schwach' | 'zu_wenig_daten'
+
+export type BoardWirkungResult = {
+  wirkung: BoardWirkung
+  outboundClickRate: number
+  saveRate: number
+  // true, wenn der Traffic schwach ist, das Board aber überdurchschnittlich
+  // viele Saves sammelt (Schutz-Hinweis). Ändert die `wirkung` NICHT.
+  sammeltSaves: boolean
+}
+
+// Mindest-Felder, die die Wirkungs-Logik je Board braucht (Untermenge von
+// BoardAnalyticsEntry — bewusst strukturell, damit auch Dashboard-Rows passen).
+export type BoardWirkungEntry = {
+  impressionen: number
+  ausgehende_klicks: number
+  saves: number
+}
+
+// Median-Pool: nur Boards mit genug Impressionen (>= mindestImpressionen)
+// fließen in den Median ein, damit datenarme Boards ihn nicht verzerren. Wird
+// EINMAL über alle Boards gebildet und dann pro Board an `boardWirkung`
+// durchgereicht.
+export function boardWirkungMediane(
+  entries: ReadonlyArray<BoardWirkungEntry>,
+  schwellen: BoardWirkungSchwellen = BOARD_WIRKUNG_DEFAULTS
+): { medianOutbound: number; medianSave: number; anzahlQualifiziert: number } {
+  const qualifiziert = entries.filter(
+    (e) => e.impressionen >= schwellen.mindestImpressionen
+  )
+  return {
+    anzahlQualifiziert: qualifiziert.length,
+    medianOutbound: median(qualifiziert.map((e) => boardOutboundClickRate(e))),
+    medianSave: median(qualifiziert.map((e) => boardSaveRate(e))),
+  }
+}
+
+// Wirkungs-Einstufung EINES Boards gegen die (einmal gebildeten) Mediane.
+export function boardWirkung(args: {
+  entry: BoardWirkungEntry
+  medianOutbound: number
+  medianSave: number
+  schwellen?: BoardWirkungSchwellen
+}): BoardWirkungResult {
+  const schwellen = args.schwellen ?? BOARD_WIRKUNG_DEFAULTS
+  const outboundClickRate = boardOutboundClickRate(args.entry)
+  const saveRate = boardSaveRate(args.entry)
+
+  // Zu wenig Daten: zu wenige Impressionen → die Klickrate ist statistisch
+  // nicht belastbar, daher keine Bewertung. (impressionen ist non-null typisiert,
+  // 0 wird durch den Vergleich miterfasst.)
+  if (args.entry.impressionen < schwellen.mindestImpressionen) {
+    return {
+      wirkung: 'zu_wenig_daten',
+      outboundClickRate,
+      saveRate,
+      sammeltSaves: false,
+    }
+  }
+
+  // Median = 0 → kein verlässlicher Vergleichsmaßstab (leerer Pool oder alle
+  // qualifizierten Boards mit Outbound-Rate 0). Ehrlich „zu wenig Daten" statt
+  // einer erfundenen Bewertung — sonst würde jede Rate ≥ 0 fälschlich „stark".
+  if (args.medianOutbound <= 0) {
+    return {
+      wirkung: 'zu_wenig_daten',
+      outboundClickRate,
+      saveRate,
+      sammeltSaves: false,
+    }
+  }
+
+  let wirkung: BoardWirkung
+  if (outboundClickRate >= schwellen.starkFaktor * args.medianOutbound) {
+    wirkung = 'stark'
+  } else if (
+    outboundClickRate <=
+    schwellen.schwachFaktor * args.medianOutbound
+  ) {
+    wirkung = 'schwach'
+  } else {
+    wirkung = 'solide'
+  }
+
+  // Schutz-Hinweis: schwacher Traffic, aber starke Save-Rate. Reiner Zusatz.
+  // medianSave > 0 absichern, sonst dieselbe Null-Falle wie oben.
+  const sammeltSaves =
+    wirkung === 'schwach' &&
+    args.medianSave > 0 &&
+    saveRate >= schwellen.starkFaktor * args.medianSave
+
+  return { wirkung, outboundClickRate, saveRate, sammeltSaves }
+}
+
+// Vier-Felder-Handlung: Aktivität (diagnoseBoard) × neue Wirkung.
+export type BoardHandlungNeu =
+  | 'reaktivieren'
+  | 'weiter_so'
+  | 'optimieren_oder_archivieren'
+  | 'zu_wenig_daten'
+
+export function boardHandlungNeu(args: {
+  wirkung: BoardWirkung
+  aktivitaet: BoardStatus
+}): BoardHandlungNeu {
+  if (args.wirkung === 'zu_wenig_daten') return 'zu_wenig_daten'
+  if (args.wirkung === 'stark') {
+    // Starke Wirkung, aber Board schläft → reaktivieren; sonst läuft es.
+    return args.aktivitaet === 'aktiv' ? 'weiter_so' : 'reaktivieren'
+  }
+  if (args.wirkung === 'schwach') return 'optimieren_oder_archivieren'
+  // 'solide' → 'weiter_so' (Mittelfeld braucht keine Handlung).
+  return 'weiter_so'
 }

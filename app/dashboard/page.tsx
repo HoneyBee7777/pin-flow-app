@@ -12,7 +12,7 @@ import {
   boardThresholdsFromSettings,
   calcBoardEngagementRate,
   calcCtr,
-  calcUpdateStatusTri,
+  calcUpdateStatusMonat,
   diagnoseBoard,
   diffDays,
   formatDateDe,
@@ -35,7 +35,7 @@ import {
   type PinOption,
   type ProfilAnalytics,
   type ProfilAnalyticsWithGrowth,
-  type UpdateStatusTri,
+  type UpdateStatusMonat,
 } from './analytics/utils'
 import {
   diagnosePinAggregated,
@@ -132,6 +132,7 @@ type RawPinAnalyticsRow = {
   id: string
   pin_id: string
   datum: string
+  zeitraum_bis: string | null
   impressionen: number
   klicks: number
   saves: number
@@ -507,7 +508,7 @@ export default async function DashboardPage() {
     supabase
       .from('profil_analytics')
       .select(
-        'id, datum, impressionen, ausgehende_klicks, saves, gesamte_zielgruppe, interagierende_zielgruppe, created_at'
+        'id, datum, zeitraum_bis, impressionen, ausgehende_klicks, saves, gesamte_zielgruppe, interagierende_zielgruppe, created_at'
       )
       .order('datum', { ascending: false })
       .limit(12),
@@ -532,8 +533,7 @@ export default async function DashboardPage() {
          ziel_soll_landingpage, ziel_soll_newsletter, ziel_soll_buchung,
          strategie_content_saeulen, strategie_pinning_frequenz,
          strategie_letzte_aenderung, strategie_onboarding_abgeschlossen,
-         strategie_check_schwelle_gelb, strategie_check_schwelle_rot,
-         status_update_intervall, status_update_vorwarnung`
+         strategie_check_schwelle_gelb, strategie_check_schwelle_rot`
       )
       .eq('user_id', user.id)
       .maybeSingle(),
@@ -544,7 +544,7 @@ export default async function DashboardPage() {
       supabase
         .from('pins_analytics')
         .select(
-          `id, pin_id, datum, impressionen, klicks, saves, created_at,
+          `id, pin_id, datum, zeitraum_bis, impressionen, klicks, saves, created_at,
            pins ( id, titel, status, created_at, geplante_veroeffentlichung, pinterest_pin_url, board_id )`
         )
         .is('deleted_at', null)
@@ -636,19 +636,6 @@ export default async function DashboardPage() {
   const latest = profilRows[0] ?? null
   const previous = profilRows[1] ?? null
 
-  // Tri-State (grün/gelb/rot) für Hero-Section. Nutzt User-Schwellwerte
-  // aus Einstellungen (Defaults: 31 Tage Intervall, 7 Tage Vorwarnung).
-  type RawStatusSettings = {
-    status_update_intervall: number | null
-    status_update_vorwarnung: number | null
-  }
-  const statusRaw = settingsRes.data as Partial<RawStatusSettings> | null
-  const updateStatusTri: UpdateStatusTri = calcUpdateStatusTri(
-    settingsRes.data?.analytics_update_datum ?? null,
-    statusRaw?.status_update_intervall ?? undefined,
-    statusRaw?.status_update_vorwarnung ?? undefined
-  )
-
   // ===== Begrüßung =====
   const profilName = (settingsRes.data?.profil_name ?? '').trim()
   const greetingName = (() => {
@@ -697,6 +684,25 @@ export default async function DashboardPage() {
   const today = todayIso()
   const rawPinAnalytics =
     (pinAnalyticsRes.data ?? []) as unknown as RawPinAnalyticsRow[]
+
+  // Letztes erfasstes Zeitraum-Ende (max zeitraum_bis über Profil + Pins) für
+  // den monatsbasierten Analytics-Status. Direkt zeitraum_bis ?? datum (kein
+  // effectiveZeitraum nötig, da nur das Ende gebraucht wird). Keine Daten →
+  // null → Hero-Banner zeigt den Willkommens-/Onboarding-Zustand.
+  let latestZeitraumBis: string | null = null
+  for (const r of rows) {
+    const bis = r.zeitraum_bis ?? r.datum
+    if (bis && (!latestZeitraumBis || bis > latestZeitraumBis)) {
+      latestZeitraumBis = bis
+    }
+  }
+  for (const r of rawPinAnalytics) {
+    const bis = r.zeitraum_bis ?? r.datum
+    if (bis && (!latestZeitraumBis || bis > latestZeitraumBis)) {
+      latestZeitraumBis = bis
+    }
+  }
+  const updateStatusMonat = calcUpdateStatusMonat(latestZeitraumBis)
 
   type ErledigtRawRow = {
     pin_id: string
@@ -1654,7 +1660,8 @@ export default async function DashboardPage() {
 
       {/* 1. Hero-Section: schmaler Analytics-Status-Banner */}
       <HeroSection
-        statusTri={updateStatusTri}
+        status={updateStatusMonat}
+        analyticsUpdateDatum={settingsRes.data?.analytics_update_datum ?? null}
         pinsCount={veroeffentlichtePinsCount}
         boardsCount={boardsCount}
       />
@@ -4396,110 +4403,6 @@ function PerformanceVerlaufSection({ points }: { points: ChartPoint[] }) {
 }
 
 // ===========================================================
-// Update-Status
-// ===========================================================
-function UpdateStatusCard({
-  lastUpdate,
-  nextDue,
-  isOverdue,
-  daysSinceUpdate,
-  pinsCount,
-  boardsCount,
-}: {
-  lastUpdate: string | null
-  nextDue: string | null
-  isOverdue: boolean
-  daysSinceUpdate: number | null
-  pinsCount: number
-  boardsCount: number
-}) {
-  const daysAgoLabel =
-    daysSinceUpdate === null
-      ? null
-      : daysSinceUpdate === 0
-        ? 'heute'
-        : daysSinceUpdate === 1
-          ? 'vor 1 Tag'
-          : `vor ${daysSinceUpdate} Tagen`
-  if (!lastUpdate) {
-    return (
-      <section className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
-        <span className="font-semibold text-gray-900">Analytics-Status:</span>
-        <span className="font-semibold">⚪ Noch kein Update</span>
-        <Link
-          href="/dashboard/analytics"
-          className="rounded-md border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
-        >
-          📊 Jetzt aktualisieren
-        </Link>
-        <span className="ml-auto flex items-center gap-3 border-l border-gray-300 pl-3 text-gray-700">
-          <span>📌 {formatZahl(pinsCount)} Pins</span>
-          <span className="text-gray-400" aria-hidden>
-            ·
-          </span>
-          <span>📋 {formatZahl(boardsCount)} Boards</span>
-        </span>
-      </section>
-    )
-  }
-
-  const tone = isOverdue
-    ? {
-        border: 'border-red-200',
-        bg: 'bg-red-50',
-        title: 'text-red-900',
-        body: 'text-red-800',
-        emoji: '🔴',
-        status: 'Überfällig',
-      }
-    : {
-        border: 'border-green-200',
-        bg: 'bg-green-50',
-        title: 'text-green-900',
-        body: 'text-green-800',
-        emoji: '🟢',
-        status: 'Aktuell',
-      }
-
-  return (
-    <section
-      className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border ${tone.border} ${tone.bg} px-3 py-2 text-sm ${tone.body}`}
-    >
-      <span className={`font-semibold ${tone.title}`}>Analytics-Status:</span>
-      <span className={`font-semibold ${tone.title}`}>
-        {tone.emoji} {tone.status}
-      </span>
-      <span className="text-gray-400" aria-hidden>
-        ·
-      </span>
-      <span>
-        Letztes Update: <strong>{formatDateDe(lastUpdate)}</strong>
-        {daysAgoLabel && <> ({daysAgoLabel})</>}
-      </span>
-      <span className="text-gray-400" aria-hidden>
-        ·
-      </span>
-      <span>
-        Nächstes Update: <strong>{formatDateDe(nextDue)}</strong>
-      </span>
-      <Link
-        href="/dashboard/analytics"
-        className="rounded-md border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
-      >
-        📊 Jetzt aktualisieren
-      </Link>
-      <span className="ml-auto flex items-center gap-3 border-l border-gray-300 pl-3 text-gray-700">
-        <span>📌 {formatZahl(pinsCount)} Pins</span>
-        <span className="text-gray-400" aria-hidden>
-          ·
-        </span>
-        <span>📋 {formatZahl(boardsCount)} Boards</span>
-      </span>
-    </section>
-  )
-}
-
-// ===========================================================
 // Briefing-Block: weiße Sektion mit „Deine Prioritäten" +
 // „Deine nächsten Schritte" + Aktualitäts-Hinweis am Ende.
 // ===========================================================
@@ -4528,17 +4431,19 @@ function BriefingBlock({
 // Briefing sind eigenständige weiße Sektionen darunter.
 // ===========================================================
 function HeroSection({
-  statusTri,
+  status,
+  analyticsUpdateDatum,
   pinsCount,
   boardsCount,
 }: {
-  statusTri: UpdateStatusTri
+  status: UpdateStatusMonat
+  analyticsUpdateDatum: string | null
   pinsCount: number
   boardsCount: number
 }) {
   // Onboarding-Modus: noch nie Analytics gepflegt — blauer Info-Banner
   // statt Status/Profil-Gesundheit.
-  if (statusTri.state === 'leer') {
+  if (status.state === 'leer') {
     return (
       <section className="rounded-lg bg-slate-800 px-4 py-4 text-white shadow-md">
         <div className="flex flex-wrap items-start gap-3 text-sm">
@@ -4568,109 +4473,79 @@ function HeroSection({
     )
   }
   const tone =
-    statusTri.state === 'rot'
+    status.state === 'rot'
       ? {
           border: 'border-red-200',
           bg: 'bg-red-50',
           title: 'text-red-900',
           body: 'text-red-800',
-          divider: 'border-red-200/60',
         }
-      : statusTri.state === 'gelb'
-        ? {
-            border: 'border-yellow-200',
-            bg: 'bg-yellow-50',
-            title: 'text-yellow-900',
-            body: 'text-yellow-800',
-            divider: 'border-yellow-200/60',
-          }
-        : statusTri.state === 'gruen'
-          ? {
-              border: 'border-green-200',
-              bg: 'bg-green-50',
-              title: 'text-green-900',
-              body: 'text-green-800',
-              divider: 'border-green-200/60',
-            }
-          : {
-              border: 'border-gray-200',
-              bg: 'bg-gray-50',
-              title: 'text-gray-900',
-              body: 'text-gray-700',
-              divider: 'border-gray-200/60',
-            }
+      : {
+          border: 'border-green-200',
+          bg: 'bg-green-50',
+          title: 'text-green-900',
+          body: 'text-green-800',
+        }
 
   const statusLabel =
-    statusTri.state === 'rot'
-      ? '🔴 Analytics-Status: Daten veraltet'
-      : statusTri.state === 'gelb'
-        ? `🟡 Analytics-Status: Update fällig in ${
-            statusTri.daysUntilDue !== null
-              ? Math.max(0, statusTri.daysUntilDue)
-              : '-'
-          } Tagen`
-        : statusTri.state === 'gruen'
-          ? '🟢 Analytics-Status: Aktuell'
-          : '⚪ Analytics-Status: Noch kein Update'
-
-  const daysAgoLabel =
-    statusTri.daysSinceUpdate === null
-      ? null
-      : statusTri.daysSinceUpdate === 0
-        ? 'heute'
-        : statusTri.daysSinceUpdate === 1
-          ? 'vor 1 Tag'
-          : `vor ${statusTri.daysSinceUpdate} Tagen`
+    status.state === 'rot'
+      ? '🔴 Analytics-Status: Update fällig'
+      : '🟢 Analytics-Status: Aktuell'
 
   return (
-    <div className="space-y-3">
-      <section
-        className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-4 py-2.5 text-sm shadow-sm ${tone.border} ${tone.bg} ${tone.body}`}
-      >
-        <span className={`font-semibold ${tone.title}`}>{statusLabel}</span>
-        {statusTri.lastUpdate && (
-          <>
-            <span className="text-gray-400" aria-hidden>
-              ·
-            </span>
-            <span>
-              Letztes Update:{' '}
-              <strong>{formatDateDe(statusTri.lastUpdate)}</strong>
-              {daysAgoLabel && <> ({daysAgoLabel})</>}
-            </span>
-            <span className="text-gray-400" aria-hidden>
-              ·
-            </span>
-            <span>
-              Nächstes Update:{' '}
-              <strong>{formatDateDe(statusTri.nextDue)}</strong>
-            </span>
-          </>
-        )}
-        <Link
-          href="/dashboard/analytics"
-          className="rounded-md border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
-        >
-          📊 Jetzt aktualisieren
-        </Link>
-        <span className="ml-auto flex items-center gap-3 border-l border-gray-300 pl-3 text-gray-700">
-          <span>📌 {formatZahl(pinsCount)} Pins</span>
+    <section
+      className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-4 py-2.5 text-sm shadow-sm ${tone.border} ${tone.bg} ${tone.body}`}
+    >
+      <span className={`font-semibold ${tone.title}`}>{statusLabel}</span>
+      <span className="text-gray-400" aria-hidden>
+        ·
+      </span>
+      <span>
+        Letztes Update:{' '}
+        <strong>
+          {analyticsUpdateDatum ? formatDateDe(analyticsUpdateDatum) : 'noch nie'}
+        </strong>
+      </span>
+      {status.state === 'gruen' && (
+        <>
           <span className="text-gray-400" aria-hidden>
             ·
           </span>
-          <span>📋 {formatZahl(boardsCount)} Boards</span>
-        </span>
-      </section>
-
-      {statusTri.state === 'rot' && statusTri.daysSinceUpdate !== null && (
-        <div className="warn-box">
-          <span className="font-semibold">🚨 Daten veraltet</span> – das
-          Dashboard zeigt Werte vom letzten Update (vor{' '}
-          {statusTri.daysSinceUpdate} Tagen). Aktualisiere jetzt deine
-          Analytics, damit alle Sektionen verlässliche Empfehlungen zeigen.
-        </div>
+          <span>
+            Nächstes Update ab:{' '}
+            <strong>{formatDateDe(status.eintragbarAb)}</strong>
+          </span>
+        </>
       )}
-    </div>
+      {status.state === 'rot' && (
+        <>
+          <span className="text-gray-400" aria-hidden>
+            ·
+          </span>
+          <span>
+            Zeitraum{' '}
+            <strong>
+              {formatDateDe(status.faelligerMonatVon)} bis{' '}
+              {formatDateDe(status.faelligerMonatBis)}
+            </strong>{' '}
+            fällig
+          </span>
+        </>
+      )}
+      <Link
+        href="/dashboard/analytics"
+        className="rounded-md border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+      >
+        📊 Jetzt aktualisieren
+      </Link>
+      <span className="ml-auto flex items-center gap-3 border-l border-gray-300 pl-3 text-gray-700">
+        <span>📌 {formatZahl(pinsCount)} Pins</span>
+        <span className="text-gray-400" aria-hidden>
+          ·
+        </span>
+        <span>📋 {formatZahl(boardsCount)} Boards</span>
+      </span>
+    </section>
   )
 }
 

@@ -46,11 +46,6 @@ export type InitialContentPipelineSchwellwerte = {
   maxPinsGoldnugget: number | null
 }
 
-export type InitialStatusSchwellwerte = {
-  intervall: number
-  vorwarnung: number
-}
-
 export default function EinstellungenClient({
   initialProfilName,
   initialEigeneSignalwoerter,
@@ -59,7 +54,6 @@ export default function EinstellungenClient({
   initialPersoenlicheLinks,
   initialBoardSchwellwerte,
   initialContentPipelineSchwellwerte,
-  initialStatusSchwellwerte,
 }: {
   initialProfilName: string
   initialEigeneSignalwoerter: string
@@ -71,7 +65,6 @@ export default function EinstellungenClient({
   initialNicheProfile: AccountNicheProfile
   initialBoardSchwellwerte: InitialBoardSchwellwerte
   initialContentPipelineSchwellwerte: InitialContentPipelineSchwellwerte
-  initialStatusSchwellwerte: InitialStatusSchwellwerte
 }) {
   return (
     <div className="space-y-6">
@@ -89,7 +82,6 @@ export default function EinstellungenClient({
       <ContentPipelineSchwellwerteSection
         initial={initialContentPipelineSchwellwerte}
       />
-      <StatusSchwellwerteSection initial={initialStatusSchwellwerte} />
     </div>
   )
 }
@@ -953,141 +945,6 @@ function ContentPipelineSchwellwerteSection({
             type="submit"
             disabled={isPending}
             className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
-          >
-            {isPending ? 'Speichert…' : 'Speichern'}
-          </button>
-          {feedback.saved && (
-            <span className="text-sm text-green-700">✓ Gespeichert</span>
-          )}
-          {feedback.error && (
-            <span className="text-sm text-red-700">{feedback.error}</span>
-          )}
-        </div>
-      </form>
-    </section>
-  )
-}
-
-function StatusSchwellwerteSection({
-  initial,
-}: {
-  initial: InitialStatusSchwellwerte
-}) {
-  const [intervall, setIntervall] = useState<string>(
-    String(initial.intervall)
-  )
-  const [vorwarnung, setVorwarnung] = useState<string>(
-    String(initial.vorwarnung)
-  )
-  const [isPending, startTransition] = useTransition()
-  const [feedback, setFeedback] = useState<{
-    saved?: boolean
-    error?: string
-  }>({})
-
-  const intervallN = Number(intervall)
-  const vorwarnungN = Number(vorwarnung)
-  const validationErr =
-    !Number.isInteger(intervallN) || intervallN < 7 || intervallN > 60
-      ? 'Update-Intervall muss eine ganze Zahl zwischen 7 und 60 sein.'
-      : !Number.isInteger(vorwarnungN) ||
-          vorwarnungN < 1 ||
-          vorwarnungN > 14
-        ? 'Update-Vorwarnung muss eine ganze Zahl zwischen 1 und 14 sein.'
-        : vorwarnungN >= intervallN
-          ? 'Update-Vorwarnung muss kleiner sein als das Update-Intervall.'
-          : null
-
-  function onSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    setFeedback({})
-    if (validationErr) {
-      setFeedback({ error: validationErr })
-      return
-    }
-    const formData = new FormData()
-    formData.set('status_update_intervall', String(intervallN))
-    formData.set('status_update_vorwarnung', String(vorwarnungN))
-    startTransition(async () => {
-      const result = await saveEinstellungen(formData)
-      if (result.error) setFeedback({ error: result.error })
-      else setFeedback({ saved: true })
-    })
-  }
-
-  return (
-    <section
-      id="status-schwellwerte"
-      className="scroll-mt-24 rounded-lg border border-gray-200 bg-white p-6 shadow-sm"
-    >
-      <h2 className="text-lg font-semibold text-gray-900">
-        Status-Schwellwerte
-      </h2>
-      <p className="mt-1 text-sm text-gray-600">
-        Diese Werte steuern den Analytics-Status (grün/gelb/rot) auf dem
-        Dashboard. Der Status wechselt automatisch je nach Tagen seit deinem
-        letzten Analytics-Update.
-      </p>
-
-      <form onSubmit={onSubmit} className="mt-4 space-y-4">
-        <div>
-          <label
-            htmlFor="status_update_intervall"
-            className="block text-sm font-medium text-gray-700"
-          >
-            Update-Intervall (Tage)
-          </label>
-          <input
-            id="status_update_intervall"
-            name="status_update_intervall"
-            type="number"
-            min={7}
-            max={60}
-            step={1}
-            value={intervall}
-            onChange={(e) => setIntervall(e.target.value)}
-            className="mt-1 block w-32 rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-          />
-          <p className="mt-1 text-xs text-gray-500">
-            Nach dieser Anzahl Tage gilt ein Analytics-Update als überfällig.
-            Standard: 31. Min: 7, Max: 60.
-          </p>
-        </div>
-
-        <div>
-          <label
-            htmlFor="status_update_vorwarnung"
-            className="block text-sm font-medium text-gray-700"
-          >
-            Update-Vorwarnung (Tage)
-          </label>
-          <input
-            id="status_update_vorwarnung"
-            name="status_update_vorwarnung"
-            type="number"
-            min={1}
-            max={14}
-            step={1}
-            value={vorwarnung}
-            onChange={(e) => setVorwarnung(e.target.value)}
-            className="mt-1 block w-32 rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-          />
-          <p className="mt-1 text-xs text-gray-500">
-            So viele Tage vor Fälligkeit wechselt der Status auf Gelb. Muss
-            kleiner sein als das Update-Intervall. Standard: 7. Min: 1, Max:
-            14.
-          </p>
-        </div>
-
-        {validationErr && (
-          <p className="text-xs text-red-700">{validationErr}</p>
-        )}
-
-        <div className="flex items-center gap-3">
-          <button
-            type="submit"
-            disabled={isPending || !!validationErr}
-            className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isPending ? 'Speichert…' : 'Speichern'}
           </button>

@@ -12,11 +12,9 @@ import {
   deletePinAnalytics,
   hardDeleteAllDeletedPinAnalytics,
   restorePinAnalytics,
-  type UnmatchedPin,
 } from './actions'
 import SharedSortableTh from '@/components/SortableTh'
 import InfoTooltip from '@/components/InfoTooltip'
-import UnmatchedPinsSection from './UnmatchedPinsSection'
 import PinAnalyticsEditModal from './PinAnalyticsEditModal'
 import type { DeletedPinEntry } from './AnalyticsClient'
 import {
@@ -54,19 +52,15 @@ const COLUMN_TOOLTIPS = {
   saves:
     'Wie oft Menschen deinen Pin auf eigene Boards gespeichert haben. Das ist Pinterests wichtigstes Signal: Viele Saves → Pinterest spielt deinen Pin mehr aus.',
   ctr:
-    'Von 100 Menschen, die deinen Pin sehen, wie viele klicken auf deine Website? Beispiel: 1,5 % heißt: 1,5 von 100 klicken durch. Klingt wenig, ist aber bei Pinterest ein guter Wert.',
+    'Von 100 Menschen, die deinen Pin sehen, wie viele klicken auf deine Website? Pin-Flow bewertet deine Klickrate immer gegen deinen eigenen Durchschnitt, nicht gegen feste Branchenwerte.',
   saveRate:
     'Von 100 Menschen, die deinen Pin sehen, wie viele speichern ihn auf eigenen Boards? Beispiel: 0,5 % heißt: 1 von 200 speichert ihn. Pinterest belohnt hohe Save-Rates mit mehr Reichweite.',
-  er:
-    'Engagement-Rate. Zeigt die Gesamtwirkung eines Pins: Von 100 Menschen, denen Pinterest deinen Pin ausgespielt hat, wie viele reagieren (durch Speichern oder Klicken)? Ein guter Überblickswert. Die Ausspielung steuert Pinterest aber über die Save-Rate, nicht über die Engagement-Rate. Beispiel: 1,5 % heißt: 1,5 von 100 reagieren auf den Pin.',
   diagnose:
     'Welche Stärke und Schwäche hat dieser Pin? Die Diagnose entscheidet, was du als nächstes tun solltest.',
   handlung:
     'Was solltest du mit diesem Pin tun? Konkrete Empfehlung basierend auf der Diagnose.',
-  perioden:
-    'In wie vielen monatlichen Daten-Imports kommt dieser Pin schon vor? Mehr Perioden = stabilere Aussage.',
   alter:
-    'Wie viele Tage seit der ersten Veröffentlichung. Pinterest braucht Zeit, um neue Pins voll auszuspielen, meist 60+ Tage.',
+    'Wie viele Tage seit der ersten Veröffentlichung. Pinterest braucht Zeit, um neue Pins voll auszuspielen, meist rund 90 Tage.',
 } as const
 
 export default function PinsTab({
@@ -75,22 +69,14 @@ export default function PinsTab({
   pins,
   thresholds,
   benchmark,
-  unmatchedPins,
-  unmatchedZeitraumVon,
-  unmatchedZeitraumBis,
-  onUnmatchedPinResolved,
 }: {
   pinAnalytics: PinAnalyticsRow[]
   deletedPinAnalytics: DeletedPinEntry[]
-  // Wird nur an UnmatchedPinsSection durchgereicht (Pin-Auswahl beim
-  // Zuordnen) — die Pin-Tabelle selbst nutzt pinAnalytics.pin.
+  // Wird für das Bearbeiten-Modal (Pin-Auswahl) gebraucht — die Pin-Tabelle
+  // selbst nutzt pinAnalytics.pin.
   pins: PinOption[]
   thresholds: PinAnalyticsThresholds
   benchmark: UserPinBenchmark | null
-  unmatchedPins: UnmatchedPin[]
-  unmatchedZeitraumVon: string
-  unmatchedZeitraumBis: string
-  onUnmatchedPinResolved: (pinterestPinId: string) => void
 }) {
   const [isPending, startTransition] = useTransition()
 
@@ -212,27 +198,32 @@ export default function PinsTab({
   return (
     <div className="space-y-6">
       <p className="text-sm text-gray-700">
-        Hier siehst du die Performance deiner Top Pins über alle erfassten
-        Zeiträume.
+        Hier siehst du die Auswertung deiner CSV-Importe, aufgeschlüsselt nach
+        den Pins, deren Pinterest-ID einem deiner Pins zugeordnet ist.
         <br />
-        →{' '}
+        Alle Werte sind sichtbar: ausgehende Klicks, Impressionen, Saves,
+        Klickrate und Save-Rate, dazu für jeden Pin die Diagnose, die passende
+        Handlung und das Alter.
+        <br />
+        Die ausführliche Analyse mit Coaching zu jedem Pin findest du im{' '}
+        <Link
+          href="/dashboard#pin-handlungsbedarf"
+          className="font-medium text-red-600 hover:underline"
+        >
+          Dashboard unter Pins
+        </Link>
+        .
+        <br />
+        Tiefergehende Erklärungen zu den Kennzahlen und Diagnosen stehen in
+        den{' '}
         <Link
           href="/dashboard/strategie?tab=analytics"
           className="font-medium text-red-600 hover:underline"
         >
-          Mehr zur Analyse: Pin-Lebenszyklus, Kategorien und Vergleichswerte
-          in Pinterest-Wissen
+          Wissensseiten
         </Link>
+        .
       </p>
-
-      <UnmatchedPinsSection
-        unmatchedPins={unmatchedPins}
-        pins={pins}
-        zeitraumVon={unmatchedZeitraumVon}
-        zeitraumBis={unmatchedZeitraumBis}
-        onAssigned={onUnmatchedPinResolved}
-        onSkipped={onUnmatchedPinResolved}
-      />
 
       <ThresholdInfo thresholds={thresholds} benchmark={benchmark} />
 

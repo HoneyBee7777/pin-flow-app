@@ -2,14 +2,15 @@ import { createClient } from '@/lib/supabase-server'
 import AnalyticsClient from './AnalyticsClient'
 import UpdateStatusBanner from './UpdateStatusBanner'
 import {
-  boardHandlung,
+  BOARD_WIRKUNG_DEFAULTS,
   boardThresholdsFromSettings,
-  calcBoardEngagementRate,
+  boardWirkung,
+  boardWirkungMediane,
+  boardHandlungNeu,
   calcCtr,
   diagnoseBoard,
   diffDays,
-  scoreBoardHybrid,
-  topPercentCutoff,
+  effectiveZeitraum,
   thresholdsFromSettings,
   todayIso,
   withGrowth,
@@ -67,7 +68,6 @@ export default async function AnalyticsPage() {
       .from('einstellungen')
       .select(
         `pinterest_analytics_url, analytics_update_datum,
-         status_update_intervall, status_update_vorwarnung,
          schwellwert_beobachtung, schwellwert_min_klicks,
          schwellwert_ctr,
          schwellwert_min_imp_ctr_urteil, schwellwert_min_imp_reichweite_stark,
@@ -173,6 +173,19 @@ export default async function AnalyticsPage() {
     }
   })
 
+  // Letztes erfasstes Zeitraum-Ende (max zeitraum_bis über Profil + Pins) —
+  // Basis für den monatsbasierten Analytics-Status. Spiegelt die Client-Logik
+  // in AnalyticsClient. Keine Daten → null → Banner zeigt „Noch kein Update".
+  let latestZeitraumBis: string | null = null
+  for (const r of profilAnalytics) {
+    const bis = effectiveZeitraum(r).bis
+    if (!latestZeitraumBis || bis > latestZeitraumBis) latestZeitraumBis = bis
+  }
+  for (const r of pinAnalytics) {
+    const bis = effectiveZeitraum(r).bis
+    if (!latestZeitraumBis || bis > latestZeitraumBis) latestZeitraumBis = bis
+  }
+
   // ===== Boards =====
   const boardsRaw = (boardsRes.data ?? []) as BoardOption[]
   const boards: BoardOption[] = boardsRaw.map(({ id, name, pinterest_url }) => ({
@@ -193,8 +206,14 @@ export default async function AnalyticsPage() {
   )
 
   const lastPinByBoard = new Map<string, string>()
+  // Pflegestand: Anzahl der in Pin-Flow diesem Board zugeordneten Pins. Aus der
+  // internen pins-Tabelle (pinsForBoardRaw, hier wiederverwendet) — die CSV
+  // liefert keine Pin-Anzahl pro Board. Zählt alle Pins mit board_id, unabhängig
+  // vom Datum.
+  const pinsCountByBoard = new Map<string, number>()
   for (const p of pinsForBoardRaw) {
     if (!p.board_id) continue
+    pinsCountByBoard.set(p.board_id, (pinsCountByBoard.get(p.board_id) ?? 0) + 1)
     const refDate =
       p.geplante_veroeffentlichung ?? p.created_at?.slice(0, 10) ?? null
     if (!refDate) continue
@@ -203,17 +222,13 @@ export default async function AnalyticsPage() {
       lastPinByBoard.set(p.board_id, refDate)
   }
 
-  // Dedup board_analytics — neueste + zweitneueste Datum pro Board
-  // (Rohdaten sind DESC sortiert; zweiter Treffer = Vormonat). Außerdem
-  // die komplette Zeitreihe pro Board für die aufklappbare Detailansicht.
+  // Dedup board_analytics — neueste Periode pro Board (Rohdaten DESC sortiert).
+  // Außerdem die komplette Zeitreihe pro Board für die aufklappbare Ansicht.
   const latestByBoard = new Map<string, BoardAnalyticsEntry>()
-  const prevByBoard = new Map<string, BoardAnalyticsEntry>()
   const historyByBoard = new Map<string, BoardAnalyticsEntry[]>()
   for (const row of boardAnalyticsRaw) {
     if (!latestByBoard.has(row.board_id)) {
       latestByBoard.set(row.board_id, row)
-    } else if (!prevByBoard.has(row.board_id)) {
-      prevByBoard.set(row.board_id, row)
     }
     const arr = historyByBoard.get(row.board_id) ?? []
     arr.push(row)
@@ -222,17 +237,14 @@ export default async function AnalyticsPage() {
 
   const boardById = new Map(boards.map((b) => [b.id, b]))
 
-  type PreScored = {
+  type PreBoard = {
     board: BoardOption
     latest: BoardAnalyticsEntry
-    prev: BoardAnalyticsEntry | null
     lastPinDatum: string | null
     lastPinAlterTage: number | null
-    engagementRate: number | null
-    engagementRateVormonat: number | null
     status: ReturnType<typeof diagnoseBoard>
   }
-  const preScored: PreScored[] = []
+  const preBoards: PreBoard[] = []
   latestByBoard.forEach((latest, boardId) => {
     const board = boardById.get(boardId)
     if (!board) return
@@ -240,42 +252,29 @@ export default async function AnalyticsPage() {
     const lastPinAlterTage = lastPinDatum
       ? Math.max(0, diffDays(lastPinDatum, today))
       : null
-    const engagementRate = calcBoardEngagementRate(
-      latest.engagement,
-      latest.impressionen
-    )
-    const prev = prevByBoard.get(boardId) ?? null
-    const engagementRateVormonat = prev
-      ? calcBoardEngagementRate(prev.engagement, prev.impressionen)
-      : null
+    // Aktivität bleibt über diagnoseBoard (datumsbasiert).
     const status = diagnoseBoard({
       lastPinAlterTage,
       thresholds: boardThresholds,
     })
-    preScored.push({
-      board,
-      latest,
-      prev,
-      lastPinDatum,
-      lastPinAlterTage,
-      engagementRate,
-      engagementRateVormonat,
-      status,
-    })
+    preBoards.push({ board, latest, lastPinDatum, lastPinAlterTage, status })
   })
 
-  // Cutoff für „obere X %" des Profils berechnen.
-  const allErs = preScored
-    .map((p) => p.engagementRate)
-    .filter((er): er is number => er !== null)
-  const topCutoffEr = topPercentCutoff(allErs, boardThresholds.topProzent)
+  // Neue Wirkungs-Logik (Häppchen 2): Mediane EINMAL über alle Boards
+  // (latest-Periode) bilden, dann pro Board Wirkung + Handlung ableiten.
+  const { medianOutbound, medianSave, anzahlQualifiziert } = boardWirkungMediane(
+    preBoards.map((p) => p.latest)
+  )
+  // Datenmengen-Gate: nur wenn genug Boards genug Reichweite haben, trägt der
+  // Median. Sonst ruht die Wirkungs-Diagnose (Aktivität bleibt davon unberührt).
+  const wirkungGated =
+    anzahlQualifiziert < BOARD_WIRKUNG_DEFAULTS.mindestQualifizierteBoards
 
-  const boardAnalytics: BoardAnalyticsRow[] = preScored.map((p) => {
-    const { score, dataInsufficient, trendPct } = scoreBoardHybrid({
-      er: p.engagementRate,
-      erVormonat: p.engagementRateVormonat,
-      topCutoffEr,
-      thresholds: boardThresholds,
+  const boardAnalytics: BoardAnalyticsRow[] = preBoards.map((p) => {
+    const w = boardWirkung({
+      entry: p.latest,
+      medianOutbound,
+      medianSave,
     })
     return {
       board: p.board,
@@ -283,16 +282,17 @@ export default async function AnalyticsPage() {
       lastPinDatum: p.lastPinDatum,
       lastPinAlterTage: p.lastPinAlterTage,
       status: p.status,
-      score,
-      engagementRate: p.engagementRate,
-      engagementRateVormonat: p.engagementRateVormonat,
-      trendPct,
-      dataInsufficient,
-      handlung: boardHandlung({
-        score,
-        status: p.status,
-        dataInsufficient,
-      }),
+      wirkung: w.wirkung,
+      outboundClickRate: w.outboundClickRate,
+      saveRate: w.saveRate,
+      sammeltSaves: w.sammeltSaves,
+      // Bei gegatetem Zustand keine Handlung berechnen (neutraler Platzhalter;
+      // der Tab zeigt dann „—" statt eines Labels).
+      handlungNeu: wirkungGated
+        ? 'zu_wenig_daten'
+        : boardHandlungNeu({ wirkung: w.wirkung, aktivitaet: p.status }),
+      wirkungGated,
+      anzahlPinsIntern: pinsCountByBoard.get(p.board.id) ?? 0,
     }
   })
 
@@ -408,8 +408,7 @@ export default async function AnalyticsPage() {
             analyticsUpdateDatum={
               settingsRes.data?.analytics_update_datum ?? null
             }
-            intervall={settingsRes.data?.status_update_intervall ?? null}
-            vorwarnung={settingsRes.data?.status_update_vorwarnung ?? null}
+            latestZeitraumBis={latestZeitraumBis}
           />
         </div>
       </header>

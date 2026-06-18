@@ -10,19 +10,11 @@ import {
   useState,
   useTransition,
 } from 'react'
-import {
-  deleteBoardAnalytics,
-  type UnmatchedBoard,
-} from './actions'
-import UnmatchedBoardsSection from './UnmatchedBoardsSection'
+import { deleteBoardAnalytics } from './actions'
 import BoardAnalyticsEditModal from './BoardAnalyticsEditModal'
 import {
-  BOARD_SCORE_BADGE,
-  BOARD_SCORE_LABEL,
   BOARD_STATUS_BADGE,
   BOARD_STATUS_LABEL,
-  boardScoreTooltip,
-  calcBoardEngagementRate,
   diffDays,
   formatDateDe,
   formatNumber,
@@ -31,6 +23,7 @@ import {
   todayIso,
   type BoardAnalyticsEntry,
   type BoardAnalyticsRow,
+  type BoardHandlungNeu,
   type BoardOption,
   type BoardThresholds,
 } from './utils'
@@ -48,20 +41,12 @@ export default function BoardsTab({
   boardHistory,
   thresholds,
   publicBoardsWithoutAnalytics = [],
-  unmatchedBoards,
-  unmatchedZeitraumVon,
-  unmatchedZeitraumBis,
-  onUnmatchedBoardResolved,
 }: {
   boards: BoardOption[]
   boardAnalytics: BoardAnalyticsRow[]
   boardHistory: Record<string, BoardAnalyticsEntry[]>
   thresholds: BoardThresholds
   publicBoardsWithoutAnalytics?: BoardWithoutAnalytics[]
-  unmatchedBoards: UnmatchedBoard[]
-  unmatchedZeitraumVon: string
-  unmatchedZeitraumBis: string
-  onUnmatchedBoardResolved: (boardSlug: string) => void
 }) {
   const [deletePending, startDeleteTransition] = useTransition()
   const router = useRouter()
@@ -140,14 +125,16 @@ export default function BoardsTab({
         </div>
       )}
 
-      <UnmatchedBoardsSection
-        unmatchedBoards={unmatchedBoards}
-        boards={boards}
-        zeitraumVon={unmatchedZeitraumVon}
-        zeitraumBis={unmatchedZeitraumBis}
-        onAssigned={onUnmatchedBoardResolved}
-        onSkipped={onUnmatchedBoardResolved}
-      />
+      <ThresholdInfo />
+
+      {boardAnalytics.some((r) => r.wirkungGated) && (
+        <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+          Die Wirkungs-Diagnose deiner Boards zeigt sich, sobald du genug Boards
+          mit ausreichender Reichweite hast. Aktuell sind es noch zu wenige für
+          einen verlässlichen Vergleich. Die Aktivität deiner Boards siehst du
+          weiterhin.
+        </div>
+      )}
 
       <BoardAnalyticsTable
         rows={boardAnalytics}
@@ -157,8 +144,6 @@ export default function BoardsTab({
         onEdit={onEdit}
         deleteDisabled={deletePending}
       />
-
-      <ThresholdInfo thresholds={thresholds} />
 
       <BoardAnalyticsEditModal
         open={editEntry !== null}
@@ -177,13 +162,11 @@ export default function BoardsTab({
 type SortKey =
   | 'name'
   | 'impressionen'
-  | 'klicks_auf_pins'
   | 'ausgehende_klicks'
   | 'saves'
-  | 'interaktionen'
+  | 'ctr'
+  | 'saveRate'
   | 'anzahl_pins'
-  | 'engagement_rate'
-  | 'score'
   | 'status'
   | 'zuletzt'
 type SortDir = 'asc' | 'desc'
@@ -203,29 +186,20 @@ function compareRows(
     case 'impressionen':
       res = a.latest.impressionen - b.latest.impressionen
       break
-    case 'klicks_auf_pins':
-      res = a.latest.klicks_auf_pins - b.latest.klicks_auf_pins
-      break
     case 'ausgehende_klicks':
       res = a.latest.ausgehende_klicks - b.latest.ausgehende_klicks
       break
     case 'saves':
       res = a.latest.saves - b.latest.saves
       break
-    case 'interaktionen':
-      res = a.latest.engagement - b.latest.engagement
+    case 'ctr':
+      res = a.outboundClickRate - b.outboundClickRate
+      break
+    case 'saveRate':
+      res = a.saveRate - b.saveRate
       break
     case 'anzahl_pins':
-      res = (a.latest.anzahl_pins ?? -1) - (b.latest.anzahl_pins ?? -1)
-      break
-    case 'engagement_rate':
-      res = (a.engagementRate ?? -Infinity) - (b.engagementRate ?? -Infinity)
-      break
-    case 'score':
-      res = BOARD_SCORE_LABEL[a.score].localeCompare(
-        BOARD_SCORE_LABEL[b.score],
-        'de'
-      )
+      res = a.anzahlPinsIntern - b.anzahlPinsIntern
       break
     case 'status':
       res = BOARD_STATUS_LABEL[a.status].localeCompare(
@@ -238,6 +212,35 @@ function compareRows(
       break
   }
   return res * sign
+}
+
+// Sichtbare Labels + Tooltips für die neue Handlungs-Spalte (boardHandlungNeu).
+const HANDLUNG_NEU_LABEL: Record<BoardHandlungNeu, string> = {
+  weiter_so: 'weiter so',
+  reaktivieren: 'reaktivieren',
+  optimieren_oder_archivieren: 'prüfen',
+  zu_wenig_daten: 'zu wenig Daten',
+}
+
+function handlungNeuTooltip(
+  handlung: BoardHandlungNeu,
+  sammeltSaves: boolean
+): string {
+  switch (handlung) {
+    case 'optimieren_oder_archivieren': {
+      const basis =
+        'Dieses Board wandelt seine Reichweite kaum in Klicks um. Passt es thematisch noch zu deinem Profil, dann schärfe Namen und Keywords. Passt es nicht mehr, archiviere es, dann bleibt es indexiert und bringt weiter Reichweite.'
+      return sammeltSaves
+        ? `${basis} Es sammelt aber Saves, das spricht eher fürs Optimieren als fürs Archivieren.`
+        : basis
+    }
+    case 'reaktivieren':
+      return 'Dieses Board bringt überdurchschnittlich viel Traffic, ist aber eingeschlafen. Pinne wieder regelmäßig darauf, hier liegt dein größter Hebel.'
+    case 'weiter_so':
+      return 'Dieses Board läuft gut. Pinne weiter regelmäßig darauf.'
+    case 'zu_wenig_daten':
+      return 'Dieses Board hat noch zu wenige Pins für eine verlässliche Einschätzung.'
+  }
 }
 
 function BoardAnalyticsTable({
@@ -362,15 +365,6 @@ function BoardAnalyticsTable({
                 IMP
               </SortableTh>
               <SortableTh
-                sortKey="klicks_auf_pins"
-                current={sortKey}
-                dir={sortDir}
-                onSort={toggleSort}
-                info="Wie oft Nutzer auf einen Pin geklickt haben um ihn zu vergrößern, zählt NICHT als Website-Besucher. Für Traffic zählen nur Ausgehende Klicks."
-              >
-                PIN KLICKS
-              </SortableTh>
-              <SortableTh
                 sortKey="ausgehende_klicks"
                 current={sortKey}
                 dir={sortDir}
@@ -388,39 +382,31 @@ function BoardAnalyticsTable({
                 Saves
               </SortableTh>
               <SortableTh
-                sortKey="interaktionen"
+                sortKey="ctr"
                 current={sortKey}
                 dir={sortDir}
                 onSort={toggleSort}
-                info="Alle aktiven Handlungen mit Pins auf diesem Board: Klicks, Saves, Kommentare, Carousel-Swipes. Entspricht Interaktionen in den deutschen Pinterest Analytics."
+                info="Anteil der Impressionen, die zu einem Klick auf deine Website führen. Gemessen gegen deinen eigenen Board-Durchschnitt."
               >
-                Interaktionen
+                CTR
+              </SortableTh>
+              <SortableTh
+                sortKey="saveRate"
+                current={sortKey}
+                dir={sortDir}
+                onSort={toggleSort}
+                info="Anteil der Impressionen, die gespeichert werden. Saves sind das stärkste Signal für die Ausspielung bei Pinterest."
+              >
+                Save-Rate
               </SortableTh>
               <SortableTh
                 sortKey="anzahl_pins"
                 current={sortKey}
                 dir={sortDir}
                 onSort={toggleSort}
-                info="Anzahl der Pins wie sie in deinen Pinterest-Analytics erscheint – nicht aus der internen Pin-Datenbank berechnet."
+                info="Pins, die du in Pin-Flow diesem Board zugeordnet hast."
               >
                 Anzahl Pins
-              </SortableTh>
-              <SortableTh
-                sortKey="engagement_rate"
-                current={sortKey}
-                dir={sortDir}
-                onSort={toggleSort}
-                info="Engagement Rate = Interaktionen / Impressionen."
-              >
-                ER
-              </SortableTh>
-              <SortableTh
-                sortKey="score"
-                current={sortKey}
-                dir={sortDir}
-                onSort={toggleSort}
-              >
-                Board-Score
               </SortableTh>
               <SortableTh
                 sortKey="status"
@@ -491,12 +477,6 @@ function BoardAnalyticsTable({
                     </td>
                     <td
                       className="whitespace-nowrap px-4 py-3 text-sm text-gray-700"
-                      title={formatNumber(row.latest.klicks_auf_pins)}
-                    >
-                      {formatZahl(row.latest.klicks_auf_pins)}
-                    </td>
-                    <td
-                      className="whitespace-nowrap px-4 py-3 text-sm text-gray-700"
                       title={formatNumber(row.latest.ausgehende_klicks)}
                     >
                       {formatZahl(row.latest.ausgehende_klicks)}
@@ -507,42 +487,14 @@ function BoardAnalyticsTable({
                     >
                       {formatZahl(row.latest.saves)}
                     </td>
-                    <td
-                      className="whitespace-nowrap px-4 py-3 text-sm text-gray-700"
-                      title={formatNumber(row.latest.engagement)}
-                    >
-                      {formatZahl(row.latest.engagement)}
+                    <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">
+                      {formatPercent(row.outboundClickRate)}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">
-                      {row.latest.anzahl_pins === null ||
-                      row.latest.anzahl_pins === undefined ? (
-                        <span className="text-gray-400">—</span>
-                      ) : (
-                        formatZahl(row.latest.anzahl_pins)
-                      )}
+                      {formatPercent(row.saveRate)}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">
-                      {formatPercent(row.engagementRate)}
-                    </td>
-                    <td className="px-4 py-3 text-sm">
-                      <span className="inline-flex items-center gap-1">
-                        <span
-                          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${BOARD_SCORE_BADGE[row.score]}`}
-                        >
-                          {BOARD_SCORE_LABEL[row.score]}
-                        </span>
-                        <InfoTooltip
-                          text={boardScoreTooltip({
-                            score: row.score,
-                            er: row.engagementRate,
-                            erVormonat: row.engagementRateVormonat,
-                            trendPct: row.trendPct,
-                            dataInsufficient: row.dataInsufficient,
-                            thresholds,
-                          })}
-                          className="text-gray-400"
-                        />
-                      </span>
+                      {formatZahl(row.anzahlPinsIntern)}
                     </td>
                     <td className="px-4 py-3 text-sm">
                       <span
@@ -556,8 +508,23 @@ function BoardAnalyticsTable({
                         {BOARD_STATUS_LABEL[row.status]}
                       </span>
                     </td>
-                    <td className="max-w-xs px-4 py-3 text-sm font-medium text-gray-800">
-                      {row.handlung ?? <span className="text-gray-400">—</span>}
+                    <td className="max-w-xs px-4 py-3 text-sm">
+                      {row.wirkungGated ? (
+                        <span className="text-gray-400">—</span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1">
+                          <span className="font-medium text-gray-800">
+                            {HANDLUNG_NEU_LABEL[row.handlungNeu]}
+                          </span>
+                          <InfoTooltip
+                            text={handlungNeuTooltip(
+                              row.handlungNeu,
+                              row.sammeltSaves
+                            )}
+                            className="text-gray-400"
+                          />
+                        </span>
+                      )}
                     </td>
                     <td
                       className={`whitespace-nowrap px-4 py-3 text-sm ${
@@ -595,7 +562,7 @@ function BoardAnalyticsTable({
                   </tr>
                   {hasHistory && isOpen && (
                     <tr className="bg-gray-50">
-                      <td colSpan={14} className="px-4 py-3">
+                      <td colSpan={12} className="px-4 py-3">
                         <BoardTimeline history={history} />
                       </td>
                     </tr>
@@ -624,16 +591,10 @@ function BoardTimeline({ history }: { history: BoardAnalyticsEntry[] }) {
               IMP
             </th>
             <th className="px-3 py-2 text-left font-semibold uppercase tracking-wide text-gray-500">
-              Pin Klicks
-            </th>
-            <th className="px-3 py-2 text-left font-semibold uppercase tracking-wide text-gray-500">
               Ausg. Klicks
             </th>
             <th className="px-3 py-2 text-left font-semibold uppercase tracking-wide text-gray-500">
               Saves
-            </th>
-            <th className="px-3 py-2 text-left font-semibold uppercase tracking-wide text-gray-500">
-              ER
             </th>
             <th className="px-3 py-2 text-left font-semibold uppercase tracking-wide text-gray-500">
               Vs. Vorher
@@ -643,13 +604,6 @@ function BoardTimeline({ history }: { history: BoardAnalyticsEntry[] }) {
         <tbody className="divide-y divide-gray-100">
           {history.map((row, i) => {
             const prev = history[i + 1]
-            const er = calcBoardEngagementRate(
-              row.engagement,
-              row.impressionen
-            )
-            const prevEr = prev
-              ? calcBoardEngagementRate(prev.engagement, prev.impressionen)
-              : null
             return (
               <tr key={row.id} className="text-gray-700">
                 <td className="whitespace-nowrap px-3 py-2 font-medium text-gray-900">
@@ -659,13 +613,6 @@ function BoardTimeline({ history }: { history: BoardAnalyticsEntry[] }) {
                   <InlineMetricDelta
                     value={row.impressionen}
                     prev={prev?.impressionen}
-                    format="zahl"
-                  />
-                </td>
-                <td className="whitespace-nowrap px-3 py-2">
-                  <InlineMetricDelta
-                    value={row.klicks_auf_pins}
-                    prev={prev?.klicks_auf_pins}
                     format="zahl"
                   />
                 </td>
@@ -682,9 +629,6 @@ function BoardTimeline({ history }: { history: BoardAnalyticsEntry[] }) {
                     prev={prev?.saves}
                     format="zahl"
                   />
-                </td>
-                <td className="whitespace-nowrap px-3 py-2">
-                  <InlineMetricDelta value={er} prev={prevEr} format="percent" />
                 </td>
                 <td className="whitespace-nowrap px-3 py-2 text-gray-500">
                   {prev ? formatDateDe(prev.datum) : '—'}
@@ -798,61 +742,59 @@ function SortableTh({
 // ===========================================================
 // Schwellwert-Info
 // ===========================================================
-function ThresholdInfo({ thresholds }: { thresholds: BoardThresholds }) {
+function ThresholdInfo() {
   return (
-    <details className="rounded-md border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600">
-      <summary className="cursor-pointer text-sm font-medium text-gray-900">
-        Aktuelle Diagnose-Schwellwerte
-      </summary>
-      <div className="mt-2 space-y-3">
-        <div>
-          <p className="font-medium text-gray-900">Board-Status (Aktivität)</p>
-          <ul className="mt-1 space-y-0.5">
-            <li>
-              ✅ Aktiv: letzter Pin &lt;{' '}
-              <strong>{thresholds.wenigAktiv}</strong> Tage
-            </li>
-            <li>
-              ⚠️ Wenig aktiv: zwischen <strong>{thresholds.wenigAktiv}</strong>{' '}
-              und <strong>{thresholds.inaktiv}</strong> Tagen
-            </li>
-            <li>
-              ❌ Inaktiv: letzter Pin &gt;{' '}
-              <strong>{thresholds.inaktiv}</strong> Tage
-            </li>
-          </ul>
-        </div>
-        <div>
-          <p className="font-medium text-gray-900">
-            Board-Score (Daten-Performance)
-          </p>
-          <ul className="mt-1 space-y-0.5">
-            <li>
-              🏆 Top: ER &ge; <strong>{thresholds.topEr}%</strong> UND in den
-              oberen <strong>{thresholds.topProzent}%</strong> des Profils
-            </li>
-            <li>
-              📈 Wachstum: ER-Verbesserung zum Vormonat &ge;{' '}
-              <strong>{thresholds.wachstumTrend}%</strong>
-            </li>
-            <li>
-              💤 Schwach: ER &lt; <strong>{thresholds.schwachEr}%</strong> ODER
-              ER-Verschlechterung &ge; <strong>{thresholds.wachstumTrend}%</strong>
-            </li>
-            <li>👀 Solide: alles andere</li>
-          </ul>
-        </div>
-      </div>
-      <p className="mt-3 text-xs text-gray-500">
-        Werte anpassen in den{' '}
-        <Link
-          href="/dashboard/einstellungen"
-          className="font-medium text-red-600 hover:underline"
+    <details className="group rounded-lg border border-gray-200 bg-white shadow-sm">
+      <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-4 text-base font-semibold text-gray-900 hover:bg-red-50 [&::-webkit-details-marker]:hidden">
+        <span
+          className="text-lg leading-none text-gray-400 transition-transform"
+          aria-hidden
         >
-          Einstellungen
-        </Link>
-        .
-      </p>
+          <span className="inline group-open:hidden">▸</span>
+          <span className="hidden group-open:inline">▾</span>
+        </span>
+        <span className="flex-1">So funktioniert die Board-Auswertung</span>
+      </summary>
+      <div className="space-y-4 border-t border-gray-100 px-5 py-5 text-sm leading-relaxed text-gray-700">
+        <div>
+          <p className="font-semibold text-gray-900">
+            Aktivität (wann zuletzt gepinnt)
+          </p>
+          <ul className="mt-1 list-disc space-y-0.5 pl-5">
+            <li>Aktiv: letzter Pin vor weniger als 30 Tagen</li>
+            <li>Wenig aktiv: letzter Pin vor 30 bis 90 Tagen</li>
+            <li>Eingeschlafen: letzter Pin vor über 90 Tagen</li>
+          </ul>
+        </div>
+        <div>
+          <p className="font-semibold text-gray-900">
+            Wirkung (was das Board bewirkt)
+          </p>
+          <p className="mt-1">
+            Gemessen an der CTR, also den ausgehenden Klicks geteilt durch die
+            Impressionen, im Vergleich zu deinem eigenen Board-Durchschnitt.
+            Stark heißt 20 Prozent über deinem Durchschnitt, schwach 20 Prozent
+            darunter, dazwischen liegt das solide Mittelfeld. Boards mit weniger
+            als 750 Impressionen bekommen noch keine Wirkungs-Einschätzung,
+            dafür sind zu wenig Daten da. Und damit der Vergleich überhaupt
+            belastbar ist, braucht es mindestens 5 Boards mit ausreichender
+            Reichweite. Sind es weniger, ruht die Wirkungs-Diagnose, bis du
+            genug Daten gesammelt hast. Sammelt ein schwaches Board
+            überdurchschnittlich viele Saves, weist die Handlung darauf hin,
+            dann lohnt eher das Optimieren als das Archivieren.
+          </p>
+        </div>
+        <p className="text-xs text-gray-500">
+          Werte anpassen in den{' '}
+          <Link
+            href="/dashboard/einstellungen"
+            className="font-medium text-red-600 hover:underline"
+          >
+            Einstellungen
+          </Link>
+          .
+        </p>
+      </div>
     </details>
   )
 }

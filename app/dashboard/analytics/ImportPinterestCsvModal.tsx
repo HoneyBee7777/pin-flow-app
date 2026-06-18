@@ -441,14 +441,14 @@ function ImportSummary({
           {pinsUnmatched > 0 && (
             <p>
               ⚠️ {pinsUnmatched} Pin{pinsUnmatched === 1 ? '' : 's'} konnten
-              nicht zugeordnet werden → siehe <strong>Pins-Tab</strong>
+              nicht zugeordnet werden, siehe weiter unten im Eingabe-Tab
             </p>
           )}
           {boardsUnmatched > 0 && (
             <p>
               ⚠️ {boardsUnmatched} Board
               {boardsUnmatched === 1 ? '' : 's'} konnten nicht zugeordnet
-              werden → siehe <strong>Boards-Tab</strong>
+              werden, siehe weiter unten im Eingabe-Tab
             </p>
           )}
         </div>

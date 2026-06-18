@@ -1,13 +1,12 @@
 'use client'
 
-import { useEffect, useMemo, useState, useTransition } from 'react'
+import { useMemo, useState, useTransition } from 'react'
 import {
   assignPinAndImportMetrics,
   skipPendingImport,
   type UnmatchedPin,
 } from './actions'
 import { formatDateDe, type PinOption } from './utils'
-import { HinweisBox } from '@/components/HinweisBox'
 
 type Props = {
   unmatchedPins: UnmatchedPin[]
@@ -20,11 +19,16 @@ type Props = {
   onSkipped: (pinterestPinId: string) => void
 }
 
-// Default-Schwellwerte beim ersten Öffnen — der Filter ist sofort aktiv,
-// damit Rauschen (Pins mit 0/1 Klicks) gar nicht erst die Liste füllt.
-const DEFAULT_KLICKS = '2'
-const DEFAULT_IMPRESSIONEN = '100'
-const DEFAULT_SAVES = '1'
+// Standardansicht: Vereinigung der stärksten Pins je Metrik — Top N nach
+// Impressionen ∪ Top N nach Klicks ∪ Top N nach Saves. Bewusst nicht über
+// feste Schwellen, damit auch schwächere Accounts ihre relativ besten Pins
+// sehen. Benannt, damit später leicht änderbar.
+const TOP_N = 15
+
+// Progressive Anzeige: im Standard-/Manual-Modus nur so viele Pins gleichzeitig
+// rendern. Wird einer zugeordnet/übersprungen (fällt aus unmatchedPins), rückt
+// der nächste automatisch nach. Hält die Liste kurz, Karte darunter sichtbar.
+const STACK_SIZE = 2
 
 const FILTER_STORAGE_KEY = 'analytics_unmatched_filter'
 
@@ -42,10 +46,6 @@ function parseThreshold(s: string): number | null {
   return n
 }
 
-function thresholdToInput(n: number | null): string {
-  return n === null ? '' : String(n)
-}
-
 export default function UnmatchedPinsSection({
   unmatchedPins,
   pins,
@@ -56,41 +56,22 @@ export default function UnmatchedPinsSection({
 }: Props) {
   // Eingabewerte und „angewendete" Werte getrennt — der Filter wirkt erst,
   // wenn der Nutzer auf „Filtern" klickt (sonst zappt die Liste bei jeder
-  // Tastatureingabe).
-  const [klicksInput, setKlicksInput] = useState(DEFAULT_KLICKS)
-  const [impInput, setImpInput] = useState(DEFAULT_IMPRESSIONEN)
-  const [savesInput, setSavesInput] = useState(DEFAULT_SAVES)
-  const [appliedKlicks, setAppliedKlicks] = useState<number | null>(
-    parseThreshold(DEFAULT_KLICKS)
-  )
-  const [appliedImp, setAppliedImp] = useState<number | null>(
-    parseThreshold(DEFAULT_IMPRESSIONEN)
-  )
-  const [appliedSaves, setAppliedSaves] = useState<number | null>(
-    parseThreshold(DEFAULT_SAVES)
-  )
+  // Tastatureingabe). Felder starten LEER: die Standardansicht ist die
+  // Top-N-Vereinigung, kein vorbefüllter Schwellen-Filter.
+  const [klicksInput, setKlicksInput] = useState('')
+  const [impInput, setImpInput] = useState('')
+  const [savesInput, setSavesInput] = useState('')
+  const [appliedKlicks, setAppliedKlicks] = useState<number | null>(null)
+  const [appliedImp, setAppliedImp] = useState<number | null>(null)
+  const [appliedSaves, setAppliedSaves] = useState<number | null>(null)
 
-  // Persistenz: gespeicherte Filter-Werte nach dem Mount aus localStorage
-  // laden (nach Mount, um SSR-Hydration-Mismatch zu vermeiden).
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(FILTER_STORAGE_KEY)
-      if (!raw) return
-      const parsed = JSON.parse(raw) as Partial<StoredFilter>
-      const k = typeof parsed.klicks === 'number' ? parsed.klicks : null
-      const i =
-        typeof parsed.impressionen === 'number' ? parsed.impressionen : null
-      const s = typeof parsed.saves === 'number' ? parsed.saves : null
-      setKlicksInput(thresholdToInput(k))
-      setImpInput(thresholdToInput(i))
-      setSavesInput(thresholdToInput(s))
-      setAppliedKlicks(k)
-      setAppliedImp(i)
-      setAppliedSaves(s)
-    } catch {
-      // Defekte localStorage-Werte ignorieren — Defaults greifen.
-    }
-  }, [])
+  // Drei Ansichts-Zustände:
+  //   'standard' = Top-N-Vereinigung (Default beim Öffnen)
+  //   'manual'   = benutzerdefinierte Schwellen (ODER-Logik)
+  //   'all'      = wirklich alle Pins, ohne Begrenzung
+  const [viewMode, setViewMode] = useState<'standard' | 'manual' | 'all'>(
+    'standard'
+  )
 
   // ODER-Verknüpfung: ein Pin passt, wenn er mindestens einen GESETZTEN
   // Schwellwert erfüllt. Sind alle drei Schwellen leer, gilt kein Filter
@@ -115,6 +96,45 @@ export default function UnmatchedPinsSection({
     })
   }, [unmatchedPins, appliedKlicks, appliedImp, appliedSaves])
 
+  // Standardansicht: Vereinigung der Top-N je Metrik. Drei sortierte Kopien,
+  // je slice(0, TOP_N), dedupliziert über pinterestPinId (Map). Null-Werte
+  // als 0 (wie beim Schwellen-Filter).
+  const topUnion = useMemo(() => {
+    const topBy = (metric: (u: UnmatchedPin) => number) =>
+      [...unmatchedPins].sort((a, b) => metric(b) - metric(a)).slice(0, TOP_N)
+    const union = new Map<string, UnmatchedPin>()
+    for (const list of [
+      topBy((u) => u.impressionen ?? 0),
+      topBy((u) => u.klicks ?? 0),
+      topBy((u) => u.saves ?? 0),
+    ]) {
+      for (const u of list) union.set(u.pinterestPinId, u)
+    }
+    // Stabile Endsortierung: Impressionen desc, dann Klicks desc, dann Saves desc.
+    return Array.from(union.values()).sort(
+      (a, b) =>
+        (b.impressionen ?? 0) - (a.impressionen ?? 0) ||
+        (b.klicks ?? 0) - (a.klicks ?? 0) ||
+        (b.saves ?? 0) - (a.saves ?? 0)
+    )
+  }, [unmatchedPins])
+
+  // Sichtbare Liste je Ansichts-Zustand.
+  const visible =
+    viewMode === 'manual'
+      ? filtered
+      : viewMode === 'all'
+        ? unmatchedPins
+        : topUnion
+
+  // Tatsächlich gerenderter Stapel: nur im Standard-Modus auf STACK_SIZE
+  // begrenzt (progressives Nachrücken). Im manual-/all-Modus die volle Liste —
+  // im manual hat der Nutzer bewusst gefiltert, da ist kein 2er-Stapel sinnvoll.
+  // restCount = wie viele aus `visible` aktuell noch warten (nur im Standard > 0).
+  const displayList =
+    viewMode === 'standard' ? visible.slice(0, STACK_SIZE) : visible
+  const restCount = visible.length - displayList.length
+
   function applyFilter() {
     const k = parseThreshold(klicksInput)
     const i = parseThreshold(impInput)
@@ -122,6 +142,7 @@ export default function UnmatchedPinsSection({
     setAppliedKlicks(k)
     setAppliedImp(i)
     setAppliedSaves(s)
+    setViewMode('manual')
     try {
       const stored: StoredFilter = { klicks: k, impressionen: i, saves: s }
       localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(stored))
@@ -130,13 +151,16 @@ export default function UnmatchedPinsSection({
     }
   }
 
+  // „Alle anzeigen": zeigt wirklich ALLE Pins — Filter komplett geleert UND
+  // Top-N-Begrenzung aufgehoben (Zustand 'all').
   function showAll() {
-    setKlicksInput(DEFAULT_KLICKS)
-    setImpInput(DEFAULT_IMPRESSIONEN)
-    setSavesInput(DEFAULT_SAVES)
-    setAppliedKlicks(parseThreshold(DEFAULT_KLICKS))
-    setAppliedImp(parseThreshold(DEFAULT_IMPRESSIONEN))
-    setAppliedSaves(parseThreshold(DEFAULT_SAVES))
+    setViewMode('all')
+    setKlicksInput('')
+    setImpInput('')
+    setSavesInput('')
+    setAppliedKlicks(null)
+    setAppliedImp(null)
+    setAppliedSaves(null)
     try {
       localStorage.removeItem(FILTER_STORAGE_KEY)
     } catch {
@@ -144,9 +168,14 @@ export default function UnmatchedPinsSection({
     }
   }
 
+  // Zurück zur Standardansicht (Top-N-Vereinigung).
+  function showStandard() {
+    setViewMode('standard')
+  }
+
   if (unmatchedPins.length === 0) return null
 
-  const hiddenCount = unmatchedPins.length - filtered.length
+  const hiddenCount = unmatchedPins.length - visible.length
 
   return (
     <section
@@ -158,10 +187,38 @@ export default function UnmatchedPinsSection({
           Nicht zugeordnete Pins aus dem letzten CSV-Import
         </h3>
         <p className="mt-0.5 text-xs text-gray-600">
-          Zeitraum {formatDateDe(zeitraumVon)} – {formatDateDe(zeitraumBis)}
-          {' · '}
-          {unmatchedPins.length} Pin
-          {unmatchedPins.length === 1 ? '' : 's'} ausstehend
+          Zeitraum {formatDateDe(zeitraumVon)} bis {formatDateDe(zeitraumBis)}.{' '}
+          {viewMode === 'standard' ? (
+            visible.length === 1 ? (
+              <>
+                Hier siehst du deinen stärksten Pin aus diesem Import, der sich
+                zuerst lohnt. Schwächere kannst du über {'„Alle anzeigen"'}{' '}
+                einblenden.
+              </>
+            ) : (
+              <>
+                Hier siehst du deine stärksten{' '}
+                <span className="font-bold text-base text-red-600">
+                  {visible.length}
+                </span>{' '}
+                Pins aus diesem Import, die sich zuerst lohnen. Schwächere
+                kannst du über {'„Alle anzeigen"'} einblenden.
+              </>
+            )
+          ) : viewMode === 'all' ? (
+            <>
+              Alle {unmatchedPins.length} nicht{' '}
+              {unmatchedPins.length === 1
+                ? 'zugeordneter Pin'
+                : 'zugeordneten Pins'}{' '}
+              aus diesem Import.
+            </>
+          ) : (
+            <>
+              {visible.length} von {unmatchedPins.length}{' '}
+              {unmatchedPins.length === 1 ? 'Pin' : 'Pins'} nach deinem Filter.
+            </>
+          )}
         </p>
       </div>
 
@@ -206,26 +263,37 @@ export default function UnmatchedPinsSection({
             >
               Alle anzeigen
             </button>
+            {viewMode !== 'standard' && (
+              <button
+                type="button"
+                onClick={showStandard}
+                className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Zurück zu Top-Pins
+              </button>
+            )}
           </div>
         </div>
         <p className="mt-2 text-xs text-gray-500">
           Es reicht wenn ein Kriterium zutrifft, Felder können auch leer
           gelassen werden.
         </p>
-        <p className="mt-1 text-xs text-gray-600">
-          <strong>{filtered.length}</strong> von{' '}
-          <strong>{unmatchedPins.length}</strong> nicht zugeordneten Pins{' '}
-          {filtered.length === 1 ? 'wird' : 'werden'} angezeigt
-        </p>
+        {viewMode !== 'standard' && (
+          <p className="mt-1 text-xs text-gray-600">
+            <strong>{displayList.length}</strong> von{' '}
+            <strong>{unmatchedPins.length}</strong> nicht zugeordneten Pins{' '}
+            {displayList.length === 1 ? 'wird' : 'werden'} angezeigt
+          </p>
+        )}
       </div>
 
-      {filtered.length === 0 ? (
+      {visible.length === 0 ? (
         <p className="rounded-md border border-gray-200 bg-white p-3 text-xs text-gray-500">
           Keine Pins erfüllen die aktuellen Schwellenwerte.
         </p>
       ) : (
         <ul className="space-y-3">
-          {filtered.map((u) => (
+          {displayList.map((u) => (
             <UnmatchedPinRow
               key={u.pinterestPinId}
               unmatched={u}
@@ -239,115 +307,81 @@ export default function UnmatchedPinsSection({
         </ul>
       )}
 
-      {hiddenCount > 0 && (
+      {viewMode === 'standard' && restCount > 0 && (
         <p className="mt-3 text-xs text-gray-500">
-          {hiddenCount} Pin{hiddenCount === 1 ? '' : 's'} unter dem
-          Schwellenwert{' '}
-          {hiddenCount === 1 ? 'wird' : 'werden'} nicht angezeigt, diese
-          können jederzeit über „Alle anzeigen" nachgepflegt werden.
+          Noch {restCount} {restCount === 1 ? 'weiterer Pin' : 'weitere Pins'}.
+          Ordne die oben zuerst zu,{' '}
+          {restCount === 1
+            ? 'der nächste rückt'
+            : 'die nächsten rücken'}{' '}
+          automatisch nach. Über {'„Alle anzeigen"'} siehst du die ganze Liste.
+        </p>
+      )}
+
+      {viewMode === 'manual' && hiddenCount > 0 && (
+        <p className="mt-3 text-xs text-gray-500">
+          {hiddenCount} {hiddenCount === 1 ? 'Pin' : 'Pins'} unter deinem
+          Filter {hiddenCount === 1 ? 'wird' : 'werden'} nicht angezeigt.
+          Über {'„Alle anzeigen"'} siehst du alle.
         </p>
       )}
     </section>
   )
 }
 
-// Ausblendbarer Erklär-Baustein nach dem ClassificationExplainerBanner-Muster:
-// startet versteckt (SSR-safe), blendet nach Mount ein, wenn das localStorage-
-// Flag fehlt. „Verstanden"/X setzt das Flag und blendet dauerhaft aus. Sitzt
-// innerhalb der Section, wird also mit ihr ausgeblendet, wenn keine unmatched
-// Pins existieren (Section-Guard oben unberührt).
+// Erklär-Toggle zur Zuordnung — natives <details>, standardmäßig zugeklappt
+// (kein open-Attribut). Wiederholt auf-/zuklappbar; kein localStorage, kein
+// Dismiss. Muster wie CombinedHowToToggle (EingabeTab): ▸/▾ via group-open.
 function UnmatchedPinsExplainer() {
-  const STORAGE_KEY = 'unmatched_pins_explainer_seen'
-  const [visible, setVisible] = useState(false)
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    try {
-      const seen = window.localStorage.getItem(STORAGE_KEY)
-      if (!seen) setVisible(true)
-    } catch {
-      // localStorage nicht verfügbar — Hinweis einfach zeigen.
-      setVisible(true)
-    }
-  }, [])
-
-  if (!visible) return null
-
-  function dismiss() {
-    setVisible(false)
-    try {
-      window.localStorage.setItem(STORAGE_KEY, '1')
-    } catch {
-      // ignore
-    }
-  }
-
   return (
-    <div className="mb-3">
-      <HinweisBox variant="merke">
-        <div className="flex items-start gap-3">
-          <div className="flex-1 space-y-2">
-            <p className="font-semibold">
-              Nicht jeder Pin muss zugeordnet werden
-            </p>
-            <p>
-              Pinterest liefert dir die Zahlen deiner Top-Pins, aber nur über
-              die Pin-ID, nicht über den Titel. Damit Pin-Flow die Zahlen einem
-              deiner Pins zuordnen kann, verknüpfst du die ID einmalig über{' '}
-              {'„Zuordnen & importieren"'}. Danach wird der Pin bei jedem
-              weiteren Import automatisch erkannt.
-            </p>
-            <p>
-              Konzentrier dich dabei auf deine starken Pins. Ein kleiner Teil
-              deiner Pins bringt den Großteil der Ergebnisse, und genau die
-              lohnen die Zuordnung. Ein Pin mit wenigen Impressionen und kaum
-              Klicks sagt wenig aus, kostet aber Zeit beim Verknüpfen.
-            </p>
-            <p>
-              Bei schwachen Pins hast du zwei Möglichkeiten: Du kannst sie
-              einfach liegen lassen, dann bleiben sie in der Liste stehen. Oder
-              du klickst {'„Überspringen"'}, dann verschwinden sie sofort und
-              du arbeitest die Liste leerer. Beides ist in Ordnung.
-            </p>
-            <p>
-              Wird ein liegengelassener Pin in einem der nächsten Monate stärker
-              und sammelt mehr Impressionen, Klicks und Saves, ordnest du ihn
-              dann zu. Ab da fließen seine Zahlen in deine Auswertungen ein.
-              Pins, die du nicht zuordnest und die in einem späteren Import nicht
-              mehr unter deinen Top-Pins sind, verschwinden hier von selbst, du
-              musst also nichts aufräumen.
-            </p>
-            <p>
-              Mit den Feldern oben blendest du dir gezielt die Pins ein, die
-              sich lohnen. Jeder Account entwickelt sich anders, deshalb gibst du
-              die Schwellen selbst vor. Wer mag, ordnet alle Pins zu, dann sind
-              die Auswertungen komplett, ein Muss ist es nicht.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={dismiss}
-            className="shrink-0 rounded-md p-1 text-teal-700 hover:bg-teal-100"
-            aria-label="Hinweis schließen"
-            title="Schließen"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 20 20"
-              fill="currentColor"
-              className="h-4 w-4"
-              aria-hidden
-            >
-              <path
-                fillRule="evenodd"
-                d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                clipRule="evenodd"
-              />
-            </svg>
-          </button>
-        </div>
-      </HinweisBox>
-    </div>
+    <details className="group mb-3 rounded-md border border-gray-200 bg-white">
+      <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 text-sm font-semibold text-gray-900 hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
+        <span
+          className="text-base leading-none text-gray-400 transition-transform"
+          aria-hidden
+        >
+          <span className="inline group-open:hidden">▸</span>
+          <span className="hidden group-open:inline">▾</span>
+        </span>
+        <span className="flex-1">Wie funktioniert die Zuordnung?</span>
+      </summary>
+      <div className="space-y-3 border-t border-gray-100 px-4 py-4 text-sm leading-relaxed text-gray-700">
+        <p>
+          Pinterest liefert dir die Zahlen deiner Top-Pins, aber nur über die
+          Pin-ID, nicht über den Titel. Damit Pin-Flow die Zahlen einem deiner
+          Pins zuordnen kann, verknüpfst du die ID einmalig über{' '}
+          {'„Zuordnen & importieren"'}. Danach wird der Pin bei jedem weiteren
+          Import automatisch erkannt.
+        </p>
+        <p>
+          Konzentriere dich dabei auf deine starken Pins. Ein kleiner Teil
+          deiner Pins bringt den Großteil der Ergebnisse, und genau die lohnen
+          die Zuordnung. Ein Pin mit wenigen Impressionen und kaum Klicks sagt
+          wenig aus, kostet aber Zeit beim Verknüpfen.
+        </p>
+        <p>
+          Bei schwachen Pins hast du zwei Möglichkeiten: Du kannst sie einfach
+          liegen lassen, dann bleiben sie in der Liste stehen. Oder du klickst{' '}
+          {'„Überspringen"'}, dann verschwinden sie sofort und du arbeitest die
+          Liste leerer. Beides ist in Ordnung.
+        </p>
+        <p>
+          Wird ein liegengelassener Pin in einem der nächsten Monate stärker
+          und sammelt mehr Impressionen, Klicks und Saves, ordnest du ihn dann
+          zu. Ab da fließen seine Zahlen in deine Auswertungen ein. Pins, die
+          du nicht zuordnest und die in einem späteren Import nicht mehr unter
+          deinen Top-Pins sind, verschwinden hier von selbst, du musst also
+          nichts aufräumen.
+        </p>
+        <p>
+          Standardmäßig zeigt Pin-Flow dir deine stärksten Pins aus diesem
+          Import, die, die sich zuerst lohnen. Über {'„Alle anzeigen"'} siehst
+          du den Rest, und mit den Filterfeldern suchst du gezielt nach eigenen
+          Schwellen. Wer mag, ordnet alle Pins zu, dann sind die Auswertungen
+          komplett, ein Muss ist es nicht.
+        </p>
+      </div>
+    </details>
   )
 }
 
