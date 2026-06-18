@@ -51,14 +51,14 @@ const TAB_KEYS: TabKey[] = [
 
 export default function StrategieClient({
   strategie,
-  thresholds,
   strategieBoardKategorien,
   strategieUrlCount,
 }: {
   strategie: StrategieRow | null
-  // Aktuelle Pin-Schwellwerte aus den Einstellungen — werden im Analytics-Tab
-  // in die Klartext-Erklärungen eingesetzt, damit die Strategie-Texte immer
-  // mit dem übereinstimmen, was die Diagnose-Logik wirklich nutzt.
+  // Wird vom Parent noch übergeben, aber im Analytics-Tab nicht mehr
+  // verwendet: Alle Schwellwerte stehen inzwischen fest im Klartext der
+  // Erklärungen. Prop bleibt nur erhalten, um keinen Cascade in page.tsx zu
+  // erzwingen.
   thresholds: PinAnalyticsThresholds
   // Strategie-Setup (Phase B): Board-Kategorien für Baustein 3 und Anzahl
   // Ziel-URLs für den Frequenz-Vorschlag in Baustein 4.
@@ -131,7 +131,7 @@ export default function StrategieClient({
         {active === 'strategien' && <TabStrategien />}
         {active === 'design' && <TabDesign />}
         {active === 'keywords' && <TabKeywords />}
-        {active === 'analytics' && <TabAnalytics thresholds={thresholds} />}
+        {active === 'analytics' && <TabAnalytics />}
         {active === 'audience' && <AudienceWissen />}
       </div>
     </div>
@@ -3283,6 +3283,31 @@ function TabKeywords() {
           auf der Boards-Seite um direkt einen auf Sichtbarkeit optimierten Board-Namen
           und eine Beschreibung zu generieren.
         </HinweisBox>
+
+        <H4>Bestehende Boards pflegen</H4>
+        <Para>
+          Boards aufzubauen ist das eine, sie am Leben zu halten das andere.
+          Zwei Dinge solltest du im Blick behalten:
+        </Para>
+        <Para>
+          Reaktiviere inaktive Boards. Boards, auf denen lange nichts Neues
+          erschienen ist, spielt Pinterest seltener aus. Speichere regelmäßig
+          neue Pins darauf, idealerweise 3 bis 5 pro Woche, bis das Board wieder
+          als aktiv gilt.
+        </Para>
+        <Para>
+          Prüfe nach rund 30 Tagen, ob sich etwas getan hat. Läuft das Board
+          besser, bleibe dabei. Wenn nicht, schärfe die Keywords im Namen und in
+          der Beschreibung nach oder überdenke das Thema grundsätzlich.
+        </Para>
+
+        <H4>Wann du ein Board löschen solltest</H4>
+        <Para>
+          Selten. Lösche ein Board nur, wenn es thematisch komplett nicht zu
+          deiner Nische passt. In allen anderen Fällen ist Optimieren besser als
+          Löschen, denn beim Löschen verlierst du sämtliche historischen Daten
+          des Boards bei Pinterest, und die kommen nicht zurück.
+        </Para>
       </Accordion>
 
       <Accordion
@@ -3540,11 +3565,7 @@ function TabKeywords() {
 // Tab 6 — Erfolg messen
 // ===========================================================
 
-function TabAnalytics({
-  thresholds: t,
-}: {
-  thresholds: PinAnalyticsThresholds
-}) {
+function TabAnalytics() {
   return (
     <div className="space-y-3">
       <p className="mb-4 text-sm font-medium text-gray-600">
@@ -3558,250 +3579,244 @@ function TabAnalytics({
         als nächstes tun sollst.
       </p>
 
-      <Accordion title="Die zwei Stufen, die über deine Reichweite entscheiden">
+      <Accordion title="Die drei wichtigsten Kennzahlen und wie sie berechnet werden">
         <Para>
-          Pinterest funktioniert in zwei Stufen. Nur wenn beide funktionieren,
-          entsteht echte Performance:
+          Pinterest funktioniert in zwei Schritten. Erst muss dein Pin
+          überhaupt gezeigt werden, und dann müssen die Menschen darauf
+          reagieren. Nur wenn beides zusammenkommt, läuft ein Pin wirklich.
+          Genau das misst du mit drei Kennzahlen.
         </Para>
 
-        <div>
-          <H4>Stufe 1: Distribution → gemessen durch Impressionen</H4>
-          <Para>
-            Pinterest entscheidet, wie oft dein Pin ausgespielt wird, 
-            basierend auf Relevanz, Keywords und Board-Qualität. Hohe
-            Impressionen bedeuten: Der Algorithmus vertraut diesem Pin.
-          </Para>
-        </div>
-
-        <div>
-          <H4>Stufe 2: Reaktion → gemessen durch Klicks & Saves</H4>
-          <Para>
-            Ein Klick bedeutet, dass jemand mehr wissen wollte. Ein Save
-            signalisiert Pinterest, dass der Inhalt wertvoll ist, und sorgt
-            für organische Weiterdistribution.
-          </Para>
-        </div>
-
-        <H4>Was du trackst, und was es bedeutet:</H4>
+        <H4>Die 3 Kennzahlen</H4>
         <Bullets
           items={[
             <>
-              <strong>Impressionen</strong>: wie oft wurde der Pin ausgespielt
+              <strong>Impressionen:</strong> wie oft Pinterest deinen Pin
+              gezeigt hat. Das ist deine <strong>Reichweite</strong>, der erste
+              Schritt. Beispiel: 1.000 Impressionen heißt, dein Pin ist 1.000
+              Mal in einem Feed oder in der Suche aufgetaucht.
             </>,
             <>
-              <strong>Ausgehende Klicks</strong>: wie oft wurde auf die
-              Website geklickt (direkter Traffic)
+              <strong>Ausgehende Klicks:</strong> wie oft jemand von deinem Pin
+              auf deine Website gegangen ist. Das ist der direkte Nutzen für
+              dich, dein Website-Traffic. Beispiel: Von 100 Menschen, die deinen
+              Pin sehen, klicken 5 weiter zu deiner Website.
             </>,
             <>
-              <strong>Saves</strong>: wie oft wurde der Pin gespeichert
-              (langfristiger Wachstumshebel)
+              <strong>Saves:</strong> wie oft jemand deinen Pin auf einer
+              eigenen Pinnwand gespeichert hat. Das ist das Signal, auf das
+              Pinterest besonders achtet, ein gespeicherter Pin wird eher weiter
+              ausgespielt. Beispiel: Von 100 Menschen, die deinen Pin sehen,
+              speichern ihn 3 für später.
+            </>,
+          ]}
+        />
+        <H4>Wie diese Kennzahlen in Pin-Flow kommen</H4>
+        <Para>
+          Deine Pin- und Board-Zahlen kommen automatisch per CSV-Import aus
+          Pinterest Analytics, du lädst die Datei hoch, den Rest übernimmt
+          Pin-Flow. Nur die Gesamtzahlen deines Profils trägst du von Hand ein,
+          weil Pinterest dafür keinen Export anbietet.
+        </Para>
+
+        <H4>Daraus errechnet Pin-Flow drei Quoten</H4>
+        <Bullets
+          items={[
+            <>
+              <strong>CTR (Klickrate)</strong> = ausgehende Klicks ÷
+              Impressionen × 100. Zeigt, wie überzeugend dein Hook ist.
+              Beispiel: 5 ausgehende Klicks bei 1.000 Impressionen ergeben eine
+              CTR von 0,5 %.
             </>,
             <>
-              <strong>CTR (Click-Through-Rate)</strong> = Klicks ÷ Impressionen
-              × 100. Zeigt, wie überzeugend dein Hook ist. Wichtig: Was eine
-              „gute" CTR ist, hängt vom eigenen Account ab, die App vergleicht
-              jeden Pin mit deinem persönlichen Durchschnitt, nicht mit
-              Branchenwerten.
+              <strong>Save-Rate</strong> = Saves ÷ Impressionen × 100. Zeigt,
+              wie wertvoll der Inhalt für die Menschen ist. Beispiel: 30 Saves
+              bei 1.000 Impressionen ergeben eine Save-Rate von 3 %.
             </>,
             <>
-              <strong>Save-Rate</strong> = Saves ÷ Impressionen × 100. Misst,
-              wie oft Menschen deinen Pin auf eigene Boards speichern.
-              Pinterests wichtigstes Signal: Hohe Save-Rate → Pinterest spielt
-              deinen Pin mehr aus.
-            </>,
-            <>
-              <strong>Engagement-Rate</strong> = (Saves + Ausgehende Klicks) ÷
-              Impressionen × 100. Ein hilfreicher Anzeigewert für die
-              Gesamtaktivität, der aber weder die Pin-Diagnose noch den
-              Board-Status direkt steuert. Die Pin-Bewertung läuft über
-              Save-Rate und CTR, der Board-Status über die Pin-Aktivität.
+              <strong>Engagement-Rate</strong> = (Saves + ausgehende Klicks) ÷
+              Impressionen × 100. Ein reiner Überblickswert für die
+              Gesamtaktivität. Sie steuert weder die Diagnose noch die
+              Ausspielung, sie zeigt dir nur das grobe Gesamtbild.
             </>,
           ]}
         />
 
-        <HinweisBox variant="merke">
-          <strong>Merke:</strong> Analytics ist kein Bewertungssystem für
-          deine Arbeit. Es ist ein Navigationssystem für deine nächsten
-          Schritte.
-        </HinweisBox>
+        <H4>Wie die Diagnose daraus entsteht:</H4>
+        <Para>
+          Pin-Flow bewertet jeden Pin nicht gegen fremde Werte, sondern gegen
+          deinen <strong>eigenen Durchschnitt</strong>. Aus deinen Pins der
+          letzten 90 Tage berechnet die App deinen typischen Wert für Klickrate,
+          Save-Rate und Reichweite. Jeder Pin wird dann daran gemessen: Liegt er
+          darüber oder darunter? Bevor ein Pin überhaupt nach seiner Klickrate
+          beurteilt wird, braucht er mindestens{' '}
+          <strong>300 Impressionen</strong>, darunter wären die Quoten reiner
+          Zufall. Aus dem Zusammenspiel von Reichweite, ausgehenden Klicks und
+          Saves ergeben sich <strong>8 Diagnosen</strong>, die jeweils eine
+          andere Handlung verlangen. Welche das sind, zeigt dir der Abschnitt{' '}
+          {'„So liest du die Zahlen hinter jedem Pin, die 8 Diagnosen"'}.
+        </Para>
+        <Para>
+          Der Vorteil: Du vergleichst dich fair mit dir selbst, nicht mit großen
+          Pinterest-Profis. Dein Maßstab wächst mit, je mehr Pins du erstellst.
+        </Para>
       </Accordion>
 
-      <Accordion title="Welche Zahlen du brauchst und was sie dir verraten">
-        <H4>Die drei Kennzahlen die du brauchst</H4>
-        <Para>
-          Du importierst deine Pinterest-Daten per CSV. Pin-Flow liest daraus
-          je Pin drei Kennzahlen:
-        </Para>
-        <Bullets
-          items={[
-            <>
-              <strong>Impressionen</strong>: wie oft wurde der Pin ausgespielt
-            </>,
-            <>
-              <strong>Klicks</strong>: wie oft wurde auf die Website geklickt
-            </>,
-            <>
-              <strong>Saves</strong>: wie oft wurde der Pin gespeichert
-            </>,
-          ]}
-        />
-        <Para>
-          Die Performance deines Profils trägst du zusätzlich manuell ein.
-        </Para>
-        <Para>Daraus berechnet Pin-Flow drei Werte:</Para>
-        <Bullets
-          items={[
-            <>
-              <strong>CTR (Click-Through-Rate)</strong> = Klicks ÷
-              Impressionen × 100
-            </>,
-            <>
-              <strong>Save-Rate</strong> = Saves ÷ Impressionen × 100
-            </>,
-            <>
-              <strong>Engagement-Rate</strong> = (Saves + Ausgehende Klicks) ÷
-              Impressionen × 100
-            </>,
-          ]}
-        />
-        <Para>
-          Die Save-Rate ist dabei das wichtigste Signal: Pinterest nutzt sie
-          selbst, um zu entscheiden, ob ein Pin weiter ausgespielt wird. Die
-          Diagnose jedes Pins stützt sich genau auf zwei dieser Werte, die
-          Save-Rate als Algorithmus-Signal und die CTR als Nutzer-Signal. Die
-          Engagement-Rate steuert die Ausspielung nicht, sie ist ein reiner
-          Anzeigewert, der dir das Gesamtbild zeigt.
-        </Para>
-        <Para>
-          Daraus ergeben sich 6 Diagnose-Kategorien, von „Aktiver Top
-          Performer" über „Hidden Gem" bis „Stiller Pin", die dir für jeden
-          Pin sagen, was zu tun ist. Welche das sind und wie du sie liest,
-          zeigt dir der nächste Abschnitt „Was deine Pins dir sagen".
-        </Para>
-
-        <H4>Welchen Zeitraum du verwendest</H4>
-        <Para>
-          Du exportierst deine Daten aus Pinterest Analytics nicht als
-          Gesamtwert seit Veröffentlichung, sondern immer für einen bestimmten
-          Zeitraum, von deinem letzten Stichtag bis zum aktuellen Datum.
-          Pin-Flow speichert jede dieser Perioden einzeln und rechnet sie
-          selbst zu deinen Gesamtwerten zusammen. So entsteht dein Verlauf über
-          die Zeit, ohne dass du etwas doppelt einträgst.
-        </Para>
-        <Para>
-          Für deinen persönlichen Durchschnitt zählen die Pins der letzten 90
-          Tage mit mindestens 100 Impressionen. So bleibt dein Vergleichswert
-          immer aktuell. Das ist eine andere Schwelle als die Bewertung eines
-          einzelnen Pins weiter unten.
-        </Para>
-
-        <H4>Wie die Diagnose entsteht</H4>
-        <Para>
-          Dieses System bewertet jeden Pin nicht gegen Branchenwerte, sondern
-          gegen deine eigenen Pins.
-        </Para>
-        <Bullets
-          items={[
-            <>
-              Aus deinen Pins der letzten 90 Tage berechnet die App einen
-              Durchschnittswert (Median) für CTR und Save-Rate.
-            </>,
-            <>
-              Jeder neue Pin wird gegen diesen Durchschnitt verglichen: Liegt
-              er drüber oder drunter?
-            </>,
-            <>
-              Bevor ein einzelner Pin nach seiner Klickrate beurteilt wird,
-              braucht er mindestens {t.minImpCtrUrteil} Impressionen. Darunter
-              gilt er als „noch zu früh". Das ist nicht dieselbe Schwelle wie die
-              100 Impressionen für deinen persönlichen Durchschnitt, sondern ein
-              eigener Mindestwert pro Pin.
-            </>,
-          ]}
-        />
-        <Para>
-          <strong>Vorteil:</strong> Du vergleichst dich fair mit dir selbst,
-          nicht mit großen Pinterest-Profis. Dein Account skaliert mit, je
-          mehr Pins du erstellst.
-        </Para>
-
-        <H4>Welche Pins importiert werden</H4>
+      <Accordion title="So importierst du deine Daten und welchen Zeitraum du nutzt">
+        <H4>Import</H4>
         <Para>
           Du lädst deine CSV-Dateien aus Pinterest Analytics hoch, den Rest
-          übernimmt Pin-Flow automatisch. Es übernimmt alle Pins aus der Datei,
-          die zu deinen in Pin-Flow angelegten Pins passen. Pins, die du noch
-          nicht angelegt hast, werden dir gesondert angezeigt, sodass du sie bei
-          Bedarf ergänzen kannst.
+          übernimmt Pin-Flow. Wie genau du die CSV-Datei aus Pinterest lädst,
+          findest du im Analyse-Tab unter{' '}
+          <Link
+            href="/dashboard/analytics?tab=eingabe#so-findest-du-die-zahlen"
+            className="text-red-700 underline underline-offset-2 hover:text-red-800"
+          >
+            {'„So findest du die Zahlen"'}
+          </Link>
+          . Die App ordnet die Zahlen automatisch deinen Pins zu, sofern die
+          Pin-ID aus Pinterest einem Pin in Pin-Flow zugeordnet ist. Du
+          entscheidest dabei selbst, welche Pins du zuordnen möchtest und welche
+          nicht. Hier hilft das Pareto-Prinzip: Die wenigsten deiner Pins
+          bringen den größten Teil deiner Ergebnisse. Du musst also nicht jeden
+          Pin pflegen, konzentrier dich auf die, die wirklich etwas bewegen.
+          Welche das sind, siehst du direkt im{' '}
+          <Link
+            href="/dashboard/analytics?tab=pins"
+            className="text-red-700 underline underline-offset-2 hover:text-red-800"
+          >
+            Analyse-Tab
+          </Link>
+          , wo du die Zuordnung Pin für Pin selbst steuerst.
+        </Para>
+
+        <H4>Welchen Zeitraum du nutzt</H4>
+        <Para>
+          Pinterest gibt dir mehrere Möglichkeiten, den Auswertungszeitraum zu
+          wählen: die letzten 24 Stunden, 7, 30, 60 oder 90 Tage, oder
+          benutzerdefiniert. Für deine Auswertung in Pin-Flow eignet sich
+          benutzerdefiniert gut, ein Muss ist es aber nicht. Wichtig ist nur
+          eines: Wähle möglichst immer dieselbe Zeitspanne, damit deine Perioden
+          vergleichbar bleiben. Es bringt dir wenig, eine Zwei-Wochen-Periode
+          mit einer Fünf-Wochen-Periode zu vergleichen, dann misst du nicht die
+          Entwicklung deiner Pins, sondern nur den längeren Zeitraum. Deinen
+          idealen nächsten Zeitraum schlägt dir Pin-Flow im{' '}
+          <Link
+            href="/dashboard/analytics?tab=eingabe"
+            className="text-red-700 underline underline-offset-2 hover:text-red-800"
+          >
+            {'Analyse-Tab unter „Eingabe"'}
+          </Link>{' '}
+          automatisch vor.
+        </Para>
+
+        <H4>Warum das ein echter Vorteil ist</H4>
+        <Para>
+          Pinterest zeigt dir die Zahlen eines Pins nur rückwirkend für die
+          letzten rund sechs Monate. Ein Pin, den du im Januar erstellt hast,
+          lässt sich dort nur bis etwa Anfang Juli vollständig auswerten.
+          Wertest du im August aus, gibt es den Pin zwar noch, aber nur mit
+          Daten von Februar bis August, der Januar fehlt. Pin-Flow dagegen
+          behält jede Periode, die du einträgst, dauerhaft. So bleibt deine
+          komplette Historie erhalten, auch wenn Pinterest sie längst nicht mehr
+          zeigt. Das ist einer der größten Vorteile der App.
+        </Para>
+
+        <H4>Dein persönlicher Durchschnitt</H4>
+        <Para>
+          Für deinen Durchschnitt zählen die Pins der letzten 90 Tage mit
+          mindestens 100 Impressionen. So bleibt dein Vergleichswert aktuell und
+          schleppt keine alten Pins mit, die längst nicht mehr laufen.
         </Para>
       </Accordion>
 
-      <Accordion title="Was deine Pins dir sagen: die 6 Diagnosen und deine Handlung dazu">
+      <Accordion title="So liest du die Zahlen hinter jedem Pin, die 8 Diagnosen">
         <Para>
-          Jeder deiner Pins bekommt automatisch eine Diagnose. Sie kombiniert
-          zwei Fragen: Spielt Pinterest den Pin aus? Klicken Menschen ihn an?
-          Aus den Antworten ergeben sich 6 Situationen, die jeweils eine
-          andere Handlung erfordern.
+          Jeder deiner Pins bekommt automatisch eine Diagnose. Sie beantwortet
+          drei Fragen: Wie viel Reichweite hat der Pin? Klicken die Menschen?
+          Speichern sie ihn? Aus den Antworten ergeben sich acht Situationen,
+          die jeweils eine andere Handlung erfordern.
         </Para>
 
         <Table
-          head={[
-            'Spielt Pinterest aus?',
-            'Klicken Menschen?',
-            'Diagnose',
-            'Kategorie',
-          ]}
+          head={['Reichweite?', 'Klicks?', 'Saves?', 'Was das heißt', 'Diagnose']}
           rows={[
             [
-              'Ja',
-              'Ja',
-              'Alles funktioniert',
+              'Hoch',
+              'stark',
+              'egal',
+              'Läuft rundum, dein Blueprint',
               '⭐ Aktiver Top Performer',
             ],
             [
-              'Nein',
-              'Ja',
-              'Pin gut, Sichtbarkeit schwach',
-              '💎 Hidden Gem',
+              'Hoch',
+              'schwach',
+              'stark',
+              'Cover zieht, Klick fehlt',
+              '🧲 Save-Magnet',
             ],
             [
-              'Ja',
-              'Nein',
-              'Reichweite da, Cover schwach',
+              'Hoch',
+              'schwach',
+              'schwach',
+              'Wird gesehen, keiner reagiert',
               '🔧 Reichweite ohne Wirkung',
             ],
             [
-              'Nein',
-              'Nein',
-              'Niemand reagiert',
+              'Niedrig',
+              'eins davon stark*',
+              'eins davon stark*',
+              'Gut, aber kaum sichtbar',
+              '💎 Hidden Gem',
+            ],
+            [
+              'Niedrig',
+              'schwach',
+              'schwach',
+              'Hatte Zeit, kam nicht an',
               '💤 Stiller Pin',
             ],
-            [
-              'Spezialfall: alter Star',
-              '',
-              'War mal stark, lebt nicht mehr',
-              '♻️ Eingeschlafener Gewinner',
-            ],
-            [
-              'Spezialfall: zu wenig Daten',
-              '',
-              'Noch keine Aussage möglich',
-              '⏳ Noch zu früh',
-            ],
+          ]}
+        />
+
+        <p className="text-xs leading-relaxed text-gray-500">
+          {'*Beim Hidden Gem reicht ein starkes Signal: entweder die Klickrate oder die Save-Rate liegt über deinem Durchschnitt. Wären beide stark, wäre es ein Top Performer.'}
+        </p>
+
+        <Para>
+          Drei Sonderfälle passen nicht in dieses Raster, weil sie von Zeit oder
+          Datenmenge abhängen:
+        </Para>
+        <Bullets
+          items={[
+            <>
+              ♻️ <strong>Eingeschlafener Gewinner:</strong> Lief früher stark,
+              jetzt fällt die Reichweite deutlich. Zeit für einen frischen Pin.
+            </>,
+            <>
+              ⏳ <strong>Noch zu früh:</strong> Zu wenig Daten für ein
+              verlässliches Urteil.
+            </>,
+            <>
+              📊 <strong>Noch keine Vergleichsdaten:</strong> Es fehlen noch
+              genug ausgewertete Pins für deinen persönlichen Durchschnitt.
+            </>,
           ]}
         />
 
         <div className="rounded-md border border-gray-200 bg-white p-4">
-          <H3>Aktiver Top Performer</H3>
+          <H3><span aria-hidden>⭐</span> Aktiver Top Performer</H3>
           <Para>
             Diese Pins haben bewiesen: Pinterest spielt sie aus, Menschen
             klicken sie an, das Thema hat echte Nachfrage. Sie sind dein
             Blueprint für die nächsten Pins.
           </Para>
           <Para>
-            <strong>Was die Daten zeigen:</strong> Sowohl die Save-Rate als
-            auch die CTR liegen über deinem persönlichen Durchschnitt, und der
-            Pin hat genug Daten gesammelt, um das verlässlich zu beurteilen.
-            Beide Signale sind stark, das ist der Idealzustand.
+            <strong>Was die Daten zeigen:</strong> Die Reichweite (Impressionen)
+            liegt über deinem Durchschnitt, und gleichzeitig klicken
+            überdurchschnittlich viele durch (CTR über deinem Schnitt). Der Pin
+            hat genug Daten gesammelt, um das verlässlich zu beurteilen. Beide
+            Signale sind stark, das ist der Idealzustand.
           </Para>
           <Para>
             <strong>Deine Handlung:</strong> Produziere 2 bis 3 Varianten desselben
@@ -3810,7 +3825,7 @@ function TabAnalytics({
           </Para>
           <Para>
             <strong>Wichtig, der Zeitfaktor:</strong> Pinterest spielt neue Pins
-            in den ersten rund {t.topPerformerMaxAlter} Tagen am stärksten aus.
+            in den ersten rund 90 Tagen am stärksten aus.
             Pin-Flow zeigt dir dazu auf dem Dashboard einen Countdown, wie lange
             ein Top Performer voraussichtlich noch in dieser starken Phase ist.
             Das bedeutet nicht, dass der Pin danach wertlos wird: Gute Pins
@@ -3823,44 +3838,40 @@ function TabAnalytics({
         </div>
 
         <div className="rounded-md border border-gray-200 bg-white p-4">
-          <H3>Hidden Gem</H3>
+          <H3><span aria-hidden>🧲</span> Save-Magnet</H3>
           <Para>
-            Wer diesen Pin sieht, klickt überdurchschnittlich oft durch. Aber
-            Pinterest zeigt ihn fast niemandem. Verschenktes Potenzial.
+            Dieser Pin wird oft gespeichert, aber selten geklickt. Das Cover und
+            das Thema ziehen, doch der Weg zur Website fehlt.
           </Para>
           <Para>
-            <strong>Was die Daten zeigen:</strong> Was gut läuft: Die Klickrate
-            liegt deutlich über deinem Durchschnitt, dein Hook zieht. Das
-            Problem: Die Reichweite ist niedrig, Pinterest spielt den Pin noch
-            zu wenig aus. Das ist oft ein Keyword- oder Board-Thema.
+            <strong>Was die Daten zeigen:</strong> Die Reichweite ist gut,
+            Pinterest spielt den Pin aus, und die Save-Rate liegt über deinem
+            Durchschnitt. Menschen merken ihn sich also gern. Was fehlt: die
+            Klicks. Die Klickrate bleibt unter deinem Durchschnitt, kaum jemand
+            geht von hier zu deiner Website.
           </Para>
           <Para>
-            <strong>Deine Handlung:</strong> Erstelle einen neuen Pin mit
-            demselben Cover, aber überarbeite Titel, Beschreibung und
-            Keywords. Vielleicht passt der Pin auch besser auf ein anderes
-            Board.
-          </Para>
-          <Para>
-            <strong>Hinweis:</strong> Damit ein Pin als Hidden Gem gilt,
-            braucht er mindestens {t.minImpCtrUrteil} Impressionen. Bei
-            kleineren Stichproben sind Klickraten zu unzuverlässig.
+            <strong>Deine Handlung:</strong> Erstelle eine neue Variante mit
+            einer klaren Handlungsaufforderung. Sag im Cover oder Titel direkt,
+            was auf der Website wartet, ein konkreter Grund zu klicken. Das
+            Speichern zeigt: Das Thema trägt. Jetzt fehlt nur der Anstoß zum
+            Klick.
           </Para>
         </div>
 
         <div className="rounded-md border border-gray-200 bg-white p-4">
-          <H3>Reichweite ohne Wirkung</H3>
+          <H3><span aria-hidden>🔧</span> Reichweite ohne Wirkung</H3>
           <Para>
-            Pinterest spielt diesen Pin gut aus, viele Menschen sehen ihn, 
-            aber kaum jemand klickt durch. Das Cover oder der Hook funktioniert
-            nicht.
+            Pinterest spielt diesen Pin gut aus, viele Menschen sehen ihn, aber
+            kaum jemand reagiert.
           </Para>
           <Para>
             <strong>Was die Daten zeigen:</strong> Was gut läuft: Pinterest
             spielt den Pin viel aus, deine Keywords und dein Board funktionieren
-            (mindestens {t.minImpReichweiteStark} Impressionen, Save-Rate über
-            deinem Durchschnitt). Das Problem: Zu wenige klicken durch, der Hook
-            oder das Titelbild überzeugt noch nicht (CTR unter deinem
-            Durchschnitt).
+            (mindestens 500 Impressionen). Das Problem: Weder Klicks noch Saves
+            liegen über deinem Durchschnitt. Die Menschen sehen den Pin, aber
+            das Cover oder der Hook löst nichts aus, kein Klick zur Website, kein
+            Speichern.
           </Para>
           <Para>
             <strong>Deine Handlung:</strong> Erstelle einen neuen Pin mit
@@ -3870,16 +3881,42 @@ function TabAnalytics({
         </div>
 
         <div className="rounded-md border border-gray-200 bg-white p-4">
-          <H3>Stiller Pin</H3>
+          <H3><span aria-hidden>💎</span> Hidden Gem</H3>
+          <Para>
+            Wer diesen Pin sieht, reagiert stark, klickt oder speichert
+            überdurchschnittlich. Aber Pinterest zeigt ihn fast niemandem.
+            Verschenktes Potenzial.
+          </Para>
+          <Para>
+            <strong>Was die Daten zeigen:</strong> Ein Signal ist klar stark:
+            Entweder die Klickrate oder die Save-Rate liegt deutlich über deinem
+            Durchschnitt. Das Problem: Die Reichweite ist niedrig, Pinterest
+            spielt den Pin noch zu wenig aus. Das ist oft ein Keyword- oder
+            Board-Thema.
+          </Para>
+          <Para>
+            <strong>Deine Handlung:</strong> Erstelle einen neuen Pin mit
+            demselben Cover, aber überarbeite Titel, Beschreibung und Keywords.
+            Vielleicht passt der Pin auch besser auf ein anderes Board.
+          </Para>
+          <Para>
+            <strong>Hinweis:</strong> Damit ein Pin als Hidden Gem gilt, braucht
+            er mindestens 300 Impressionen. Bei kleineren Stichproben sind die
+            Quoten zu unzuverlässig.
+          </Para>
+        </div>
+
+        <div className="rounded-md border border-gray-200 bg-white p-4">
+          <H3><span aria-hidden>💤</span> Stiller Pin</H3>
           <Para>
             Weder Pinterest noch Nutzer reagieren auf diesen Pin. Er hat genug
             Zeit gehabt zu performen, aber er hat nicht funktioniert.
           </Para>
           <Para>
-            <strong>Was die Daten zeigen:</strong> Der Pin ist älter als{' '}
-            {t.beobachtungszeitraum} Tage und hatte mit mindestens{' '}
-            {t.minImpCtrUrteil} Impressionen genug Gelegenheit. Trotzdem liegen
-            weder Saves noch Klicks über deinem Durchschnitt. Hier ist also kein
+            <strong>Was die Daten zeigen:</strong> Der Pin ist älter als 90 Tage
+            und hatte mit mindestens 300 Impressionen genug Gelegenheit, oder er
+            ist über 180 Tage alt, ohne je in Fahrt zu kommen. Trotzdem liegen
+            weder Saves noch Klicks über deinem Durchschnitt. Hier ist kein
             Signal stark, das ist die deutlichste Baustelle. Das ist normal,
             nicht jedes Thema trifft.
           </Para>
@@ -3901,7 +3938,7 @@ function TabAnalytics({
         </div>
 
         <div className="rounded-md border border-gray-200 bg-white p-4">
-          <H3>Eingeschlafener Gewinner</H3>
+          <H3><span aria-hidden>♻️</span> Eingeschlafener Gewinner</H3>
           <Para>
             Dieser Pin lief früher stark, verliert inzwischen aber an
             Reichweite. Pinterest priorisiert frische Inhalte, ältere Pins
@@ -3927,7 +3964,7 @@ function TabAnalytics({
         </div>
 
         <div className="rounded-md border border-gray-200 bg-white p-4">
-          <H3>Noch zu früh</H3>
+          <H3><span aria-hidden>⏳</span> Noch zu früh</H3>
           <Para>
             Wir haben zu wenig Daten für eine ehrliche Bewertung. Entweder ist
             der Pin noch jung oder Pinterest hat ihn noch nicht oft genug
@@ -3935,11 +3972,10 @@ function TabAnalytics({
           </Para>
           <Para>
             <strong>Was die Daten zeigen:</strong> Für ein verlässliches Urteil
-            fehlen noch Daten: Der Pin ist jünger als {t.beobachtungszeitraum}{' '}
-            Tage und hat unter {t.minImpReichweiteStark} Impressionen, oder
-            weniger als {t.minImpCtrUrteil} Impressionen, egal wie alt. Das ist
-            kein Problem, sondern normal, der Pin sammelt noch Daten, hier zählt
-            Geduld.
+            fehlen noch Daten: Der Pin ist jünger als 90 Tage und hat unter 500
+            Impressionen, oder weniger als 300 Impressionen, egal wie alt. Das
+            ist kein Problem, sondern normal, der Pin sammelt noch Daten, hier
+            zählt Geduld.
           </Para>
           <Para>
             <strong>Deine Handlung:</strong> Abwarten. Nicht voreilig
@@ -3947,10 +3983,30 @@ function TabAnalytics({
             Muster.
           </Para>
           <Para>
-            <strong>Hintergrund:</strong> Pinterest braucht typischerweise{' '}
-            {t.beobachtungszeitraum} bis {t.topPerformerMaxAlter} Tage, um einen
-            Pin voll auszuspielen. In dieser Zeit schwanken alle Zahlen stark.
-            Beim nächsten Daten-Import prüft die App automatisch neu.
+            <strong>Hintergrund:</strong> Pinterest braucht oft mehrere Wochen,
+            um einen Pin voll auszuspielen. In dieser Zeit schwanken alle Zahlen
+            stark. Beim nächsten Daten-Import prüft die App automatisch neu.
+          </Para>
+        </div>
+
+        <div className="rounded-md border border-gray-200 bg-white p-4">
+          <H3><span aria-hidden>📊</span> Noch keine Vergleichsdaten</H3>
+          <Para>
+            Pin-Flow vergleicht jeden Pin mit deinem persönlichen Durchschnitt.
+            Solange du noch zu wenige ausgewertete Pins hast, gibt es diesen
+            Durchschnitt noch nicht, und damit auch noch keine verlässliche
+            Diagnose.
+          </Para>
+          <Para>
+            <strong>Was die Daten zeigen:</strong> Es braucht mindestens 10 Pins
+            mit genug Impressionen, um deinen typischen Wert für Klickrate,
+            Save-Rate und Reichweite zu berechnen. Bis dahin fehlt der Maßstab,
+            gegen den ein einzelner Pin gemessen wird.
+          </Para>
+          <Para>
+            <strong>Deine Handlung:</strong> Trag weiter deine Zahlen ein. Sobald
+            genug Pins ausgewertet sind, schaltet sich die Diagnose automatisch
+            frei.
           </Para>
         </div>
 
@@ -3964,7 +4020,7 @@ function TabAnalytics({
         </HinweisBox>
       </Accordion>
 
-      <Accordion title="Boards optimieren, damit deine Pins besser laufen">
+      <Accordion title="So liest du deine Board-Zahlen">
         <Para>
           Viele Pinterest-Nutzer optimieren ihre Pins, aber vergessen ihre
           Boards. Das ist ein Fehler. Boards sind neben Keywords in Pin-
@@ -3975,33 +4031,22 @@ function TabAnalytics({
           darauf, ein schwaches Board bremst selbst gute Pins aus.
         </Para>
 
-        <H4>Was ist wichtiger: Engagement Rate oder ausgehende Klicks?</H4>
-        <Para>Beide Kennzahlen sind relevant, aber für verschiedene Fragen:</Para>
+        <H4>Worauf es bei deinen Board-Zahlen ankommt</H4>
+        <Para>
+          Zwei Zahlen helfen dir, ein Board einzuschätzen, aber sie beantworten
+          verschiedene Fragen:
+        </Para>
         <Bullets
           items={[
-            <>
-              <strong>Engagement-Rate (ER)</strong> fasst Saves, Pin-Klicks
-              und ausgehende Klicks einer Pinnwand im Verhältnis zu den
-              Impressionen zusammen. Sie ist ein nützlicher Anhaltspunkt
-              dafür, wie gut die Pins auf einer Pinnwand insgesamt ankommen.
-              Sie ist aber kein einzelnes Ranking-Signal, über das Pinterest
-              die Qualität einer Pinnwand bewertet. Wichtiger für die
-              Distribution sind thematische Konsistenz, Aktualität und
-              regelmäßiges Pinnen auf eine fokussierte Pinnwand.
-            </>,
-            <>
-              <strong>Ausgehende Klicks</strong> → zeigen, ob das Board
-              Traffic auf deine Website schickt. Das ist der direkte
-              Business-Impact, wie viel Website-Traffic kommt von diesem
-              Board?
-            </>,
+            'Die Engagement-Rate = (Saves + ausgehende Klicks) ÷ Impressionen × 100. Sie fasst zusammen, wie gut die Pins auf einer Pinnwand insgesamt ankommen. Ein nützlicher Überblickswert, aber sie steuert nichts. Für die Sichtbarkeit eines Boards zählen thematische Klarheit, Aktualität und regelmäßiges Pinnen zum Kernthema.',
+            'Ausgehende Klicks zeigen, ob ein Board Besucher auf deine Website bringt. Das ist der direkte Geschäftswert: Wie viel Website-Traffic kommt von diesem Board?',
           ]}
         />
         <HinweisBox variant="merke">
-          <strong>Faustregel:</strong> Die Engagement-Rate zeigt, wie gut die
-          Pins auf einer Pinnwand insgesamt ankommen. Ausgehende Klicks zeigen,
-          wie viel Website-Traffic die Pinnwand bringt. Beide zusammen zeigen
-          dir, ob eine Pinnwand wirklich funktioniert.
+          Die Engagement-Rate zeigt dir das Gesamtbild, wie gut die Pins einer
+          Pinnwand ankommen. Die ausgehenden Klicks zeigen, wie viel
+          Website-Traffic die Pinnwand bringt. Zusammen geben sie dir ein gutes
+          Gefühl dafür, ob ein Board für dich arbeitet.
         </HinweisBox>
 
         <H4>Was du daraus ableitest:</H4>
@@ -4009,70 +4054,9 @@ function TabAnalytics({
           items={[
             'Board mit hohen Impressionen, aber wenig Klicks → Hook-Problem: Die Pins darauf überzeugen nicht zum Klicken, Design und Hook überarbeiten',
             'Board mit wenig Impressionen → Sichtbarkeits-Problem: Board-Name und Beschreibung sind zu schwach, Keywords optimieren',
-            'Pinnwand mit niedriger ER: ein Hinweis, dass die Pins darauf noch nicht gut ankommen. Prüfe, ob Thema, Pin-Qualität und Aktivität zusammenpassen, und pinne regelmäßiger zum Kernthema der Pinnwand',
+            'Board mit niedriger Engagement-Rate: ein Hinweis, dass die Pins darauf noch nicht gut ankommen. Prüfe, ob Thema, Pin-Qualität und Aktivität zusammenpassen, und pinne regelmäßiger zum Kernthema des Boards',
           ]}
         />
-
-        <H4>Board-Optimierung in 4 Schritten:</H4>
-
-        <div>
-          <H4>Schritt 1: Board-Name prüfen</H4>
-          <Para>
-            Enthält der Board-Name das wichtigste Keyword? Steht es ganz
-            vorne? Ein Board namens „Meine Yoga Welt" ist schwächer als „Yoga
-            zuhause: Yogaraum & Yoga Ecke einrichten". Pinterest indexiert
-            den neuen Namen innerhalb weniger Tage.
-          </Para>
-        </div>
-
-        <div>
-          <H4>Schritt 2: Board-Beschreibung überarbeiten</H4>
-          <Para>
-            Leer oder zu kurz? 2 bis 3 Sätze mit den wichtigsten Keywords
-            schreiben, natürlich formuliert. Nutze den{' '}
-            <Link
-              href="/dashboard/boards"
-              className="text-red-700 underline underline-offset-2 hover:text-red-800"
-            >
-              → KI-Prompt Generator
-            </Link>{' '}
-            auf der Boards-Seite, um direkt einen auf Sichtbarkeit optimierten Board-Namen
-            und eine Beschreibung zu generieren.
-          </Para>
-        </div>
-
-        <div>
-          <H4>Schritt 3: Board reaktivieren</H4>
-          <Para>
-            Inaktive Boards brauchen neue Pins. Mindestens 3 bis 5 neue Pins pro
-            Woche, bis das Board wieder als aktiv gilt.
-          </Para>
-        </div>
-
-        <div>
-          <H4>Schritt 4: Board-Score prüfen</H4>
-          <Para>
-            Nach 30 Tagen erneut prüfen. Hat sich die Performance verbessert?
-            Wenn nicht, Keywords weiter optimieren oder Board strategisch
-            überdenken.
-          </Para>
-        </div>
-
-        <H4>Wann du ein Board löschen solltest:</H4>
-        <Para>
-          Lösche ein Board nur, wenn es thematisch komplett falsch ist und
-          keine Verbindung zu deiner Nische hat. In allen anderen Fällen ist
-          Optimieren besser als Löschen, Pinterest verliert beim Löschen
-          alle historischen Daten des Boards.
-        </Para>
-
-        <HinweisBox>
-          <strong>Tipp:</strong> Prüfe einmal im Monat deine Board-Zahlen
-          im Dashboard unter Board-Gesundheit. Top Boards zeigen dir, wo
-          deine Zielgruppe aktiv ist, dort mehr produzieren. Schwache
-          Boards entweder aktiv bespielen oder Board-Beschreibung mit
-          stärkeren Keywords überarbeiten.
-        </HinweisBox>
 
         <H4>Zusammenhang Board und Pin-Diagnose</H4>
         <Para>

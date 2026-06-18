@@ -424,47 +424,26 @@ export type EinstellungenSchwellwerte = {
   schwellwert_ctr_boost_faktor: number | string | null
 }
 
-function numOrFallbackCtr(
-  raw: number | string | null | undefined,
-  fallback: number
-): number {
-  if (raw === null || raw === undefined) return fallback
-  const n = Number(raw)
-  return Number.isFinite(n) ? n : fallback
-}
-
+// Die 9 Pin-Schwellwerte sind fest im Code verdrahtet (PIN_ANALYTICS_THRESHOLD_
+// DEFAULTS) und NICHT mehr aus den Einstellungen überschreibbar. Der `settings`-
+// Parameter wird bewusst ignoriert (positional belassen, damit `benchmark` als
+// zweites Argument nicht verrutscht); die DB-Spalten schwellwert_* liegen
+// vorerst ungenutzt brach (späterer DB-Cleanup).
 export function thresholdsFromSettings(
   settings: Partial<EinstellungenSchwellwerte> | null | undefined,
   benchmark: UserPinBenchmark | null = null
 ): PinAnalyticsThresholds {
   const D = PIN_ANALYTICS_THRESHOLD_DEFAULTS
   return {
-    beobachtungszeitraum:
-      settings?.schwellwert_beobachtung ?? D.beobachtungszeitraum,
-    minImpCtrUrteil:
-      settings?.schwellwert_min_imp_ctr_urteil ?? D.minImpCtrUrteil,
-    minImpReichweiteStark:
-      settings?.schwellwert_min_imp_reichweite_stark ??
-      D.minImpReichweiteStark,
-    minKlicksTopPerformer:
-      settings?.schwellwert_min_klicks ?? D.minKlicksTopPerformer,
-    minKlicksNutzerSignal:
-      settings?.schwellwert_min_klicks_nutzer_signal ??
-      D.minKlicksNutzerSignal,
-    topPerformerMaxAlter:
-      settings?.schwellwert_top_performer_max_alter ??
-      D.topPerformerMaxAlter,
-    schlafenderGewinnerAlter:
-      settings?.schwellwert_schlafender_gewinner_alter ??
-      D.schlafenderGewinnerAlter,
-    ctrBoostFaktor: numOrFallbackCtr(
-      settings?.schwellwert_ctr_boost_faktor,
-      D.ctrBoostFaktor
-    ),
-    fallbackMindestCtr: numOrFallbackCtr(
-      settings?.schwellwert_ctr,
-      D.fallbackMindestCtr
-    ),
+    beobachtungszeitraum: D.beobachtungszeitraum,
+    minImpCtrUrteil: D.minImpCtrUrteil,
+    minImpReichweiteStark: D.minImpReichweiteStark,
+    minKlicksTopPerformer: D.minKlicksTopPerformer,
+    minKlicksNutzerSignal: D.minKlicksNutzerSignal,
+    topPerformerMaxAlter: D.topPerformerMaxAlter,
+    schlafenderGewinnerAlter: D.schlafenderGewinnerAlter,
+    ctrBoostFaktor: D.ctrBoostFaktor,
+    fallbackMindestCtr: D.fallbackMindestCtr,
     medianCtr: benchmark?.medianCtr ?? null,
     medianSaveRate: benchmark?.medianSaveRate ?? null,
     medianImpressionen: benchmark?.medianImpressionen ?? null,

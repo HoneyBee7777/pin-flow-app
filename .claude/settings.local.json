@@ -102,7 +102,9 @@
       "PowerShell(npx eslint app/dashboard/analytics/PinsTab.tsx app/dashboard/page.tsx app/dashboard/einstellungen/EinstellungenClient.tsx 2>&1 | Select-Object -First 20)",
       "PowerShell(npx eslint app/dashboard/analytics/PinsTab.tsx 2>&1; if \\($?\\) { \"PinsTab.tsx: 0 Probleme\" })",
       "PowerShell(npx tsc --noEmit 2>&1 | Select-Object -First 8; echo \"----ESLINT----\"; npx eslint app/dashboard/analytics/PinsTab.tsx 2>&1; if \\($?\\) { \"PinsTab.tsx: 0 Probleme\" })",
-      "PowerShell(npx eslint app/dashboard/analytics/PinsTab.tsx 2>&1; if \\($?\\) { \"PinsTab.tsx: 0 Probleme\" }; npx eslint app/dashboard/analytics/AnalyticsClient.tsx 2>&1; if \\($?\\) { \"AnalyticsClient.tsx: 0 Probleme\" })"
+      "PowerShell(npx eslint app/dashboard/analytics/PinsTab.tsx 2>&1; if \\($?\\) { \"PinsTab.tsx: 0 Probleme\" }; npx eslint app/dashboard/analytics/AnalyticsClient.tsx 2>&1; if \\($?\\) { \"AnalyticsClient.tsx: 0 Probleme\" })",
+      "PowerShell(npx eslint app/dashboard/analytics/utils.ts 2>&1; if \\($?\\) { \"utils.ts: 0 Probleme\" })",
+      "PowerShell(npx tsc --noEmit 2>&1 | Select-Object -First 14; echo \"----ESLINT----\"; npx eslint app/dashboard/einstellungen/EinstellungenClient.tsx app/dashboard/analytics/utils.ts 2>&1 | Select-Object -First 25)"
     ]
   }
 }
