@@ -1,14 +1,13 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import type { AccountNicheProfile } from '@/lib/account-niche-profile'
-import { generateAudienceInsights } from '@/lib/audience-insights'
+import Link from 'next/link'
+import { formatCategoryLabel } from '@/lib/audience-translations'
 import type { AudienceSnapshot } from '@/lib/audience-types'
 import {
   effectiveZeitraum,
   type ProfilAnalyticsWithGrowth,
 } from './utils'
-import AudienceInsightSummary from './AudienceInsightSummary'
 import AudienceInterestsTable from './AudienceInterestsTable'
 import {
   AudienceDemographics,
@@ -32,20 +31,21 @@ import AudienceSnapshotList from './AudienceSnapshotList'
 //     Vormonat fürs Trend-Hint genutzt, nicht der allerneueste.
 export default function AudienceTab({
   snapshots,
-  nicheProfile,
   profilAnalytics,
+  onEditInteragierende,
 }: {
   snapshots: AudienceSnapshot[]
-  nicheProfile: AccountNicheProfile
   // DESC nach datum (withGrowth). [0] = neuester Performance-Datensatz.
   profilAnalytics: ProfilAnalyticsWithGrowth[]
+  // Wechselt zum Eingabe-Tab + scrollt zum Feld „Interagierende Zielgruppe".
+  onEditInteragierende?: () => void
 }) {
   // Leerer State: kein Snapshot bisher importiert.
   if (snapshots.length === 0) {
     return (
       <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-8 text-center">
         <p className="text-base font-medium text-gray-900">
-          Noch keine Zielgruppe-Daten
+          Noch keine interagierende Zielgruppe-Daten
         </p>
         <p className="mt-1 text-sm text-gray-600">
           Importiere deine erste Zielgruppe-CSV im Tab &bdquo;Eingabe&ldquo;.
@@ -57,9 +57,143 @@ export default function AudienceTab({
   return (
     <AudienceTabBody
       snapshots={snapshots}
-      nicheProfile={nicheProfile}
       profilAnalytics={profilAnalytics}
+      onEditInteragierende={onEditInteragierende}
     />
+  )
+}
+
+// Einleitungssatz + einklappbarer „So funktioniert diese Seite"-Block, im
+// selben Toggle-Muster wie die „So funktioniert …"-Toggles der anderen Tabs.
+// `example` = oberste Tabellenzeile (höchste Affinität), für das dynamische
+// Beispiel im zweiten Block. null = leerer Snapshot → Beispiel entfällt.
+function AudienceSeiteInfo({
+  example,
+}: {
+  example: { label: string; anteil: string; affinity: string } | null
+}) {
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-gray-700">
+        Hier siehst du, wer deine interagierende Zielgruppe auf Pinterest ist
+        und wofür sie sich interessiert, also die Menschen, die mit deinen Pins
+        interagiert haben.{' '}
+        <strong className="font-semibold">
+          Je genauer du deine Zielgruppe kennst, desto gezielter kannst du
+          pinnen
+        </strong>
+        , denn du pinnst dann für echte Interessen statt ins Blaue. Mehr dazu
+        unter{' '}
+        <Link
+          href="/dashboard/strategie?tab=audience"
+          className="font-medium text-red-600 hover:underline"
+        >
+          Zielgruppe verstehen
+        </Link>
+        . Die Daten stammen aus deinem importierten Zielgruppe-CSV.
+      </p>
+      <details className="group max-w-3xl rounded-lg border border-gray-200 bg-white shadow-sm">
+        <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-4 text-base font-semibold text-gray-900 hover:bg-red-50 [&::-webkit-details-marker]:hidden">
+          <span
+            className="text-lg leading-none text-gray-400 transition-transform"
+            aria-hidden
+          >
+            <span className="inline group-open:hidden">▸</span>
+            <span className="hidden group-open:inline">▾</span>
+          </span>
+          <span className="flex-1">So funktioniert diese Seite</span>
+        </summary>
+        <div className="space-y-4 border-t border-gray-100 px-5 py-5 text-sm leading-relaxed text-gray-700">
+          <p>
+            Diese Auswertung bezieht sich auf deine interagierende Zielgruppe.
+            Das sind die eindeutigen Personen, die in den letzten 30 Tagen aktiv
+            mit deinen Pins interagiert haben, nicht nur gesehen. Als
+            Interaktion zählt Pinterest, wenn jemand deinen Pin öffnet, auf
+            deine verlinkte Seite klickt oder ihn auf einem eigenen Board
+            speichert.
+          </p>
+          <p>
+            Gezählt werden Personen, nicht Aktionen. Wer fünf Pins speichert,
+            zählt einmal. Das Fenster ist rollierend über 30 Tage, nicht der
+            Kalendermonat, das verzerrt Monatsvergleiche etwas, wenn du an
+            festen Stichtagen abliest.
+          </p>
+          <p>
+            Wer deine Pins nur gesehen hat, landet in der Gesamtzielgruppe. Das
+            Verhältnis von interagierender zu gesamter Zielgruppe ist
+            aussagekräftig: Wächst die gesamte Zielgruppe, aber die
+            interagierende stagniert, sehen viele deine Pins, ohne zu reagieren.
+            Dann liegt es eher am Pin-Motiv oder daran, dass das Thema nicht zur
+            Suche passt, nicht an der Reichweite.
+          </p>
+          <p>
+            Die Tabelle zeigt dir zwei Zahlen pro Thema, und sie beantworten
+            verschiedene Fragen.
+          </p>
+          <p>
+            <strong className="font-semibold">Der Anteil der Zielgruppe</strong>{' '}
+            sagt, wie groß der Teil deiner interagierenden Zielgruppe ist, der
+            dieses Interesse hat.{' '}
+            {example && (
+              <>
+                <strong className="font-semibold">
+                  Bei dir steht {example.label} ganz oben mit {example.anteil}
+                </strong>
+                : von hundert Personen deiner interagierenden Zielgruppe
+                interessieren sich so viele dafür.{' '}
+              </>
+            )}
+            Eine Person hat meist mehrere Interessen gleichzeitig, deshalb
+            summieren sich die Anteile über alle Themen auf weit mehr als
+            hundert Prozent. Das ist kein Fehler, jedes Thema wird einzeln
+            gezählt.
+          </p>
+          <p>
+            Die <strong className="font-semibold">Affinität</strong> sagt, wie
+            viel stärker dieses Interesse bei deiner Zielgruppe ist als beim
+            Pinterest-Durchschnitt. Sie ist ein Faktor, kein Prozentwert:{' '}
+            <strong className="font-semibold">
+              1,0 ist Durchschnitt, 2,0 doppelt so stark
+            </strong>
+            .
+            {example && (
+              <>
+                {' '}
+                {example.label} hat bei dir eine Affinität von{' '}
+                <strong className="font-semibold">{example.affinity}</strong>.
+              </>
+            )}
+          </p>
+          <p>
+            Wenn du eine Kategorie aufklappst, siehst du die Unterthemen,
+            jeweils mit eigenem Anteil und eigener Affinität. So erkennst du,
+            welches Unterthema innerhalb einer starken Kategorie wirklich zieht
+            und welches nur mitläuft.
+          </p>
+          <p>
+            Das{' '}
+            <strong className="font-semibold">
+              Spannende für deine Strategie ist die Affinität, nicht der Anteil
+            </strong>
+            . Themen mit hoher Affinität zeigen, womit sich deine Zielgruppe von
+            der breiten Masse abhebt. Dort lohnt sich dein Content am meisten.
+            Deshalb ist die Tabelle nach Affinität sortiert, die stärksten
+            Themen stehen oben.
+          </p>
+          <p>
+            Die konkrete Handlung dazu, wie du aus diesen Themen Content-Ideen
+            machst, findest du unter{' '}
+            <Link
+              href="/dashboard/ressourcen#bruecken-themen"
+              className="font-medium text-red-600 hover:underline"
+            >
+              Prompts und Vorlagen
+            </Link>
+            .
+          </p>
+        </div>
+      </details>
+    </div>
   )
 }
 
@@ -67,12 +201,12 @@ export default function AudienceTab({
 // und die Hooks-Reihenfolge stabil bleibt.
 function AudienceTabBody({
   snapshots,
-  nicheProfile,
   profilAnalytics,
+  onEditInteragierende,
 }: {
   snapshots: AudienceSnapshot[]
-  nicheProfile: AccountNicheProfile
   profilAnalytics: ProfilAnalyticsWithGrowth[]
+  onEditInteragierende?: () => void
 }) {
   const [selectedId, setSelectedId] = useState<string>(snapshots[0].id)
 
@@ -95,29 +229,20 @@ function AudienceTabBody({
 
   const selected =
     snapshots.find((s) => s.id === selectedId) ?? snapshots[0]
-  const selectedIndex = snapshots.findIndex((s) => s.id === selected.id)
-  const previous = snapshots[selectedIndex + 1] ?? null
 
-  const insight = useMemo(
-    () =>
-      generateAudienceInsights({
-        snapshot: selected,
-        previousSnapshot: previous,
-        nicheId: nicheProfile.primaryNiche?.id ?? null,
-        nicheLabel: nicheProfile.primaryNiche?.label ?? null,
-        // V3.0.9 — Größen-Satz/Trend basieren auf der echten
-        // interagierenden Zielgruppe aus den Performance-Daten.
-        engagedSize: engaged?.value ?? null,
-        engagedPreviousSize: engaged?.previousValue ?? null,
-      }),
-    [
-      selected,
-      previous,
-      nicheProfile,
-      engaged?.value,
-      engaged?.previousValue,
-    ]
-  )
+  // Oberste Tabellenzeile = höchste Affinität (gleiche Sortierung wie die
+  // Tabelle, Default Affinität DESC). Werte exakt wie in der Tabelle formatiert,
+  // damit Beispiel und Tabelle übereinstimmen. Leerer Snapshot → null.
+  const topExample = useMemo(() => {
+    const arr = selected.data.interests
+    if (arr.length === 0) return null
+    const top = arr.slice().sort((a, b) => b.affinity - a.affinity)[0]
+    return {
+      label: formatCategoryLabel(top.category),
+      anteil: `${(top.percent * 100).toFixed(1).replace('.', ',')} %`,
+      affinity: top.affinity.toFixed(2).replace('.', ','),
+    }
+  }, [selected])
 
   // V3.0 Phase 2d: Pillen vom Dashboard-Widget linken auf
   // `?tab=audience#interest-<slug>`. Bei Mount des Tabs den Hash auslesen
@@ -135,11 +260,13 @@ function AudienceTabBody({
     return () => clearTimeout(t)
   }, [])
 
-  // V3.0.4: Coaching-Block ganz oben — die Botschaft steht VOR den Daten.
-  // Reihenfolge: SnapshotList (wenn ≥2) → Coaching → Audience-Größe →
-  // Demografie → Interessen-Tabelle.
+  // Reihenfolge: SnapshotList (wenn ≥2) → Kernzahl + Demografie (eine Reihe) →
+  // Interessen/Affinity (Herzstück) → Brücken-Link (Handlung). Coaching-Text +
+  // Pills sind raus (Coaching steht identisch im Dashboard, Pills doppelten die
+  // Tabelle). Kernzahl links (1/3), Demografie rechts (2/3); auf Mobil gestapelt.
   return (
     <div className="space-y-6">
+      <AudienceSeiteInfo example={topExample} />
       {snapshots.length > 1 && (
         <AudienceSnapshotList
           snapshots={snapshots}
@@ -147,10 +274,35 @@ function AudienceTabBody({
           onSelect={setSelectedId}
         />
       )}
-      <AudienceInsightSummary insight={insight} />
-      <AudienceSizeBlock engaged={engaged} />
-      <AudienceDemographics snapshot={selected} />
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <AudienceSizeBlock
+          engaged={engaged}
+          onEditInteragierende={onEditInteragierende}
+        />
+        <div className="h-full lg:col-span-2">
+          <AudienceDemographics snapshot={selected} />
+        </div>
+      </div>
       <AudienceInterestsTable interests={selected.data.interests} />
+      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+        <p className="text-sm font-medium text-gray-900">
+          Mach aus diesen Themen Content-Ideen
+        </p>
+        <p className="mt-1 text-sm text-gray-600">
+          Die Themen mit hoher Affinität zeigen, wofür deine interagierende
+          Zielgruppe brennt. Lass dir daraus Brücken-Themen vorschlagen,
+          Inhalte, die deine Nische mit diesen Interessen verbinden.
+        </p>
+        <p className="mt-2 text-sm">
+          →{' '}
+          <Link
+            href="/dashboard/ressourcen#bruecken-themen"
+            className="font-medium text-red-600 hover:underline"
+          >
+            Brücken-Themen-Ideen generieren
+          </Link>
+        </p>
+      </div>
     </div>
   )
 }

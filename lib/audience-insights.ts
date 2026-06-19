@@ -20,7 +20,8 @@ import { germanCategoryName } from './audience-translations'
 
 // Schwellen aus der Spec (V3.0).
 const STRONG_AFFINITY_THRESHOLD = 1.5
-const WEAK_AFFINITY_THRESHOLD = 0.5
+// Vereinheitlicht mit Tabelle + Wissensseite: schwach < 0,8 (vorher 0,5).
+const WEAK_AFFINITY_THRESHOLD = 0.8
 // Trend-Schwelle: weniger als ±0.5 % gilt als „stabil" (kein nennenswerter Trend).
 const TREND_STABILITY_THRESHOLD = 0.005
 

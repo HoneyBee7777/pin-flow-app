@@ -6,6 +6,7 @@ import {
   formatCategoryLabel,
   slugifyCategory,
 } from '@/lib/audience-translations'
+import InfoTooltip from '@/components/InfoTooltip'
 
 // V3.0 — Sektion C des Audience-Tabs: sortierbare Tabelle mit allen
 // Top-Level-Interessen-Kategorien. Klick auf eine Zeile klappt die zugehörigen
@@ -54,6 +55,10 @@ export default function AudienceInterestsTable({
   const [sortKey, setSortKey] = useState<SortKey>('affinity')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  // Standardmäßig nur die Top 10 der aktuellen Sortierung; Rest per Toggle.
+  const [showAll, setShowAll] = useState(false)
+
+  const TOP_LIMIT = 5
 
   const sorted = useMemo(() => {
     const arr = interests.slice()
@@ -100,6 +105,11 @@ export default function AudienceInterestsTable({
     })
   }
 
+  // Top-10-Grenze greift auf der bereits sortierten Liste → zeigt immer die
+  // Top 10 der AKTIVEN Sortierung; bei Sortierwechsel aktualisiert sich das mit.
+  const visible = showAll ? sorted : sorted.slice(0, TOP_LIMIT)
+  const restCount = sorted.length - visible.length
+
   return (
     <section className="rounded-lg border border-gray-200 bg-white">
       <h3 className="border-b border-gray-200 px-4 py-3 text-base font-semibold text-gray-900">
@@ -109,8 +119,8 @@ export default function AudienceInterestsTable({
           die Affinitäts-Sortierung der strategische Default ist. */}
       <div className="border-b border-gray-100 bg-blue-50 px-4 py-2 text-xs text-blue-900">
         Sortiert nach Affinitäts-Index — die Themen oben sind dein
-        strategischer Hebel: Hier interessiert sich deine Audience stärker
-        als der Pinterest-Durchschnitt.
+        strategischer Hebel: Hier interessiert sich deine interagierende
+        Zielgruppe stärker als der Pinterest-Durchschnitt.
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -133,7 +143,7 @@ export default function AudienceInterestsTable({
                   dir={sortDir}
                   onClick={() => handleSort('percent')}
                 >
-                  Anteil Audience
+                  Anteil Zielgruppe
                 </SortButton>
               </th>
               <th className="px-4 py-2 text-right font-medium">
@@ -146,22 +156,12 @@ export default function AudienceInterestsTable({
                   >
                     Affinitäts-Index
                   </SortButton>
-                  {/* V3.0.4: sichtbares ⓘ-Icon konsistent zum App-Stil
-                      (V2.0.1). Nativer Tooltip per title-Attribut +
-                      cursor-help — matched die bestehende Tooltip-UX in
-                      PinsTab. */}
-                  <span
-                    aria-hidden
-                    className="cursor-help text-gray-400 hover:text-gray-600"
-                    title={
-                      'Affinitäts-Index zeigt, wie stark deine Audience an einem Thema interessiert ist verglichen mit der Pinterest-Allgemeinheit.\n\n' +
-                      '🟢 ≥ 1,5: Stark überdurchschnittlich (dein Hebel)\n' +
-                      '🟡 0,8–1,5: Durchschnittlich\n' +
-                      '🔴 < 0,8: Unterdurchschnittlich'
-                    }
-                  >
-                    ⓘ
-                  </span>
+                  {/* Standard-Tooltip der App (InfoTooltip-Komponente) — gleiche
+                      ⓘ-Optik/Mechanik wie überall, statt rohem title-Glyph. */}
+                  <InfoTooltip
+                    className="text-gray-400"
+                    text="Wie viel stärker sich deine interagierende Zielgruppe für ein Thema interessiert als der Pinterest-Durchschnitt. 1,0 ist Durchschnitt, 2,0 doppelt so stark. Stark ab 1,5, neutral 0,8 bis 1,5, schwach darunter."
+                  />
                 </span>
               </th>
               <th className="px-4 py-2 text-left font-medium">
@@ -177,7 +177,7 @@ export default function AudienceInterestsTable({
             </tr>
           </thead>
           <tbody>
-            {sorted.map((interest) => {
+            {visible.map((interest) => {
               const rating = ratingFor(interest.affinity)
               const isExpanded = expanded.has(interest.category)
               const hasSubs = interest.subInterests.length > 0
@@ -237,6 +237,26 @@ export default function AudienceInterestsTable({
             })}
           </tbody>
         </table>
+      </div>
+      {sorted.length > TOP_LIMIT && (
+        <div className="border-t border-gray-100 px-4 py-2">
+          <button
+            type="button"
+            onClick={() => setShowAll((v) => !v)}
+            className="text-sm font-medium text-red-600 hover:underline"
+          >
+            {showAll
+              ? 'Weniger anzeigen'
+              : `Weitere ${restCount} Interessen anzeigen`}
+          </button>
+        </div>
+      )}
+      <div className="border-t border-gray-100 px-4 py-2 text-xs leading-relaxed text-gray-500">
+        Stark ab 1,5, hier hebt sich deine interagierende Zielgruppe deutlich
+        vom Pinterest-Durchschnitt ab, das sind deine wertvollsten Themen.
+        Neutral zwischen 0,8 und 1,5, ungefähr durchschnittliches Interesse.
+        Schwach unter 0,8, hier ist das Interesse geringer als beim
+        Durchschnitt.
       </div>
     </section>
   )

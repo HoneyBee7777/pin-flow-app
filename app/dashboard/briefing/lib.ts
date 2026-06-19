@@ -214,7 +214,7 @@ export function buildBriefingItems(
             ` ${input.hiddenGemCount === 1 ? 'Hidden Gem erkannt' : 'Hidden Gems erkannt'} – Pins mit hoher CTR aber wenig Reichweite. Keywords und Boards optimieren.`
           ),
         ],
-        sectionLabel: 'Bestehende Pins optimieren',
+        sectionLabel: 'Pins recyceln',
         sectionId: BRIEFING_ANCHORS.pinHandlung,
         prio: 'hoch',
       })
@@ -227,7 +227,7 @@ export function buildBriefingItems(
             ` ${input.reichweiteOhneWirkungCount === 1 ? 'Pin' : 'Pins'} mit Reichweite ohne Wirkung – Pinterest spielt sie aus, aber niemand klickt durch. Cover und Hooks neu gestalten.`
           ),
         ],
-        sectionLabel: 'Bestehende Pins optimieren',
+        sectionLabel: 'Pins recyceln',
         sectionId: BRIEFING_ANCHORS.pinHandlung,
         prio: 'hoch',
       })
@@ -240,7 +240,7 @@ export function buildBriefingItems(
             ` ${input.aktivTopPerformerCount === 1 ? 'Pin läuft' : 'Pins laufen'} aktiv – Varianten produzieren, solange der Algorithmus pusht.`
           ),
         ],
-        sectionLabel: 'Bestehende Pins optimieren',
+        sectionLabel: 'Pins recyceln',
         sectionId: BRIEFING_ANCHORS.pinHandlung,
         prio: 'hoch',
       })
@@ -253,7 +253,7 @@ export function buildBriefingItems(
             ` ${input.eingeschlafenerGewinnerCount === 1 ? 'eingeschlafener Pin' : 'eingeschlafene Pins'} – Recycling-Kandidaten mit frischem Design.`
           ),
         ],
-        sectionLabel: 'Bestehende Pins optimieren',
+        sectionLabel: 'Pins recyceln',
         sectionId: BRIEFING_ANCHORS.pinHandlung,
         prio: 'mittel',
       })
@@ -372,7 +372,7 @@ export function buildNextStepsItems(
         ),
         txt(').'),
       ],
-      sectionLabel: 'Bestehende Pins optimieren',
+      sectionLabel: 'Pins recyceln',
       sectionId: BRIEFING_ANCHORS.pinHandlung,
       prio: 'hoch',
     })
@@ -385,7 +385,7 @@ export function buildNextStepsItems(
           ` ${input.hiddenGemCount === 1 ? 'Hidden Gem wartet' : 'Hidden Gems warten'} auf Keywords – kleine Änderung, große Wirkung.`
         ),
       ],
-      sectionLabel: 'Bestehende Pins optimieren',
+      sectionLabel: 'Pins recyceln',
       sectionId: BRIEFING_ANCHORS.pinHandlung,
       prio: 'hoch',
     })

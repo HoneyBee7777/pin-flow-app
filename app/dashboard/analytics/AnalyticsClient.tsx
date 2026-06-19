@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import {
   type ImportPinterestCsvResult,
@@ -9,7 +9,7 @@ import {
 } from './actions'
 import AudienceTab from './AudienceTab'
 import BoardsTab, { type BoardWithoutAnalytics } from './BoardsTab'
-import EingabeTab from './EingabeTab'
+import EingabeTab, { type ProfilEditRequest } from './EingabeTab'
 import PinsTab from './PinsTab'
 import ProfilTab from './ProfilTab'
 import type { AudienceSnapshot } from '@/lib/audience-types'
@@ -26,7 +26,6 @@ import {
   type ProfilAnalyticsWithGrowth,
   type UserPinBenchmark,
 } from './utils'
-import type { AccountNicheProfile } from '@/lib/account-niche-profile'
 
 // Snapshot eines CSV-Imports. Quelle ist entweder eine frische Session
 // (durch `onImportFinished` gesetzt) ODER die persistente csv_import_pending-
@@ -75,7 +74,6 @@ export default function AnalyticsClient({
   deletedPinAnalytics,
   thresholds,
   benchmark,
-  nicheProfile,
   boards,
   boardAnalytics,
   boardHistory,
@@ -91,7 +89,6 @@ export default function AnalyticsClient({
   deletedPinAnalytics: DeletedPinEntry[]
   thresholds: PinAnalyticsThresholds
   benchmark: UserPinBenchmark | null
-  nicheProfile: AccountNicheProfile
   boards: BoardOption[]
   boardAnalytics: BoardAnalyticsRow[]
   boardHistory: Record<string, BoardAnalyticsEntry[]>
@@ -127,6 +124,17 @@ export default function AnalyticsClient({
         el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
       }, 0)
     }
+  }
+
+  // Bearbeiten eines Profil-Eintrags: Eintrag merken (nonce erzwingt erneutes
+  // Vorbefüllen auch bei wiederholtem Klick) + zum Eingabe-Tab + zum Formular
+  // scrollen. Der Eingabe-Tab befüllt sich daraus selbst (editRequest-Prop).
+  const [profilEdit, setProfilEdit] = useState<ProfilEditRequest | null>(null)
+  const profilEditNonce = useRef(0)
+  function requestProfilEdit(entry: ProfilAnalyticsWithGrowth) {
+    profilEditNonce.current += 1
+    setProfilEdit({ entry, nonce: profilEditNonce.current })
+    switchTab('eingabe', 'analytics-profil-form')
   }
 
   function onImportFinished(result: ImportPinterestCsvResult) {
@@ -246,6 +254,8 @@ export default function AnalyticsClient({
       {tab === 'eingabe' && (
         <EingabeTab
           profilAnalytics={profilAnalytics}
+          pinAnalytics={pinAnalytics}
+          audienceSnapshots={audienceSnapshots}
           pins={pins}
           boards={boards}
           latestZeitraumBis={latestZeitraumBis}
@@ -266,11 +276,15 @@ export default function AnalyticsClient({
           onUnmatchedPinResolved={removeUnmatchedPin}
           unmatchedBoards={boardsPending}
           onUnmatchedBoardResolved={removeUnmatchedBoard}
+          editRequest={profilEdit}
         />
       )}
 
       {tab === 'profil' && (
-        <ProfilTab profilAnalytics={profilAnalytics} />
+        <ProfilTab
+          profilAnalytics={profilAnalytics}
+          onEditEntry={requestProfilEdit}
+        />
       )}
 
       {tab === 'pins' && (
@@ -294,8 +308,8 @@ export default function AnalyticsClient({
       {tab === 'audience' && (
         <AudienceTab
           snapshots={audienceSnapshots}
-          nicheProfile={nicheProfile}
           profilAnalytics={profilAnalytics}
+          onEditInteragierende={() => switchTab('profil')}
         />
       )}
     </div>

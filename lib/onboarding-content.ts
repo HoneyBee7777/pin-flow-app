@@ -353,7 +353,7 @@ export const ONBOARDING_STEPS: OnboardingStepDef[] = [
       {
         kind: 'ul',
         items: [
-          '5-15 Boards sind für die meisten Profile ideal',
+          'Etwa 5 bis 20 Boards sind für die meisten Profile ideal, lieber wenige scharfe als viele schwache',
           'Jedes Board sollte ein klar abgegrenztes Sub-Thema bedienen',
           'Boards unter 10-20 Pins wirken auf Pinterest schwach',
         ],

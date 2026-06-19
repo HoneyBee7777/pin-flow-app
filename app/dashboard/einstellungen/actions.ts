@@ -66,8 +66,6 @@ export async function saveEinstellungen(
       'schwellwert_schlafender_gewinner_alter',
       'Eingeschlafener Gewinner ab Alter',
     ],
-    ['schwellwert_board_wenig_aktiv', 'Wenig aktiv ab (Tage)'],
-    ['schwellwert_board_inaktiv', 'Inaktiv ab (Tage)'],
     ['cp_min_pins_gesamt', 'Mindest-Pin-Anzahl pro Inhalt'],
     [
       'cp_min_pins_ohne_aktuell',
@@ -94,10 +92,6 @@ export async function saveEinstellungen(
   const decFields = [
     ['schwellwert_ctr', 'Mindest-CTR (Fallback)'],
     ['schwellwert_ctr_boost_faktor', 'CTR-Boost-Faktor'],
-    ['schwellwert_board_top_er', 'Top Board ER Schwellwert'],
-    ['schwellwert_board_top_prozent', 'Top Board Profil-Prozent'],
-    ['schwellwert_board_schwach_er', 'Schwach ER Schwellwert'],
-    ['schwellwert_board_wachstum_trend', 'Wachstums-Trend Schwellwert'],
     ['cp_min_ctr_goldnugget', 'Mindest-CTR für Goldnugget-URLs'],
   ] as const
   for (const [name, label] of decFields) {

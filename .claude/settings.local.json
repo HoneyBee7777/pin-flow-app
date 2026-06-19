@@ -105,7 +105,19 @@
       "PowerShell(npx eslint app/dashboard/analytics/PinsTab.tsx 2>&1; if \\($?\\) { \"PinsTab.tsx: 0 Probleme\" }; npx eslint app/dashboard/analytics/AnalyticsClient.tsx 2>&1; if \\($?\\) { \"AnalyticsClient.tsx: 0 Probleme\" })",
       "PowerShell(npx eslint app/dashboard/analytics/utils.ts 2>&1; if \\($?\\) { \"utils.ts: 0 Probleme\" })",
       "PowerShell(npx tsc --noEmit 2>&1 | Select-Object -First 14; echo \"----ESLINT----\"; npx eslint app/dashboard/einstellungen/EinstellungenClient.tsx app/dashboard/analytics/utils.ts 2>&1 | Select-Object -First 25)",
-      "PowerShell(npx eslint \"app/dashboard/analytics/PinsTab.tsx\" 2>&1 | Out-String)"
+      "PowerShell(npx eslint \"app/dashboard/analytics/PinsTab.tsx\" 2>&1 | Out-String)",
+      "Bash(awk 'NR>=4103 && NR<=4107 {printf \"%d: %s\\\\n\", NR, $0}' app/dashboard/page.tsx)",
+      "Bash(awk 'NR>=4453 && NR<=4458 {printf \"%d: %s\\\\n\", NR, $0}' app/dashboard/page.tsx)",
+      "Bash(sed -i '4105,4456d' app/dashboard/page.tsx)",
+      "Bash(awk 'NR>=4101 && NR<=4108 {printf \"%d: %s\\\\n\", NR, $0}' app/dashboard/page.tsx)",
+      "Bash(awk 'NR==3934||NR==3935||NR==4042||NR==4043||NR==4044 {printf \"%d: %s\\\\n\", NR, $0}' app/dashboard/page.tsx)",
+      "Bash(sed -i '3935,4043d' app/dashboard/page.tsx)",
+      "Bash(awk 'NR>=3931 && NR<=3938 {printf \"%d: %s\\\\n\", NR, $0}' app/dashboard/page.tsx)",
+      "Bash(sed -i '584,696d' app/dashboard/einstellungen/EinstellungenClient.tsx)",
+      "Bash(awk 'NR>=580 && NR<=586 {printf \"%d: %s\\\\n\", NR, $0}' app/dashboard/einstellungen/EinstellungenClient.tsx)",
+      "PowerShell(npx eslint app/dashboard/analytics/EingabeTab.tsx app/dashboard/analytics/AnalyticsClient.tsx 2>&1)",
+      "PowerShell(npx eslint app/dashboard/strategie/AudienceWissen.tsx 2>&1)",
+      "PowerShell(npx eslint app/dashboard/page.tsx app/dashboard/BearbeitetRow.tsx lib/faq-content.ts app/dashboard/briefing/lib.ts app/dashboard/strategie/StrategieClient.tsx 2>&1 | Select-String -Pattern \"problems|error\" | Select-Object -Last 5; Write-Output \"EXIT: $LASTEXITCODE\",)"
     ]
   }
 }

@@ -11,31 +11,10 @@ import {
 import type { UserPinBenchmark } from '../analytics/utils'
 import type { AccountNicheProfile } from '@/lib/account-niche-profile'
 
-export type InitialSchwellwerte = {
-  beobachtung: number | null
-  minKlicksTopPerformer: number | null
-  minImpCtrUrteil: number | null
-  minImpReichweiteStark: number | null
-  minKlicksNutzerSignal: number | null
-  topPerformerMaxAlter: number | null
-  schlafenderGewinnerAlter: number | null
-  ctrBoostFaktor: number | null
-  fallbackCtr: number | null
-}
-
 export type InitialPersoenlicheLinks = {
   pinterestAccountUrl: string
   websiteUrl: string
   tailwindUrl: string
-}
-
-export type InitialBoardSchwellwerte = {
-  wenigAktiv: number | null
-  inaktiv: number | null
-  topEr: number | null
-  topProzent: number | null
-  schwachEr: number | null
-  wachstumTrend: number | null
 }
 
 export type InitialContentPipelineSchwellwerte = {
@@ -52,7 +31,6 @@ export default function EinstellungenClient({
   initialSignalwoerterDeaktiviert,
   initialPinterestAnalyticsUrl,
   initialPersoenlicheLinks,
-  initialBoardSchwellwerte,
   initialContentPipelineSchwellwerte,
 }: {
   initialProfilName: string
@@ -60,10 +38,8 @@ export default function EinstellungenClient({
   initialSignalwoerterDeaktiviert: string
   initialPinterestAnalyticsUrl: string
   initialPersoenlicheLinks: InitialPersoenlicheLinks
-  initialSchwellwerte: InitialSchwellwerte
   initialBenchmark: UserPinBenchmark | null
   initialNicheProfile: AccountNicheProfile
-  initialBoardSchwellwerte: InitialBoardSchwellwerte
   initialContentPipelineSchwellwerte: InitialContentPipelineSchwellwerte
 }) {
   return (
@@ -78,7 +54,6 @@ export default function EinstellungenClient({
       <StrategieSection />
 
       <ErweiterteEinstellungenTrenner />
-      <BoardSchwellwerteSection initial={initialBoardSchwellwerte} />
       <ContentPipelineSchwellwerteSection
         initial={initialContentPipelineSchwellwerte}
       />
@@ -590,150 +565,6 @@ function SchwellwertField({
         <p className="mt-0.5 text-xs italic text-gray-400">{orientation}</p>
       )}
     </div>
-  )
-}
-
-function BoardSchwellwerteSection({
-  initial,
-}: {
-  initial: InitialBoardSchwellwerte
-}) {
-  const [wenigAktiv, setWenigAktiv] = useState(
-    initial.wenigAktiv !== null ? String(initial.wenigAktiv) : '30'
-  )
-  const [inaktiv, setInaktiv] = useState(
-    initial.inaktiv !== null ? String(initial.inaktiv) : '60'
-  )
-  const [topEr, setTopEr] = useState(
-    initial.topEr !== null ? String(initial.topEr) : '3.0'
-  )
-  const [topProzent, setTopProzent] = useState(
-    initial.topProzent !== null ? String(initial.topProzent) : '30.0'
-  )
-  const [schwachEr, setSchwachEr] = useState(
-    initial.schwachEr !== null ? String(initial.schwachEr) : '1.5'
-  )
-  const [wachstumTrend, setWachstumTrend] = useState(
-    initial.wachstumTrend !== null ? String(initial.wachstumTrend) : '20.0'
-  )
-  const [isPending, startTransition] = useTransition()
-  const [feedback, setFeedback] = useState<{
-    saved?: boolean
-    error?: string
-  }>({})
-
-  function onSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const formData = new FormData(e.currentTarget)
-    setFeedback({})
-    startTransition(async () => {
-      const result = await saveEinstellungen(formData)
-      if (result.error) setFeedback({ error: result.error })
-      else setFeedback({ saved: true })
-    })
-  }
-
-  return (
-    <section
-      id="board-schwellwerte"
-      className="scroll-mt-24 rounded-lg border border-gray-200 bg-white p-6 shadow-sm"
-    >
-      <h2 className="text-lg font-semibold text-gray-900">
-        Board-Schwellwerte für Analytics
-      </h2>
-      <p className="mt-1 text-sm text-gray-600">
-        Diese Werte steuern den Board-Status (Aktivität) und Board-Score
-        (Performance) im Boards-Tab. Passe sie an die Größe deines Accounts an.
-      </p>
-
-      <form onSubmit={onSubmit} className="mt-4 space-y-4">
-        <div>
-          <p className="text-sm font-medium text-gray-900">
-            Status (Aktivität)
-          </p>
-          <div className="mt-2 space-y-4">
-            <SchwellwertField
-              label="Wenig aktiv ab (Tage)"
-              name="schwellwert_board_wenig_aktiv"
-              value={wenigAktiv}
-              onChange={setWenigAktiv}
-              step={1}
-              help={'Ab wie vielen Tagen ohne neuen Pin gilt ein Board als „wenig aktiv"?'}
-              orientation="Orientierung: Anfänger 30 Tage | Erfahren 14 Tage | Profi 7 Tage"
-            />
-            <SchwellwertField
-              label="Inaktiv ab (Tage)"
-              name="schwellwert_board_inaktiv"
-              value={inaktiv}
-              onChange={setInaktiv}
-              step={1}
-              help={'Ab wie vielen Tagen ohne neuen Pin gilt ein Board als „inaktiv"?'}
-              orientation="Orientierung: Anfänger 60 Tage | Erfahren 30 Tage | Profi 14 Tage"
-            />
-          </div>
-        </div>
-
-        <div>
-          <p className="text-sm font-medium text-gray-900">
-            Score (Performance)
-          </p>
-          <div className="mt-2 space-y-4">
-            <SchwellwertField
-              label="Top Board ER Schwellwert (%)"
-              name="schwellwert_board_top_er"
-              value={topEr}
-              onChange={setTopEr}
-              step={0.1}
-              help={'Mindest-Engagement Rate, ab der ein Board als „Top" gelten darf (zusätzlich muss es in den oberen X% des Profils liegen).'}
-              orientation="Orientierung: Anfänger 1,5% | Erfahren 3% | Profi 5% — Pinterest Durchschnitt: 0,3-0,8%"
-            />
-            <SchwellwertField
-              label="Top Board Profil-Prozent (%)"
-              name="schwellwert_board_top_prozent"
-              value={topProzent}
-              onChange={setTopProzent}
-              step={1}
-              help={'Anteil der besten Boards (nach ER), die als „Top" gelten dürfen.'}
-              orientation="Orientierung: obere 30% des eigenen Profils — verhindert dass alle Boards als Top markiert werden"
-            />
-            <SchwellwertField
-              label="Schwach ER Schwellwert (%)"
-              name="schwellwert_board_schwach_er"
-              value={schwachEr}
-              onChange={setSchwachEr}
-              step={0.1}
-              help={'Engagement Rate unter diesem Wert → Board gilt als „Schwach".'}
-              orientation="Orientierung: Anfänger 0,8% | Erfahren 1,5% | Profi 2%"
-            />
-            <SchwellwertField
-              label="Wachstums-Trend Schwellwert (%)"
-              name="schwellwert_board_wachstum_trend"
-              value={wachstumTrend}
-              onChange={setWachstumTrend}
-              step={1}
-              help={'Mindest-Verbesserung der ER zum Vormonat, damit ein Board als „Wachstum" gilt. Gleicher Wert als Verschlechterung → „Schwach" (Trend-Schwach).'}
-              orientation="Orientierung: 20% Verbesserung zum Vormonat gilt als Wachstums-Signal"
-            />
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <button
-            type="submit"
-            disabled={isPending}
-            className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
-          >
-            {isPending ? 'Speichert…' : 'Speichern'}
-          </button>
-          {feedback.saved && (
-            <span className="text-sm text-green-700">✓ Gespeichert</span>
-          )}
-          {feedback.error && (
-            <span className="text-sm text-red-700">{feedback.error}</span>
-          )}
-        </div>
-      </form>
-    </section>
   )
 }
 

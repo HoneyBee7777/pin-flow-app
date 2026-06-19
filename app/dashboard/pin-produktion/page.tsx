@@ -253,7 +253,7 @@ export default async function PinProduktionPage() {
               <span className="inline group-open:hidden">▸</span>
               <span className="hidden group-open:inline">▾</span>
             </span>
-            <span className="flex-1">So arbeitest du mit dieser Seite</span>
+            <span className="flex-1">So funktioniert diese Seite</span>
           </summary>
           <div className="space-y-4 border-t border-gray-100 px-5 py-5 text-sm leading-relaxed text-gray-700">
             <div>

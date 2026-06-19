@@ -4,8 +4,8 @@ import { useMemo, useTransition } from 'react'
 import { deleteProfilAnalytics } from './actions'
 import {
   calcCtr,
-  calcEngagement,
   calcGrowth,
+  calcSaveRate,
   diffDays,
   effectiveZeitraum,
   formatDateDe,
@@ -18,8 +18,11 @@ import {
 
 export default function ProfilTab({
   profilAnalytics,
+  onEditEntry,
 }: {
   profilAnalytics: ProfilAnalyticsWithGrowth[]
+  // Wechselt zum Eingabe-Tab und befüllt das Profil-Formular mit diesem Eintrag.
+  onEditEntry?: (entry: ProfilAnalyticsWithGrowth) => void
 }) {
   const [isPending, startTransition] = useTransition()
 
@@ -43,7 +46,7 @@ export default function ProfilTab({
       klicks: kl,
       saves: sv,
       ctr: calcCtr(kl, imp),
-      engagement: calcEngagement(kl, sv, imp),
+      saveRate: calcSaveRate(sv, imp),
       anzahlZeitraeume: profilAnalytics.length,
       startDatum,
     }
@@ -59,9 +62,16 @@ export default function ProfilTab({
 
   return (
     <div className="space-y-6">
-      <p style={{ color: '#111827', fontWeight: '600', fontSize: '14px' }}>
-        Die Gesamt-Performance zeigt alle deine Pins zusammen, so wie
-        Pinterest sie ausweist.
+      <p className="text-sm text-gray-700">
+        Hier siehst du die Gesamt-Performance aller deiner Pins zusammen,
+        aufsummiert über alle importierten Zeiträume.
+        <br />
+        Impressionen, ausgehende Klicks und Saves kommen direkt aus deinen
+        Pinterest-Importen, die Klickrate und die Save-Rate berechnet Pin-Flow
+        daraus.
+        <br />
+        Wie sich diese Werte über die Zeit entwickeln, siehst du in der Tabelle
+        darunter, mit dem Vergleich zum jeweils vorigen Zeitraum.
       </p>
 
       <KpiSection
@@ -72,7 +82,6 @@ export default function ProfilTab({
             ? `Alle Zeiträume seit ${formatDateDe(gesamtAggregate.startDatum)} (${gesamtAggregate.anzahlZeitraeume} Eintrag${gesamtAggregate.anzahlZeitraeume === 1 ? '' : 'e'})`
             : null
         }
-        zeitraumLabel=""
         kpis={
           gesamtAggregate
             ? [
@@ -93,8 +102,8 @@ export default function ProfilTab({
                 },
                 { label: 'Ø CTR', value: formatPercent(gesamtAggregate.ctr) },
                 {
-                  label: 'Ø Engagement Rate',
-                  value: formatPercent(gesamtAggregate.engagement),
+                  label: 'Ø Save-Rate',
+                  value: formatPercent(gesamtAggregate.saveRate),
                 },
               ]
             : null
@@ -105,6 +114,7 @@ export default function ProfilTab({
       <HistoryTable
         rows={profilAnalytics}
         onDelete={onDelete}
+        onEditEntry={onEditEntry}
         deleteDisabled={isPending}
       />
     </div>
@@ -124,16 +134,12 @@ type Kpi = {
 function KpiSection({
   title,
   zeitraum,
-  zeitraumLabel,
-  zeitraumExtra,
   kpis,
   emptyText,
   compact = false,
 }: {
   title: string
   zeitraum: string | null
-  zeitraumLabel: string
-  zeitraumExtra?: string | null
   kpis: Kpi[] | null
   emptyText: string
   compact?: boolean
@@ -142,50 +148,41 @@ function KpiSection({
   const gridMt = compact ? 'mt-2' : 'mt-4'
   const labelStyle = compact ? { fontSize: '10px' } : undefined
   const valueStyle = compact ? { fontSize: '20px' } : undefined
-  const footerMt = compact ? 'mt-2' : 'mt-4'
   return (
     <section
       className={`rounded-lg border border-gray-200 bg-white shadow-sm ${sectionPad}`}
     >
-      <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
+      <div className="flex flex-wrap items-baseline gap-x-2">
+        <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
+        {zeitraum && (
+          <span className="text-xs font-normal text-gray-500">{zeitraum}</span>
+        )}
+      </div>
       {kpis ? (
-        <>
-          <div className={`${gridMt} grid grid-cols-2 gap-4 md:grid-cols-5`}>
-            {kpis.map((k) => (
-              <div key={k.label}>
-                <p
-                  className="text-xs font-medium uppercase tracking-wide text-gray-500"
-                  style={labelStyle}
-                >
-                  {k.label}
-                </p>
-                <div className="mt-1 flex flex-wrap items-baseline gap-2">
-                  <p
-                    className="text-xl font-semibold text-gray-900"
-                    style={valueStyle}
-                    title={k.title}
-                  >
-                    {k.value}
-                  </p>
-                  {k.growth !== undefined && k.growth !== null && (
-                    <GrowthInline value={k.growth} />
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-          {zeitraum && (
-            <div className={`${footerMt} space-y-0.5`}>
-              <p className="text-xs text-gray-500">
-                {zeitraumLabel ? `${zeitraumLabel}: ` : ''}
-                {zeitraum}
+        <div className={`${gridMt} grid grid-cols-2 gap-4 md:grid-cols-5`}>
+          {kpis.map((k) => (
+            <div key={k.label}>
+              <p
+                className="text-xs font-medium uppercase tracking-wide text-gray-500"
+                style={labelStyle}
+              >
+                {k.label}
               </p>
-              {zeitraumExtra && (
-                <p className="text-xs text-gray-500">{zeitraumExtra}</p>
-              )}
+              <div className="mt-1 flex flex-wrap items-baseline gap-2">
+                <p
+                  className="text-xl font-semibold text-gray-900"
+                  style={valueStyle}
+                  title={k.title}
+                >
+                  {k.value}
+                </p>
+                {k.growth !== undefined && k.growth !== null && (
+                  <GrowthInline value={k.growth} />
+                )}
+              </div>
             </div>
-          )}
-        </>
+          ))}
+        </div>
       ) : (
         <p className="mt-3 text-sm text-gray-500">{emptyText}</p>
       )}
@@ -233,10 +230,12 @@ function GrowthInline({ value }: { value: number }) {
 function HistoryTable({
   rows,
   onDelete,
+  onEditEntry,
   deleteDisabled,
 }: {
   rows: ProfilAnalyticsWithGrowth[]
   onDelete: (id: string) => void
+  onEditEntry?: (entry: ProfilAnalyticsWithGrowth) => void
   deleteDisabled: boolean
 }) {
   if (rows.length === 0) {
@@ -253,13 +252,15 @@ function HistoryTable({
       <table className="min-w-full divide-y divide-gray-200">
         <thead className="bg-gray-50">
           <tr>
-            <Th>Zeitraum</Th>
-            <Th>Tage</Th>
+            <Th className="px-2">Zeitraum</Th>
+            <Th className="px-2">Tage</Th>
             <Th>Impressionen</Th>
             <Th>Ausg. Klicks</Th>
             <Th>Saves</Th>
             <Th>CTR</Th>
-            <Th>Engagement</Th>
+            <Th>Save-Rate</Th>
+            <Th>Gesamte Zielgruppe</Th>
+            <Th>Interagierende Zielgruppe</Th>
             <Th align="right">Aktion</Th>
           </tr>
         </thead>
@@ -300,12 +301,22 @@ function HistoryTable({
               perDay && prevPerDay
                 ? calcGrowth(perDay.saves, prevPerDay.saves)
                 : null
+            // Save-Rate + Delta auf der Roh-Rate (analog CTR), inline berechnet
+            // — es gibt kein save_rate_growth in withGrowth (shared util bleibt).
+            const saveRate = calcSaveRate(row.saves, row.impressionen)
+            const prevSaveRate = prev
+              ? calcSaveRate(prev.saves, prev.impressionen)
+              : null
+            const saveRateGrowth =
+              saveRate !== null && prevSaveRate !== null
+                ? calcGrowth(saveRate, prevSaveRate)
+                : null
             return (
               <tr key={row.id} className="align-top hover:bg-gray-50">
-                <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">
+                <td className="whitespace-nowrap px-2 py-3 text-sm font-medium text-gray-900">
                   {formatZeitraumKurz(eff.von, eff.bis)}
                 </td>
-                <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700">
+                <td className="whitespace-nowrap px-2 py-3 text-sm text-gray-700">
                   {tage} T
                 </td>
                 <ValueCell
@@ -331,18 +342,63 @@ function HistoryTable({
                   growth={row.ctr_growth}
                 />
                 <ValueCell
-                  value={formatPercent(row.engagement)}
-                  growth={row.engagement_growth}
+                  value={formatPercent(saveRate)}
+                  growth={saveRateGrowth}
+                />
+                <ValueCell
+                  value={
+                    row.gesamte_zielgruppe > 0
+                      ? formatZahl(row.gesamte_zielgruppe)
+                      : '—'
+                  }
+                  title={
+                    row.gesamte_zielgruppe > 0
+                      ? formatNumber(row.gesamte_zielgruppe)
+                      : undefined
+                  }
+                  growth={
+                    row.gesamte_zielgruppe > 0 ? row.zielgruppe_growth : null
+                  }
+                />
+                <ValueCell
+                  value={
+                    row.interagierende_zielgruppe > 0
+                      ? formatZahl(row.interagierende_zielgruppe)
+                      : '—'
+                  }
+                  title={
+                    row.interagierende_zielgruppe > 0
+                      ? formatNumber(row.interagierende_zielgruppe)
+                      : undefined
+                  }
+                  growth={
+                    row.interagierende_zielgruppe > 0
+                      ? row.interagierend_growth
+                      : null
+                  }
                 />
                 <td className="whitespace-nowrap px-4 py-3 text-right text-sm">
-                  <button
-                    type="button"
-                    onClick={() => onDelete(row.id)}
-                    disabled={deleteDisabled}
-                    className="text-sm font-medium text-red-600 hover:text-red-700 disabled:opacity-50"
-                  >
-                    Löschen
-                  </button>
+                  <div className="flex items-center justify-end gap-3">
+                    {onEditEntry && (
+                      <button
+                        type="button"
+                        onClick={() => onEditEntry(row)}
+                        className="text-gray-500 hover:text-gray-900"
+                        aria-label="Bearbeiten"
+                        title="Bearbeiten"
+                      >
+                        <PencilIcon />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => onDelete(row.id)}
+                      disabled={deleteDisabled}
+                      className="text-sm font-medium text-red-600 hover:text-red-700 disabled:opacity-50"
+                    >
+                      Löschen
+                    </button>
+                  </div>
                 </td>
               </tr>
             )
@@ -353,16 +409,40 @@ function HistoryTable({
   )
 }
 
+// Identisch zum Bearbeiten-Icon der Pins-Datenbank
+// (PinProduktionClient.tsx) — bewusst dasselbe SVG für App-Konsistenz.
+function PencilIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 20 20"
+      fill="currentColor"
+      className="h-4 w-4"
+      aria-hidden
+    >
+      <path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" />
+      <path
+        fillRule="evenodd"
+        d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
+        clipRule="evenodd"
+      />
+    </svg>
+  )
+}
+
 function Th({
   children,
   align = 'left',
+  className = 'px-4',
 }: {
   children: React.ReactNode
   align?: 'left' | 'right'
+  // Horizontal-Padding/Breite je Spalte überschreibbar (Default px-4).
+  className?: string
 }) {
   return (
     <th
-      className={`px-4 py-3 text-${align} text-xs font-semibold uppercase tracking-wide text-gray-500`}
+      className={`${className} py-3 text-${align} text-xs font-semibold uppercase tracking-wide text-gray-500`}
     >
       {children}
     </th>

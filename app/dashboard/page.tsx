@@ -8,9 +8,14 @@ import {
 } from '@/lib/onboarding-state'
 import OnboardingBanner from '@/components/OnboardingBanner'
 import InfoTooltip, { LabelWithTooltip } from '@/components/InfoTooltip'
+import { HinweisBox } from '@/components/HinweisBox'
 import {
   boardThresholdsFromSettings,
-  calcBoardEngagementRate,
+  boardAccountHinweise,
+  boardHebelFuerBoard,
+  boardWirkung,
+  boardWirkungMediane,
+  BOARD_WIRKUNG_DEFAULTS,
   calcCtr,
   calcUpdateStatusMonat,
   diagnoseBoard,
@@ -19,18 +24,15 @@ import {
   formatGrowth,
   formatPercent,
   formatZahl,
-  boardScoreTooltip,
-  scoreBoardHybrid,
   thresholdsFromSettings,
-  topPercentCutoff,
-  type BoardScore,
-  type BoardThresholds,
+  type BoardHebel,
+  type BoardHebelTyp,
+  type BoardWirkung,
   type PinAnalyticsThresholds,
   todayIso,
   withGrowth,
   type BoardStatus,
   type EinstellungenSchwellwerte,
-  type EinstellungenSchwellwerteBoard,
   type PinDiagnose,
   type PinOption,
   type ProfilAnalytics,
@@ -157,32 +159,16 @@ type ActionablePin = {
   // Felder bleiben null bis zum Enrich-Pass; siehe Block „Board-Verknüpfung".
   boardId: string | null
   boardName: string | null
-  // Status aus der Board-Gesundheit-Klassifizierung (assignCategory). Single
-  // Source of Truth für Farbe + Warnhinweis im Pin-Handlungsbedarf.
-  // null = Board ohne Analytics (eigener Anzeigefall).
-  boardScoreLabel: BoardScoreLabel | null
-  boardHasAnalytics: boolean
+  // Aktivitäts-Status des Boards (diagnoseBoard: aktiv/wenig_aktiv/inaktiv).
+  // null = kein Board zugeordnet. Quelle fürs Pin-Board-Badge + Coaching.
+  boardAktivitaet: BoardStatus | null
 }
-
-type BoardScoreLabel =
-  | 'Top'
-  | 'Wachstum'
-  | 'Solide'
-  | 'Schwach'
-  | 'Schlafend'
-  | 'Inaktiv'
 
 type BoardDashHealth = {
   id: string
   name: string
   pinterestUrl: string | null
   status: BoardStatus
-  score: BoardScore
-  engagementRate: number | null
-  engagementRatePrev: number | null
-  engagementRateChangePct: number | null
-  trendPct: number | null
-  dataInsufficient: boolean
   impressionen: number
   klicks: number
   hasAnalytics: boolean
@@ -196,143 +182,59 @@ type BoardDashHealth = {
   lastPinId: string | null
 }
 
-// Board-Gesundheit klassifiziert jetzt nach Pin-Aktivität (Datum des
-// letzten veröffentlichten Pins), nicht mehr nach ER-Score. ER bleibt als
-// Anzeigewert, ist aber für die Bucket-Zuweisung irrelevant.
-type BoardCat = 'inaktiv' | 'wenig_aktiv' | 'ohne_aktivitaet' | 'aktiv'
-
-type BoardMetricKind = 'er' | 'erChange' | 'impressionen' | 'klicks'
-
-type BoardCatConfig = {
-  key: BoardCat
-  group: 'A' | 'B' // A = Brauchen Aufmerksamkeit, B = Performen gut
-  emoji: string
-  label: string
-  subtitle: string
-  tooltip: string
-  iconBg: string
-  counterBg: string
-  hint: string
-  nextStep: string
-  hintTone: 'orange' | 'blue' | 'green' | 'gray'
-  primary: { label: string; href: (b: BoardDashHealth) => string }
-  primaryButtonClass: string
-  metrics: BoardMetricKind[]
-  emptyMessage: string
-  emptyTooltip?: string
-  prominentLastPin?: boolean
+// ===========================================================
+// Board-Coaching: Anzeige-Texte je Hebel-Typ (freigegeben). Die Logik
+// (welche Hebel ein Board hat) liegt in utils.ts; hier nur die Formulierungen.
+// ===========================================================
+const BOARD_HEBEL_TEXT: Record<BoardHebelTyp, string> = {
+  eingeschlafen:
+    'Dieses Board lief schon mal richtig gut, schläft aber gerade. Weck es mit 3 bis 5 frischen Pins pro Woche wieder auf, dann kommt die Sichtbarkeit zurück.',
+  beschreibung_fehlt:
+    'Diesem Board fehlt noch die Beschreibung. Schreib 200 bis 300 Zeichen, die dein Thema erklären, und pack dein Haupt-Keyword gleich in den ersten Satz.',
+  name_ohne_keyword:
+    'Im Namen dieses Boards steckt noch keines deiner Keywords. Stell dein wichtigstes Keyword nach vorn, damit Pinterest sofort versteht, worum es geht.',
+  beschreibung_zu_duenn:
+    'Die Beschreibung ist noch sehr knapp. Bau sie auf 200 bis 300 Zeichen aus, gern mit deinem Haupt-Keyword im ersten Satz, aber bitte nicht mit Keywords vollstopfen.',
+  beschreibung_ohne_keyword:
+    'Deine Beschreibung steht, aber ohne eines deiner Keywords. Bring dein Haupt-Keyword gleich in den ersten Satz, dann ordnet Pinterest das Board besser ein.',
+  wirkung_schwach:
+    'Dieses Board bekommt Impressionen, aber die Klicks bleiben aus. Schau dir die Pins hier an, oft fehlt der Anreiz zum Klicken im Titel oder Bild.',
+  name_zu_lang:
+    'Der Board-Name ist etwas lang. Kürz ihn auf maximal 50 Zeichen und stell das Wichtigste nach vorn, so bleibt er klar und gut auffindbar.',
 }
 
-const BOARD_CATEGORIES: BoardCatConfig[] = [
-  {
-    key: 'inaktiv',
-    group: 'A',
-    emoji: '⏸️',
-    label: 'Inaktive Boards (über 30 Tage)',
-    subtitle:
-      'Boards ohne neue Pins seit über 30 Tagen: Pinterest spielt inaktive Boards immer seltener aus.',
-    tooltip:
-      'Boards, auf denen seit mehr als 30 Tagen kein Pin veröffentlicht wurde. Frequenz wieder hochfahren: Pinterest belohnt regelmäßige Aktivität.',
-    iconBg: 'bg-orange-100 text-orange-700',
-    counterBg: 'bg-orange-100 text-orange-700',
-    hint: 'Inaktive Boards verlieren Reichweite. Pinterest spielt sie immer seltener aus, je länger keine neuen Pins kommen.',
-    nextStep:
-      'Mit 2-3 neuen Pins pro Woche reaktivieren: das hält die Sichtbarkeit aufrecht.',
-    hintTone: 'orange',
-    primary: {
-      label: 'Pins planen',
-      href: (b) => `/dashboard/pin-produktion?new=1&board=${b.id}`,
-    },
-    primaryButtonClass: 'bg-red-600 text-white hover:bg-red-700',
-    metrics: ['er', 'impressionen', 'klicks'],
-    emptyMessage:
-      'Aktuell keine Boards über 30 Tage ohne neuen Pin, sehr gut!',
-    prominentLastPin: true,
-  },
-  {
-    key: 'wenig_aktiv',
-    group: 'A',
-    emoji: '⚠️',
-    label: 'Wenig aktive Boards (14 bis 30 Tage)',
-    subtitle:
-      'Boards ohne neue Pins ab 14 Tagen: Frequenz wieder hochfahren bevor Pinterest die Sichtbarkeit reduziert.',
-    tooltip:
-      'Boards, auf denen seit 14 bis 30 Tagen kein Pin veröffentlicht wurde. Frühe Warnstufe: jetzt ist der richtige Zeitpunkt zum Reaktivieren.',
-    iconBg: 'bg-amber-100 text-amber-700',
-    counterBg: 'bg-amber-100 text-amber-700',
-    hint: 'Wenn die Aktivität jetzt zurückkommt, lässt sich der Sichtbarkeitsverlust noch leicht verhindern.',
-    nextStep: '2-3 neue Pins in den nächsten 7 Tagen einplanen.',
-    hintTone: 'orange',
-    primary: {
-      label: 'Pins planen',
-      href: (b) => `/dashboard/pin-produktion?new=1&board=${b.id}`,
-    },
-    primaryButtonClass: 'bg-red-600 text-white hover:bg-red-700',
-    metrics: ['er', 'impressionen', 'klicks'],
-    emptyMessage:
-      'Aktuell keine wenig aktiven Boards: alle bekommen entweder regelmäßig Pins oder sind länger inaktiv.',
-    prominentLastPin: true,
-  },
-  {
-    key: 'ohne_aktivitaet',
-    group: 'A',
-    emoji: '📥',
-    label: 'Boards mit vorbereiteten Pins ohne Veröffentlichung',
-    subtitle:
-      'Pins liegen in der Datenbank, aber noch keiner ist veröffentlicht. Auf Pinterest sichtbar machen.',
-    tooltip:
-      'Boards mit Entwürfen oder geplanten Pins, aber noch keinem veröffentlichten Pin. Solange nichts live ist, sieht Pinterest dieses Board nicht.',
-    iconBg: 'bg-orange-50 text-orange-700',
-    counterBg: 'bg-orange-50 text-orange-700',
-    hint: 'Vorbereitete Pins helfen erst, wenn sie veröffentlicht sind. Pinterest beurteilt nur was live ist.',
-    nextStep: 'Vorhandene Entwürfe oder geplante Pins veröffentlichen.',
-    hintTone: 'orange',
-    primary: {
-      label: 'Pins veröffentlichen',
-      href: (b) => `/dashboard/pin-produktion?board=${b.id}`,
-    },
-    primaryButtonClass: 'bg-red-600 text-white hover:bg-red-700',
-    metrics: ['er', 'impressionen', 'klicks'],
-    emptyMessage:
-      'Keine Boards mit vorbereiteten aber unveröffentlichten Pins.',
-  },
-  {
-    key: 'aktiv',
-    group: 'B',
-    emoji: '✅',
-    label: 'Aktive Boards',
-    subtitle:
-      'Boards mit neuem Pin in den letzten 14 Tagen: Pinterest sieht regelmäßige Aktivität.',
-    tooltip:
-      'Boards mit veröffentlichtem Pin innerhalb der letzten 14 Tage. Genau das Aktivitäts-Niveau, das Pinterest belohnt.',
-    iconBg: 'bg-emerald-100 text-emerald-700',
-    counterBg: 'bg-emerald-100 text-emerald-700',
-    hint: 'Pinterest belohnt Konstanz: Wer regelmäßig pinnt, wird bevorzugt ausgespielt. Dranbleiben.',
-    nextStep:
-      'Frequenz halten: mindestens 2-3 neue Pins pro Woche pro Board.',
-    hintTone: 'green',
-    primary: {
-      label: 'Pins planen',
-      href: (b) => `/dashboard/pin-produktion?new=1&board=${b.id}`,
-    },
-    primaryButtonClass: 'bg-red-600 text-white hover:bg-red-700',
-    metrics: ['er', 'impressionen', 'klicks'],
-    emptyMessage:
-      'Aktuell keine aktiv bepinnten Boards. Pinterest belohnt Frequenz. Mit 2-3 neuen Pins pro Woche pro Board kommen die Boards in Bewegung.',
-  },
-]
+// Verständlicher Satz je Hebel-Typ für die Liste der Bündelkarte (Board mit
+// >= 3 offenen Hebeln). Bewusst ganze Sätze statt Kürzel.
+const BOARD_HEBEL_BUENDEL_PUNKT: Record<BoardHebelTyp, string> = {
+  eingeschlafen: 'Das Board ist eingeschlafen, pinne wieder regelmäßig.',
+  beschreibung_fehlt: 'Es fehlt die Beschreibung.',
+  beschreibung_zu_duenn: 'Die Beschreibung ist noch zu knapp.',
+  name_ohne_keyword: 'Im Namen steckt keines deiner Keywords.',
+  beschreibung_ohne_keyword: 'In der Beschreibung fehlt eines deiner Keywords.',
+  name_zu_lang: 'Der Name ist länger als 50 Zeichen.',
+  wirkung_schwach: 'Das Board bekommt Reichweite, aber kaum Klicks.',
+}
 
-// Text-Akzentfarbe pro Kategorie für die Board-Zeilen-Metadaten
-// (📊 Warum, 📌 Pins). Coaching-Boxen selbst verwenden einheitlich
-// `coaching-box`; dies ist nur die Text-Tönung in den Listenzeilen.
-const BOARD_HINT_TONE: Record<
-  BoardCatConfig['hintTone'],
-  { text: string }
-> = {
-  orange: { text: 'text-orange-800' },
-  blue: { text: 'text-blue-800' },
-  green: { text: 'text-green-800' },
-  gray: { text: 'text-gray-700' },
+// Eine der bis zu drei priorisierten Handlungskarten (Einzel-Hebel oder Bündel).
+// Einzel: `text` ist der Coaching-Satz. Bündel: `buendelPunkte` ist die Liste
+// der offenen Punkte (absteigend nach Dringlichkeit), `text` bleibt leer.
+type CoachingKarte = {
+  kind: 'einzel' | 'buendel'
+  boardId: string
+  boardName: string
+  pinterestUrl: string | null
+  text: string
+  buendelPunkte?: string[]
+  prepared: { entwurf: number; geplant: number }
+}
+
+// Ein Board im einklappbaren Bereich: restliche Hebel-Texte + vorbereitete Pins.
+type CoachingRestBoard = {
+  boardId: string
+  boardName: string
+  pinterestUrl: string | null
+  hebelTexte: string[]
+  prepared: { entwurf: number; geplant: number }
 }
 
 
@@ -523,9 +425,6 @@ export default async function DashboardPage() {
          schwellwert_top_performer_max_alter,
          schwellwert_schlafender_gewinner_alter,
          schwellwert_ctr_boost_faktor,
-         schwellwert_board_wenig_aktiv, schwellwert_board_inaktiv,
-         schwellwert_board_top_er, schwellwert_board_top_prozent,
-         schwellwert_board_schwach_er, schwellwert_board_wachstum_trend,
          cp_min_pins_gesamt, cp_min_pins_ohne_aktuell, cp_tage_ohne_pin,
          cp_min_ctr_goldnugget, cp_max_pins_goldnugget,
          strategie_business_modell, strategie_hauptnische,
@@ -585,7 +484,7 @@ export default async function DashboardPage() {
     }),
     supabase
       .from('boards')
-      .select('id, name, pinterest_url, created_at, kategorie'),
+      .select('id, name, beschreibung, pinterest_url, created_at, kategorie'),
     supabase
       .from('board_analytics')
       .select(
@@ -790,8 +689,7 @@ export default async function DashboardPage() {
       boardId: pin?.board_id ?? null,
       // Board-Felder werden nach boardsHealth-Berechnung gefüllt.
       boardName: null,
-      boardScoreLabel: null,
-      boardHasAnalytics: false,
+      boardAktivitaet: null,
     })
   }
   const hasAnyAnalytics = rawPinAnalytics.length > 0
@@ -913,6 +811,7 @@ export default async function DashboardPage() {
   type BoardRow = {
     id: string
     name: string
+    beschreibung: string | null
     pinterest_url: string | null
     created_at: string
   }
@@ -1221,9 +1120,7 @@ export default async function DashboardPage() {
   }
   const boardAnalyticsRaw = (boardAnalyticsRes.data ??
     []) as BoardAnalyticsRaw[]
-  const boardThresholds = boardThresholdsFromSettings(
-    settingsRes.data as Partial<EinstellungenSchwellwerteBoard> | null
-  )
+  const boardThresholds = boardThresholdsFromSettings()
   // Verknüpfung Pins ↔ Boards für „letzter Pin pro Board":
   //   - Quelle: pins.board_id (direkter Foreign-Key auf boards.id)
   //   - Filter: nur status='veroeffentlicht' (siehe pinsPublishedCountRes-Query oben).
@@ -1283,38 +1180,11 @@ export default async function DashboardPage() {
     }
   }
 
-  // ER pro Board (latest entry); Profil-ER = Mittelwert über Boards mit Analytics.
-  // Board-ER = engagement ÷ impressionen × 100 — gleiche Definition wie
-  // Analytics-Seite (engagement ist der vom Nutzer eingetragene Pinterest-
-  // Wert „Engagement" / „Interaktionen", NICHT die Summe der Einzelmetriken).
-  const boardErRaw = boardsRows.map((b) => {
-    const ba = latestBaByBoard.get(b.id) ?? null
-    const impressionen = ba?.impressionen ?? 0
-    const interaktionen = ba?.engagement ?? 0
-    const er = ba
-      ? calcBoardEngagementRate(interaktionen, impressionen)
-      : null
-    return { board: b, ba, er, interaktionen, impressionen }
-  })
-  // Profil-ER = Durchschnitt ALLER Boards mit Analytics-Eintrag UND berechenbarer ER
-  // (impressionen > 0 — sonst wäre ER null und nicht definiert).
-  const erInputs = boardErRaw.filter((x) => x.ba !== null && x.er !== null)
-  const validErs = erInputs.map((x) => x.er as number)
-  const profilEr =
-    validErs.length > 0
-      ? validErs.reduce((s, x) => s + x, 0) / validErs.length
-      : null
-
-  // Cutoff für „Top X %" über alle Boards mit gültiger ER
-  const allErsForCutoff = boardErRaw
-    .map((x) => x.er)
-    .filter((er): er is number => er !== null)
-  const topCutoffEr = topPercentCutoff(
-    allErsForCutoff,
-    boardThresholds.topProzent
-  )
-
-  const boardsHealth: BoardDashHealth[] = boardErRaw.map(({ board, ba, er }) => {
+  // Board-Gesundheit pro Board. Aktivitäts-Status via diagnoseBoard (30/90,
+  // unabhängig von Analytics). Die alte ER-/Score-Bewertung ist entfallen
+  // (Pin-Badge nutzt jetzt die Aktivität); übrig bleiben Aktivität + Roh-Kennzahlen.
+  const boardsHealth: BoardDashHealth[] = boardsRows.map((board) => {
+    const ba = latestBaByBoard.get(board.id) ?? null
     const lastPinEntry = lastPinByBoard.get(board.id) ?? null
     const lastPin = lastPinEntry?.date ?? null
     const lastPinAlter = lastPin ? Math.max(0, diffDays(lastPin, today)) : null
@@ -1322,28 +1192,11 @@ export default async function DashboardPage() {
       lastPinAlterTage: lastPinAlter,
       thresholds: boardThresholds,
     })
-    const prevBa = prevBaByBoard.get(board.id) ?? null
-    const erPrev = prevBa
-      ? calcBoardEngagementRate(prevBa.engagement, prevBa.impressionen)
-      : null
-    const { score, dataInsufficient, trendPct } = scoreBoardHybrid({
-      er,
-      erVormonat: erPrev,
-      topCutoffEr,
-      thresholds: boardThresholds,
-    })
-    const erChangePct = trendPct
     return {
       id: board.id,
       name: board.name,
       pinterestUrl: board.pinterest_url ?? null,
       status,
-      score,
-      engagementRate: er,
-      engagementRatePrev: erPrev,
-      engagementRateChangePct: erChangePct,
-      trendPct,
-      dataInsufficient,
       impressionen: ba?.impressionen ?? 0,
       klicks: ba?.ausgehende_klicks ?? 0,
       hasAnalytics: !!ba,
@@ -1356,12 +1209,10 @@ export default async function DashboardPage() {
   })
 
   // Board-Verknüpfung pro Pin — anreichern, sobald boardsHealth existiert.
-  // Klassifizierung 1:1 aus assignCategory (gleiche Logik wie Board-Gesundheit-
-  // Sektion):
-  //   - Inaktiv + (top|wachstum) → 'Schlafend'
-  //   - Inaktiv + solide          → 'Inaktiv'
-  //   - Inaktiv + schwach         → 'Schwach' (Performance dominiert)
-  //   - Sonst                     → score-Label
+  // Das Pin-Board-Badge zeigt jetzt den reinen Aktivitäts-Status (diagnoseBoard:
+  // aktiv/wenig_aktiv/inaktiv), nicht mehr die alte ER-Misch-Logik. Aktivität ist
+  // unabhängig von Analytics — auch Boards ohne Analytics-Eintrag haben einen
+  // Status, da boardsHealth jedes angelegte Board enthält.
   const boardHealthById = new Map<string, BoardDashHealth>()
   for (const b of boardsHealth) boardHealthById.set(b.id, b)
   for (const p of actionable) {
@@ -1369,85 +1220,17 @@ export default async function DashboardPage() {
     const b = boardHealthById.get(p.boardId)
     if (!b) continue
     p.boardName = b.name
-    p.boardHasAnalytics = b.hasAnalytics
-    if (!b.hasAnalytics) {
-      p.boardScoreLabel = null
-      continue
-    }
-    if (b.status === 'inaktiv') {
-      if (b.score === 'top' || b.score === 'wachstum') {
-        p.boardScoreLabel = 'Schlafend'
-        continue
-      }
-      if (b.score === 'solide') {
-        p.boardScoreLabel = 'Inaktiv'
-        continue
-      }
-      // schwach + inaktiv → fällt durch zur Score-Zuordnung unten
-    }
-    if (b.score === 'top') p.boardScoreLabel = 'Top'
-    else if (b.score === 'wachstum') p.boardScoreLabel = 'Wachstum'
-    else if (b.score === 'solide') p.boardScoreLabel = 'Solide'
-    else p.boardScoreLabel = 'Schwach'
+    p.boardAktivitaet = b.status
   }
 
-  type BoardAssignment = BoardCat | 'leeres_board'
-  // Klassifizierung rein nach Pin-Aktivität (Datum des letzten
-  // veröffentlichten Pins). Bewusst entkoppelt von ER/Score: Boards
-  // ohne board_analytics-Eintrag erscheinen genauso in den Buckets,
-  // nur ER zeigt '—'.
-  //   - 0 Pins in der DB                        → leeres_board (Footnote)
-  //   - Pins, aber kein veröff.                 → ohne_aktivitaet
-  //   - Tage > inaktiv                          → inaktiv
-  //   - wenigAktiv ≤ Tage ≤ inaktiv             → wenig_aktiv
-  //   - Tage < wenigAktiv                       → aktiv
-  // Die Tages-Grenzen (wenigAktiv, inaktiv) kommen aus boardThresholds, also
-  // aus den Einstellungen mit Code-Default (wenigAktiv = 14, inaktiv = 30),
-  // gleiche Grenzsemantik wie diagnoseBoard im Analytics-Tab.
-  // Hinweis: anzahl_pins aus board_analytics (CSV) wird hier NICHT mehr
-  // benutzt — Pinterest liefert die Zahl oft als 0.
-  function assignCategory(b: BoardDashHealth): BoardAssignment {
-    if (b.pinsInDb === 0) return 'leeres_board'
-    if (!b.lastPinDate) return 'ohne_aktivitaet'
-    const tageOhnePins = diffDays(b.lastPinDate, today)
-    if (tageOhnePins > boardThresholds.inaktiv) return 'inaktiv'
-    if (tageOhnePins >= boardThresholds.wenigAktiv) return 'wenig_aktiv'
-    return 'aktiv'
-  }
+  // Hinweis: Die frühere Aktivitäts-Bucket-Klassifizierung (inaktiv / wenig_aktiv
+  // / aktiv / leeres_board) für die alte Board-Sektion entfällt — die Sektion
+  // zeigt jetzt Board-Coaching (Hebel). Die Hebel-Berechnung steht weiter unten,
+  // sobald die Keywords geladen sind (sie braucht keywordRows).
 
-  const boardsByCategory: Record<BoardCat, BoardDashHealth[]> = {
-    inaktiv: [],
-    wenig_aktiv: [],
-    ohne_aktivitaet: [],
-    aktiv: [],
-  }
-  const boardsLeer: BoardDashHealth[] = []
-
-  for (const b of boardsHealth) {
-    const assignment = assignCategory(b)
-    if (assignment === 'leeres_board') {
-      boardsLeer.push(b)
-    } else {
-      boardsByCategory[assignment].push(b)
-    }
-  }
-  // Sortierung pro Kategorie:
-  //   - Aktivitäts-Buckets (inaktiv, wenig_aktiv, aktiv): nach Alter des
-  //     letzten Pins DESC — die dringendsten Fälle oben.
-  //   - ohne_aktivitaet: nach pinsInDb DESC (mehr vorbereitete Pins → wichtiger).
-  boardsByCategory.inaktiv.sort(
-    (a, b) => (b.lastPinAlterTage ?? 0) - (a.lastPinAlterTage ?? 0)
-  )
-  boardsByCategory.wenig_aktiv.sort(
-    (a, b) => (b.lastPinAlterTage ?? 0) - (a.lastPinAlterTage ?? 0)
-  )
-  boardsByCategory.aktiv.sort(
-    (a, b) => (a.lastPinAlterTage ?? 0) - (b.lastPinAlterTage ?? 0)
-  )
-  boardsByCategory.ohne_aktivitaet.sort((a, b) => b.pinsInDb - a.pinsInDb)
-
-  // Aktivitätsrate = Anteil der Boards, die in den letzten 14 Tagen
-  // einen neuen Pin bekommen haben (Basis: alle angelegten Boards).
+  // Aktivitätsrate = Anteil der Boards, die in den letzten 30 Tagen
+  // einen neuen Pin bekommen haben (Basis: alle angelegten Boards). Die
+  // 30-Tage-Grenze ist fest verdrahtet (boardThresholds.wenigAktiv).
   const aktivBoardsCount = boardsRows.filter((b) => {
     const lastPin = lastPinDateByBoard.get(b.id)
     if (!lastPin) return false
@@ -1476,15 +1259,12 @@ export default async function DashboardPage() {
     aktivitaetsratePct,
     aktivBoardsCount,
     avgLastPinDays,
-    profilEr,
   }
   const hasAnyBoardAnalytics = boardsHealth.some((b) => b.hasAnalytics)
-  // Boards ohne Analytics-Einträge erscheinen in den Aktivitäts-Buckets
-  // (mit ER='—'). Der Counter dient nur als Hinweis-Footnote.
+  // Boards ohne Analytics-Einträge: dient nur als Hinweis-Footnote in der Sektion.
   const boardsOhneAnalyticsCount = boardsHealth.filter(
     (b) => !b.hasAnalytics
   ).length
-  const boardsLeerCount = boardsLeer.length
 
   // ===== Aufgaben (Priorität → Datum → erledigt unten) =====
   const aufgabenAll = (aufgabenRes.data ?? []) as Aufgabe[]
@@ -1633,6 +1413,199 @@ export default async function DashboardPage() {
     unused: keywordsWithStats
       .filter((k) => k.pinsCount === 0)
       .sort((a, b) => a.keyword.localeCompare(b.keyword)),
+  }
+
+  // ===== Board-Coaching: Hebel pro Board (Anzeige folgt in der Sektion) =====
+  // Logik in utils.ts (Häppchen 1). Hier nur die Datenbeschaffung +
+  // Priorisierung. Steht nach keywordRows, weil die Hebel die Nutzer-Keywords
+  // gegen Board-Name/Beschreibung prüfen.
+  //
+  // Wirkungs-Gate analog Boards-Tab: Der Median trägt erst ab genug
+  // qualifizierten Boards (>= mindestQualifizierteBoards über mindestImpressionen).
+  // Ist das Gate nicht erfüllt, gilt jedes Board als 'zu_wenig_daten' → der
+  // wirkung_schwach-Hebel entfällt dann automatisch.
+  const boardWirkungEntries = boardsRows.map((b) => {
+    const ba = latestBaByBoard.get(b.id)
+    return {
+      impressionen: ba?.impressionen ?? 0,
+      ausgehende_klicks: ba?.ausgehende_klicks ?? 0,
+      saves: ba?.saves ?? 0,
+    }
+  })
+  const { medianOutbound, medianSave, anzahlQualifiziert } =
+    boardWirkungMediane(boardWirkungEntries)
+  const wirkungGateErfuellt =
+    anzahlQualifiziert >= BOARD_WIRKUNG_DEFAULTS.mindestQualifizierteBoards
+
+  const hebelByBoard = new Map<string, BoardHebel[]>()
+  const alleHebel: BoardHebel[] = []
+  for (const b of boardsRows) {
+    const health = boardHealthById.get(b.id)
+    const aktivitaet: BoardStatus = health?.status ?? 'inaktiv'
+    const ba = latestBaByBoard.get(b.id)
+    const wirkung: BoardWirkung = wirkungGateErfuellt
+      ? boardWirkung({
+          entry: {
+            impressionen: ba?.impressionen ?? 0,
+            ausgehende_klicks: ba?.ausgehende_klicks ?? 0,
+            saves: ba?.saves ?? 0,
+          },
+          medianOutbound,
+          medianSave,
+        }).wirkung
+      : 'zu_wenig_daten'
+    // „Hatte früher Reichweite": irgendwann (aktuell oder Vorperiode) > 0 Impr.
+    const hatteFruehereReichweite =
+      (latestBaByBoard.get(b.id)?.impressionen ?? 0) > 0 ||
+      (prevBaByBoard.get(b.id)?.impressionen ?? 0) > 0
+    const hebel = boardHebelFuerBoard({
+      boardId: b.id,
+      name: b.name,
+      beschreibung: b.beschreibung,
+      keywords: keywordRows,
+      aktivitaet,
+      hatteFruehereReichweite,
+      wirkung,
+    })
+    if (hebel.length > 0) hebelByBoard.set(b.id, hebel)
+    alleHebel.push(...hebel)
+  }
+
+  // Account-weite Hinweise (Anzahl Boards + Reichweiten-Verteilung).
+  const accountHinweise = boardAccountHinweise({
+    boardsTotal: boardsRows.length,
+    impressionenProBoard: boardsRows.map(
+      (b) => latestBaByBoard.get(b.id)?.impressionen ?? 0
+    ),
+  })
+
+  // Priorisierung der 3 dringendsten Hebel:
+  //   - Bündel-Boards (>= 3 Hebel) zuerst als gebündelte „Grundsanierung"-Karte.
+  //   - Danach mit Einzel-Hebeln auffüllen, je Board nur der dringendste.
+  //   - Max. 1 Eintrag pro Board (die Bündelkarte zählt als dieser Eintrag).
+  const COACHING_BUENDEL_AB = 3
+  const pinterestUrlByBoard = new Map<string, string | null>()
+  for (const b of boardsRows) {
+    pinterestUrlByBoard.set(b.id, b.pinterest_url ?? null)
+  }
+  const maxDringlichkeit = (hs: BoardHebel[]) =>
+    hs.reduce((m, h) => Math.max(m, h.dringlichkeit), 0)
+  const nachDringlichkeit = (a: BoardHebel, b: BoardHebel) =>
+    b.dringlichkeit - a.dringlichkeit || a.boardName.localeCompare(b.boardName)
+
+  const buendelBoards = Array.from(hebelByBoard.entries())
+    .filter(([, hs]) => hs.length >= COACHING_BUENDEL_AB)
+    .map(([boardId, hs]) => ({ boardId, hebel: [...hs].sort(nachDringlichkeit) }))
+    .sort(
+      (a, b) =>
+        maxDringlichkeit(b.hebel) - maxDringlichkeit(a.hebel) ||
+        b.hebel.length - a.hebel.length ||
+        a.hebel[0].boardName.localeCompare(b.hebel[0].boardName)
+    )
+
+  const topKarten: CoachingKarte[] = []
+  const verwendeteBoards = new Set<string>()
+  for (const eintrag of buendelBoards) {
+    if (topKarten.length >= 3) break
+    topKarten.push({
+      kind: 'buendel',
+      boardId: eintrag.boardId,
+      boardName: eintrag.hebel[0].boardName,
+      pinterestUrl: pinterestUrlByBoard.get(eintrag.boardId) ?? null,
+      text: '',
+      buendelPunkte: eintrag.hebel.map(
+        (h) => BOARD_HEBEL_BUENDEL_PUNKT[h.typ]
+      ),
+      prepared: preparedPinsByBoard.get(eintrag.boardId) ?? {
+        entwurf: 0,
+        geplant: 0,
+      },
+    })
+    verwendeteBoards.add(eintrag.boardId)
+  }
+  for (const hebel of [...alleHebel].sort(nachDringlichkeit)) {
+    if (topKarten.length >= 3) break
+    if (verwendeteBoards.has(hebel.boardId)) continue
+    topKarten.push({
+      kind: 'einzel',
+      boardId: hebel.boardId,
+      boardName: hebel.boardName,
+      pinterestUrl: pinterestUrlByBoard.get(hebel.boardId) ?? null,
+      text: BOARD_HEBEL_TEXT[hebel.typ],
+      prepared: preparedPinsByBoard.get(hebel.boardId) ?? {
+        entwurf: 0,
+        geplant: 0,
+      },
+    })
+    verwendeteBoards.add(hebel.boardId)
+  }
+
+  // Bereits in Top-Karten gezeigte Hebel ausklammern (Einzel: nur der dringendste
+  // dieses Boards; Bündel: alle Hebel des Boards).
+  const hebelKey = (boardId: string, typ: BoardHebelTyp) => `${boardId}:${typ}`
+  const gezeigteHebelKeys = new Set<string>()
+  for (const karte of topKarten) {
+    const hs = hebelByBoard.get(karte.boardId) ?? []
+    if (karte.kind === 'buendel') {
+      for (const h of hs) gezeigteHebelKeys.add(hebelKey(h.boardId, h.typ))
+    } else {
+      const top = [...hs].sort(nachDringlichkeit)[0]
+      if (top) gezeigteHebelKeys.add(hebelKey(top.boardId, top.typ))
+    }
+  }
+
+  // Einklappbarer Bereich „Alle weiteren Hinweise": pro Board die restlichen
+  // Hebel + vorbereitete Pins. Doppelung vermeiden:
+  //   - Boards, die oben schon als Top-Karte stehen, erscheinen hier nur mit
+  //     ihren NOCH NICHT oben gezeigten Hebeln (restHebel) und OHNE Pin-Box
+  //     (die steht jetzt oben bei der Top-Karte).
+  //   - Boards ohne Top-Karte: alle Hebel + Pin-Box wie gehabt; reine
+  //     „nur vorbereitete Pins"-Boards erscheinen ebenfalls (nur die grüne Box).
+  const leerePrepared = { entwurf: 0, geplant: 0 }
+  const restBoards: CoachingRestBoard[] = []
+  for (const b of boardsRows) {
+    const istTopBoard = verwendeteBoards.has(b.id)
+    const hs = hebelByBoard.get(b.id) ?? []
+    const restHebel = hs
+      .filter((h) => !gezeigteHebelKeys.has(hebelKey(h.boardId, h.typ)))
+      .sort(nachDringlichkeit)
+    // Pin-Box im Toggle nur für Boards, die NICHT oben stehen.
+    const prepared = istTopBoard
+      ? leerePrepared
+      : preparedPinsByBoard.get(b.id) ?? leerePrepared
+    const hatPrepared = prepared.entwurf > 0 || prepared.geplant > 0
+    if (restHebel.length === 0 && !hatPrepared) continue
+    restBoards.push({
+      boardId: b.id,
+      boardName: b.name,
+      pinterestUrl: b.pinterest_url ?? null,
+      hebelTexte: restHebel.map((h) => BOARD_HEBEL_TEXT[h.typ]),
+      prepared,
+    })
+  }
+  // Sortierung: Boards mit restlichen Hebeln zuerst (nach höchster Dringlichkeit),
+  // reine „nur vorbereitete Pins"-Boards danach, alphabetisch.
+  restBoards.sort((a, b) => {
+    const da = a.hebelTexte.length > 0
+    const db = b.hebelTexte.length > 0
+    if (da !== db) return da ? -1 : 1
+    return a.boardName.localeCompare(b.boardName)
+  })
+
+  // KPI: wie viele Boards haben mindestens einen Hebel.
+  const boardsMitPotenzial = hebelByBoard.size
+
+  // Name des reichweitenstärksten Boards (höchster Impressionen-Anteil) für die
+  // KPI-Kachel „Stärkstes Board". Nur sinnvoll, wenn es überhaupt Impressionen
+  // gibt — sonst null (Kachel zeigt dann „-").
+  let staerkstesBoardName: string | null = null
+  let staerkstesBoardImpr = 0
+  for (const b of boardsRows) {
+    const impr = latestBaByBoard.get(b.id)?.impressionen ?? 0
+    if (impr > staerkstesBoardImpr) {
+      staerkstesBoardImpr = impr
+      staerkstesBoardName = b.name
+    }
   }
 
   // ===== Empty-State-Weichen (sektionsweise) =====
@@ -1788,21 +1761,21 @@ export default async function DashboardPage() {
 
       {/* 11. Board-Gesundheit.
             Weiche Sektion 9: Ohne angelegte Boards ein neutraler Hinweis.
-            Mit Boards bleibt die Aktivitäts-Auswertung — die „X% nicht aktiv"-
-            Meldung wird über hasAnyPins unterdrückt, wenn noch kein Pin
-            existiert (siehe BoardKurzanalyse). */}
+            Mit Boards zeigt die Sektion KPI-Kacheln + Board-Coaching (Hebel). */}
       {boardsCount === 0 ? (
         <BoardGesundheitEmpty />
       ) : (
         <BoardGesundheitDashboardSection
-          byCategory={boardsByCategory}
-          kpis={boardKpis}
-          thresholds={boardThresholds}
-          hasAnyBoardAnalytics={hasAnyBoardAnalytics}
+          kpis={{
+            ...boardKpis,
+            boardsMitPotenzial,
+            staerkstesBoardAnteil: accountHinweise.staerkstesBoardAnteil,
+            staerkstesBoardName,
+          }}
+          topKarten={topKarten}
+          restBoards={restBoards}
+          accountHinweise={accountHinweise}
           boardsOhneAnalyticsCount={boardsOhneAnalyticsCount}
-          boardsLeerCount={boardsLeerCount}
-          preparedPinsByBoard={preparedPinsByBoard}
-          hasAnyPins={allPinsRows.length > 0}
         />
       )}
 
@@ -2014,13 +1987,11 @@ function StrategieCheckEmptyKeineStrategie() {
   )
 }
 
-// Sektion 8 — „Bestehende Pins optimieren" ohne Analytics.
+// Sektion 8 — „Pins recyceln" ohne Analytics.
 function HandlungsbedarfEmpty() {
   return (
     <section id="pin-handlungsbedarf" className="scroll-mt-4">
-      <h2 className="text-lg font-semibold text-gray-900">
-        Bestehende Pins optimieren
-      </h2>
+      <h2 className="text-lg font-semibold text-gray-900">Pins recyceln</h2>
       <DashEmptyBox>
         Diese Auswertung wird aussagekräftig, sobald deine Pins in der Datenbank
         hinterlegt sind und du dein erstes Analytics-Update gemacht hast. Dann
@@ -2408,16 +2379,16 @@ function HandlungsbedarfSection({
 }) {
   const heading = (
     <>
-      <h2 className="text-lg font-semibold text-gray-900">
-        Bestehende Pins optimieren
-      </h2>
+      <h2 className="text-lg font-semibold text-gray-900">Pins recyceln</h2>
       <p className="mt-1 text-sm text-gray-600">
         Basierend auf deinen Analytics: Welche Pins brauchen eine Reaktion?
       </p>
-      <div className="achtung-box mt-2">
-        ⚠️ Erstelle immer einen neuen Pin – bearbeite nie den bei Pinterest
-        veröffentlichten Pin. Hake den Pin ab sobald die Handlung erfolgt
-        ist.
+      <div className="mt-2">
+        <HinweisBox variant="tipp">
+          Erstelle immer einen neuen Pin, bearbeite nie den bei Pinterest
+          veröffentlichten Pin. Hake den Pin ab, sobald die Handlung erfolgt
+          ist.
+        </HinweisBox>
       </div>
     </>
   )
@@ -2498,15 +2469,6 @@ function HandlungsbedarfSection({
             </details>
           </>
         )}
-
-        <p className="pt-2 text-xs text-gray-500">
-          <Link
-            href="/dashboard/einstellungen#pin-schwellwerte"
-            className="font-medium text-red-600 hover:underline"
-          >
-            Schwellwerte in den Einstellungen anpassen ↗
-          </Link>
-        </p>
       </div>
     </section>
   )
@@ -2528,8 +2490,7 @@ function buildPinData(p: ActionablePin): HandlungsbedarfPin {
     letzterAnalyticsDatum: p.letzterAnalyticsDatum,
     pinterestUrl: p.pinterestUrl,
     boardName: p.boardName,
-    boardScoreLabel: p.boardScoreLabel,
-    boardHasAnalytics: p.boardHasAnalytics,
+    boardAktivitaet: p.boardAktivitaet,
   }
 }
 
@@ -2599,7 +2560,7 @@ function HandlungsbedarfKategorieCard({
         </div>
       ) : (
         <div className="border-t border-gray-200">
-          <ul className="divide-y divide-gray-100">
+          <ul className="space-y-2 p-3">
             {visiblePins.map((p) => {
               const pinData = buildPinData(p)
               return (
@@ -2618,7 +2579,7 @@ function HandlungsbedarfKategorieCard({
               <summary className="cursor-pointer list-none px-4 py-2 text-xs font-medium text-red-600 hover:underline">
                 + {remaining} weitere Pin{remaining === 1 ? '' : 's'} anzeigen
               </summary>
-              <ul className="divide-y divide-gray-100">
+              <ul className="space-y-2 p-3">
                 {pins.slice(3).map((p) => {
                   const pinData = buildPinData(p)
                   return (
@@ -3599,32 +3560,29 @@ function PinPipelineUrlRow({ url }: { url: UrlPotenzialRow }) {
 // Board-Gesundheit (Dashboard)
 // ===========================================================
 function BoardGesundheitDashboardSection({
-  byCategory,
   kpis,
-  thresholds,
-  hasAnyBoardAnalytics,
+  topKarten,
+  restBoards,
+  accountHinweise,
   boardsOhneAnalyticsCount,
-  boardsLeerCount,
-  preparedPinsByBoard,
-  hasAnyPins,
 }: {
-  byCategory: Record<BoardCat, BoardDashHealth[]>
   kpis: {
     boardsTotal: number
     aktivitaetsratePct: number
     aktivBoardsCount: number
     avgLastPinDays: number | null
-    profilEr: number | null
+    boardsMitPotenzial: number
+    staerkstesBoardAnteil: number
+    staerkstesBoardName: string | null
   }
-  thresholds: BoardThresholds
-  hasAnyBoardAnalytics: boolean
+  topKarten: CoachingKarte[]
+  restBoards: CoachingRestBoard[]
+  accountHinweise: {
+    zuVieleBoards: boolean
+    zuWenigeBoards: boolean
+    staerkstesBoardAnteil: number
+  }
   boardsOhneAnalyticsCount: number
-  boardsLeerCount: number
-  preparedPinsByBoard: Map<string, { entwurf: number; geplant: number }>
-  // false → noch kein einziger Pin in der DB. Unterdrückt die
-  // Aktivitäts-Bausteine in BoardKurzanalyse („X% nicht aktiv"), die ohne
-  // Pins absurd wären.
-  hasAnyPins: boolean
 }) {
   const headingTooltip =
     'Pinterest ist eine Suchmaschine. Keywords bestimmen wer dich findet, Boards bestimmen ob Pinterest dir vertraut. Inaktive Boards bremsen alle Pins darauf und schaden deiner thematischen Autorität. Top Boards signalisieren thematische Expertise und geben neuen Pins automatisch mehr Reichweite.'
@@ -3638,36 +3596,25 @@ function BoardGesundheitDashboardSection({
         />
       </h2>
       <p className="mt-1 text-sm text-gray-600">
-        Boards zeigen Pinterest, für welche Themen du stehst. Wie oft deine
-        Pins gespeichert werden, ist Pinterests stärkstes Signal, dass deine
-        Inhalte wertvoll sind, und das hilft, deinen ganzen Account besser
-        auszuspielen. Die Engagement Rate gibt dir hier einen Überblick über
-        die Gesamtwirkung eines Boards.
+        Boards zeigen Pinterest, für welche Themen du stehst. Hier siehst du,
+        welche deiner Boards gepflegt sind und wo du mit wenig Aufwand mehr
+        Sichtbarkeit holst.
       </p>
     </>
   )
 
-  // Boards werden jetzt nach Pin-Aktivität klassifiziert — auch ohne
-  // board_analytics-Eintrag erscheinen sie in den Aktivitäts-Buckets,
-  // nur ER zeigt '—'. Die alte Hard-Gate-Bedingung „kein Analytics → ganze
-  // Sektion ausblenden" entfällt deshalb.
+  const staerkstesProzent = Math.round(accountHinweise.staerkstesBoardAnteil * 100)
 
   return (
     <section id="board-gesundheit" className="scroll-mt-4">
       {heading}
 
-      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <BoardKpiCell
-          label="Ø Engagement Rate"
-          value={formatPercent(kpis.profilEr)}
-          tooltip="Zeigt, wie aktiv Pinterest-Nutzer mit den Pins eines Boards insgesamt interagieren, also ein guter Überblickswert für die Gesamtwirkung. Pinterest fasst dafür Saves, Pin-Klicks und ausgehende Klicks zu den Interaktionen zusammen: Engagement Rate = Interaktionen ÷ Impressionen × 100. Beispiel: 50 Interaktionen bei 1.000 Impressionen ergeben 5 % Engagement Rate. Welche Pins wirklich Traffic bringen, zeigen die ausgehenden Klicks. Was Pinterest für die Ausspielung belohnt, ist die Save-Rate."
-          highlight
-        />
+      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <BoardKpiCell
           label="Aktivitätsrate"
           value={`${formatPercent(kpis.aktivitaetsratePct, 0)} aktiv`}
           sub={`${kpis.aktivBoardsCount} von ${kpis.boardsTotal} Boards`}
-          tooltip="Anteil der Boards, die in den letzten 14 Tagen einen neuen Pin bekommen haben. Pinterest belohnt aktive Boards mit mehr Reichweite."
+          tooltip="Anteil der Boards, die in den letzten 30 Tagen einen neuen Pin bekommen haben. Pinterest belohnt aktive Boards mit mehr Reichweite."
           accent={aktivitaetAccent(kpis.aktivitaetsratePct)}
         />
         <BoardKpiCell
@@ -3684,70 +3631,110 @@ function BoardGesundheitDashboardSection({
           tooltip="Im Durchschnitt vor wie vielen Tagen wurde auf deinen Boards zuletzt ein Pin veröffentlicht. Frequenz ist der wichtigste Hebel für Board-Performance."
           accent={avgPinAccent(kpis.avgLastPinDays)}
         />
+        <BoardKpiCell
+          label="Boards mit Potenzial"
+          value={`${kpis.boardsMitPotenzial} von ${kpis.boardsTotal}`}
+          tooltip="So viele deiner Boards haben mindestens einen offenen Hebel, mit dem du mehr Sichtbarkeit holst."
+          accent={kpis.boardsMitPotenzial === 0 ? 'green' : 'yellow'}
+        />
+        <BoardKpiCell
+          label="Stärkstes Board"
+          value={
+            accountHinweise.staerkstesBoardAnteil > 0
+              ? `${staerkstesProzent} %`
+              : '-'
+          }
+          sub={kpis.staerkstesBoardName ?? 'deiner Reichweite'}
+          tooltip="Das ist dein reichweitenstärkstes Board: So viel deiner gesamten Board-Impressionen entfallen auf dieses eine Board. Ein sehr hoher Wert bei vielen Boards kann ein Klumpenrisiko sein."
+          accent="gray"
+        />
       </div>
 
-      <BoardKurzanalyse
-        aktivitaetsratePct={kpis.aktivitaetsratePct}
-        avgLastPinDays={kpis.avgLastPinDays}
-        boardsTotal={kpis.boardsTotal}
-        aktivBoardsCount={kpis.aktivBoardsCount}
-        hasAnyPins={hasAnyPins}
-      />
+      {(accountHinweise.zuWenigeBoards || accountHinweise.zuVieleBoards) && (
+        <div className="coaching-box mt-3">
+          {accountHinweise.zuWenigeBoards && (
+            <p className="leading-relaxed">
+              Du hast erst {kpis.boardsTotal}{' '}
+              {kpis.boardsTotal === 1 ? 'Board' : 'Boards'}. Mit ein paar
+              fokussierten Themen-Boards mehr gibst du Pinterest klarere
+              Signale, wofür du stehst.
+            </p>
+          )}
+          {accountHinweise.zuVieleBoards && (
+            <p className="leading-relaxed">
+              Du pflegst {kpis.boardsTotal} Boards. Das ist viel: bündle deine
+              Energie lieber auf die Themen, die wirklich tragen, statt sie zu
+              verzetteln.
+            </p>
+          )}
+        </div>
+      )}
 
-      {(() => {
-        const categoriesA = BOARD_CATEGORIES.filter((c) => c.group === 'A')
-        const categoriesB = BOARD_CATEGORIES.filter((c) => c.group === 'B')
-        const countA = categoriesA.reduce(
-          (s, cat) => s + (byCategory[cat.key]?.length ?? 0),
-          0
-        )
-        const countB = categoriesB.reduce(
-          (s, cat) => s + (byCategory[cat.key]?.length ?? 0),
-          0
-        )
-        return (
-          <div className="mt-3">
-            {/* Gruppe A — Brauchen Aufmerksamkeit */}
-            <BoardGruppeHeader group="A" count={countA} />
-            <div className="mt-3 space-y-3">
-              {categoriesA.map((cat) => (
-                <BoardKategorieCard
-                  key={cat.key}
-                  cat={cat}
-                  boards={byCategory[cat.key]}
-                  thresholds={thresholds}
-                  preparedPinsByBoard={preparedPinsByBoard}
-                />
-              ))}
-            </div>
-
-            {/* Gruppe B — Performen gut (leicht ausgegraut) */}
-            <div className="mt-7 opacity-85">
-              <BoardGruppeHeader group="B" count={countB} />
-              <div className="mt-3 space-y-3">
-                {categoriesB.map((cat) => (
-                  <BoardKategorieCard
-                    key={cat.key}
-                    cat={cat}
-                    boards={byCategory[cat.key]}
-                    thresholds={thresholds}
-                    preparedPinsByBoard={preparedPinsByBoard}
-                  />
-                ))}
-              </div>
-            </div>
+      {topKarten.length === 0 ? (
+        <div className="coaching-box mt-4">
+          <p className="font-medium leading-relaxed">
+            Deine Boards sind richtig gut aufgestellt, hier ist gerade nichts
+            zu tun. Pinne einfach weiter regelmäßig, dann bleibt das so.
+          </p>
+        </div>
+      ) : (
+        <>
+          <p className="mt-4 text-xs font-medium uppercase tracking-wide text-gray-500">
+            Das sind deine wichtigsten Hebel gerade.
+          </p>
+          <div className="mt-2 space-y-3">
+            {topKarten.map((karte) => (
+              <CoachingKarteRow key={karte.boardId} karte={karte} />
+            ))}
           </div>
-        )
-      })()}
+        </>
+      )}
+
+      {restBoards.length > 0 && (
+        <details className="group mt-3 rounded-lg border border-gray-200 bg-white shadow-sm">
+          <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
+            <span className="text-2xl leading-none text-gray-400" aria-hidden>
+              <span className="inline group-open:hidden">▸</span>
+              <span className="hidden group-open:inline">▾</span>
+            </span>
+            <span>Alle weiteren Hinweise</span>
+          </summary>
+          <ul className="border-t border-gray-200">
+            {restBoards.map((rb) => (
+              <li
+                key={rb.boardId}
+                className="border-b border-gray-100 px-4 py-3 last:border-b-0"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0 text-sm font-semibold text-gray-900">
+                    <span className="truncate">{rb.boardName}</span>
+                  </div>
+                  <CoachingButtons
+                    boardId={rb.boardId}
+                    pinterestUrl={rb.pinterestUrl}
+                  />
+                </div>
+                {rb.hebelTexte.length > 0 && (
+                  <ul className="mt-1.5 space-y-1">
+                    {rb.hebelTexte.map((t, i) => (
+                      <li
+                        key={i}
+                        className="text-sm leading-relaxed text-gray-700"
+                      >
+                        {t}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <PreparedPinsBox boardId={rb.boardId} prepared={rb.prepared} />
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
 
       <div className="mt-3 space-y-3">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-2 text-xs text-gray-500">
-          <Link
-            href="/dashboard/einstellungen#board-schwellwerte"
-            className="font-medium text-red-600 hover:underline"
-          >
-            Schwellwerte in den Einstellungen anpassen ↗
-          </Link>
           <Link
             href="/dashboard/boards"
             className="font-medium text-red-600 hover:underline"
@@ -3772,179 +3759,118 @@ function BoardGesundheitDashboardSection({
               </span>
             </span>
           )}
-          {boardsLeerCount > 0 && (
-            <span className="inline-flex items-center gap-1 text-gray-500">
-              <InfoIcon className="shrink-0 text-gray-400" />
-              <span>
-                {boardsLeerCount}{' '}
-                {boardsLeerCount === 1 ? 'leeres Board' : 'leere Boards'} ohne
-                Pins. Erste Pins veröffentlichen um Daten zu sehen
-              </span>
-            </span>
-          )}
         </div>
       </div>
     </section>
   )
 }
 
-// ===========================================================
-// Board-Gruppen-Header (A: Brauchen Aufmerksamkeit, B: Performen gut)
-// ===========================================================
-function BoardGruppeHeader({
-  group,
-  count,
+// Buttons „Pins planen" + „Zum Board" für ein Board (Coaching-Karten + Liste).
+function CoachingButtons({
+  boardId,
+  pinterestUrl,
 }: {
-  group: 'A' | 'B'
-  count: number
+  boardId: string
+  pinterestUrl: string | null
 }) {
-  if (group === 'A') {
-    const isEmpty = count === 0
-    return (
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-r-md border-l-[3px] border-amber-500 bg-amber-50 px-3 py-2">
-        <h3 className="flex items-center gap-2 text-sm font-semibold text-amber-800">
-          <span aria-hidden className="text-base leading-none">
-            {isEmpty ? '👍' : '⚠️'}
-          </span>
-          Brauchen Aufmerksamkeit
-        </h3>
-        <p className="text-xs text-amber-800">
-          {isEmpty ? (
-            <>
-              0 Boards mit Handlungsbedarf
-              <span className="ml-2 font-medium text-green-700">
-                ✓ Stark, alle Boards laufen stabil!
-              </span>
-            </>
-          ) : (
-            <>{count} Boards mit Handlungsbedarf</>
-          )}
-        </p>
-      </div>
-    )
-  }
-  // Gruppe B
   return (
-    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-r-md border-l-[3px] border-green-500 bg-green-50 px-3 py-2">
-      <h3 className="flex items-center gap-2 text-sm font-semibold text-green-800">
-        <span aria-hidden className="text-base leading-none">
-          ✓
-        </span>
-        Performen gut
-      </h3>
-      <p className="text-xs text-green-800">
-        {count === 0
-          ? '0 Boards laufen aktuell stabil'
-          : `${count} Boards laufen stabil`}
-      </p>
+    <div className="flex shrink-0 items-center gap-2">
+      <Link
+        href={`/dashboard/pin-produktion?new=1&board=${boardId}`}
+        className="rounded-md bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700"
+      >
+        Pins planen
+      </Link>
+      {pinterestUrl && (
+        <a
+          href={pinterestUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="rounded-md border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+        >
+          Zum Board ↗
+        </a>
+      )}
     </div>
   )
 }
 
-// Regelbasierte Kurzanalyse — keine KI, nur Textbausteine je nach Datenwert.
-// Schwellwerte hier als Konstanten; bei Bedarf später nach einstellungen
-// auslagern (analog zu boardThresholds).
-function BoardKurzanalyse({
-  aktivitaetsratePct,
-  avgLastPinDays,
-  boardsTotal,
-  aktivBoardsCount,
-  hasAnyPins = true,
-}: {
-  aktivitaetsratePct: number
-  avgLastPinDays: number | null
-  boardsTotal: number
-  aktivBoardsCount: number
-  // false → noch kein Pin in der DB. Die Aktivitäts-Bausteine („X% nicht
-  // aktiv" / „Keines deiner Boards …") werden dann übersprungen, da sie ohne
-  // einen einzigen Pin nur absurd wirken.
-  hasAnyPins?: boolean
-}) {
-  const lines: string[] = []
-
-  // Baustein 1 — Aktivitätsrate (nur sinnvoll, wenn Pins existieren)
-  if (hasAnyPins) {
-    if (aktivitaetsratePct >= 70) {
-      lines.push('Deine Boards sind aktiv – das ist eine starke Basis.')
-    } else if (aktivitaetsratePct >= 40) {
-      lines.push(
-        'Etwa die Hälfte deiner Boards wird aktiv bepinnt – hier ist Luft nach oben.'
-      )
-    } else {
-      const inaktivPct = Math.round(100 - aktivitaetsratePct)
-      lines.push(
-        `${inaktivPct}% deiner Boards sind nicht aktiv – das bremst dein Pinterest-Wachstum.`
-      )
-    }
-  }
-
-  // Baustein 2 — Boards ohne neuen Pin in den letzten 14 Tagen
-  if (hasAnyPins && boardsTotal > 0) {
-    const inaktivCount = boardsTotal - aktivBoardsCount
-    if (inaktivCount === 0) {
-      lines.push('Alle deine Boards werden regelmäßig bepinnt – starke Basis.')
-    } else if (inaktivCount === boardsTotal) {
-      lines.push(
-        'Keines deiner Boards hat in den letzten 14 Tagen einen neuen Pin bekommen – dringend reaktivieren.'
-      )
-    } else {
-      lines.push(
-        `${inaktivCount} von ${boardsTotal} Boards haben seit mehr als 14 Tagen keinen neuen Pin bekommen – das bremst deine Reichweite.`
-      )
-    }
-  }
-
-  // Baustein 4 — Handlungsempfehlung. Reihenfolge = Priorität: erste passende
-  // Regel gewinnt. Greift keine kritische Bedingung (z.B. 40-69%
-  // Aktivitätsrate), gibt es keine Empfehlung, da kein klarer Hebel sichtbar.
-  const r = aktivitaetsratePct
-  const d = avgLastPinDays
-  let recHeading: string | null = null
-  let recText: string | null = null
-  if (r < 40 && d !== null && d > 14) {
-    recHeading = 'Größter Hebel'
-    recText =
-      'Pinning-Frequenz erhöhen – mindestens 3 neue Pins pro Woche pro aktivem Board.'
-  } else if (r < 40 && d !== null && d <= 14) {
-    recHeading = 'Größter Hebel'
-    recText =
-      'Inaktive Boards reaktivieren – das Pinning auf mehr Boards verteilen.'
-  } else if (r >= 70 && (d === null || d <= 14)) {
-    recHeading = 'Größter Hebel'
-    recText =
-      'Die Aktivität stimmt. Jetzt zählen frische Pins, starke Hooks und die richtigen Keywords: Pins, die so überzeugen, dass Menschen sie speichern und auf deine Website klicken.'
-  }
-
-  if (lines.length === 0 && !recText) return null
-
+// Eine der bis zu drei priorisierten Handlungskarten. Hat das Board vorbereitete
+// Pins, erscheint die grüne Box auch hier (im einklappbaren Bereich wird sie für
+// dieses Board dann ausgelassen, damit jede Info nur einmal steht).
+function CoachingKarteRow({ karte }: { karte: CoachingKarte }) {
   return (
-    <div className="coaching-box mt-3">
-      {lines.length > 0 && (
-        <div className="space-y-1.5">
-          {lines.map((l, i) => (
-            <p key={i} className="leading-relaxed">
-              {l}
-            </p>
-          ))}
+    <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0 text-base font-semibold text-gray-900">
+          <span className="truncate">{karte.boardName}</span>
         </div>
+        <CoachingButtons
+          boardId={karte.boardId}
+          pinterestUrl={karte.pinterestUrl}
+        />
+      </div>
+      {karte.kind === 'buendel' && karte.buendelPunkte ? (
+        <div className="mt-1.5">
+          <p className="text-sm font-semibold leading-relaxed text-gray-900">
+            Dieses Board braucht einmal deine volle Aufmerksamkeit.
+          </p>
+          <ul className="mt-1 list-disc space-y-0.5 pl-5">
+            {karte.buendelPunkte.map((punkt, i) => (
+              <li key={i} className="text-sm leading-relaxed text-gray-700">
+                {punkt}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1.5 text-sm leading-relaxed text-gray-700">
+            Nimm es dir am Stück vor, das bringt auf einen Schlag am meisten.
+          </p>
+        </div>
+      ) : (
+        <p className="mt-1.5 text-sm leading-relaxed text-gray-700">
+          {karte.text}
+        </p>
       )}
-      {(recHeading || recText) && (
-        <div className={lines.length > 0 ? 'mt-2' : ''}>
-          {recHeading && (
-            <p className="font-medium leading-relaxed">{recHeading}</p>
-          )}
-          {recText && (
-            <p
-              className={
-                recHeading
-                  ? 'mt-1.5 leading-relaxed'
-                  : 'font-medium leading-relaxed'
-              }
-            >
-              {recText}
-            </p>
-          )}
-        </div>
+      <PreparedPinsBox boardId={karte.boardId} prepared={karte.prepared} />
+    </div>
+  )
+}
+
+// Grüne Box „vorbereitete Pins" (Entwurf / geplant). Wird nur gezeigt, wenn
+// mindestens einer der beiden Counts > 0 ist.
+function PreparedPinsBox({
+  boardId,
+  prepared,
+}: {
+  boardId: string
+  prepared: { entwurf: number; geplant: number }
+}) {
+  const { entwurf, geplant } = prepared
+  if (entwurf === 0 && geplant === 0) return null
+  const showEntwurf = entwurf > 0
+  const showGeplant = geplant > 0
+  const entwurfHref = `/dashboard/pin-produktion?filter[board]=${boardId}&filter[status]=entwurf`
+  const geplantHref = `/dashboard/pin-produktion?filter[board]=${boardId}&filter[status]=geplant`
+  const linkCls = 'underline underline-offset-2 hover:text-green-800'
+  return (
+    <div className="mt-2 text-xs text-green-700">
+      ✅{' '}
+      {showEntwurf && (
+        <>
+          <Link href={entwurfHref} className={linkCls}>
+            {entwurf} {entwurf === 1 ? 'Pin' : 'Pins'} als Entwurf gespeichert
+          </Link>{' '}
+          – einplanen und veröffentlichen.
+        </>
+      )}
+      {showEntwurf && showGeplant && ' '}
+      {showGeplant && (
+        <>
+          <Link href={geplantHref} className={linkCls}>
+            {geplant} {geplant === 1 ? 'Pin' : 'Pins'} bereits eingeplant
+          </Link>{' '}
+          – Veröffentlichung vorziehen möglich.
+        </>
       )}
     </div>
   )
@@ -4008,358 +3934,6 @@ function avgPinAccent(days: number | null): KpiAccent {
   if (days <= 14) return 'gray'
   if (days <= 30) return 'yellow'
   return 'red'
-}
-
-function BoardKategorieCard({
-  cat,
-  boards,
-  thresholds,
-  preparedPinsByBoard,
-}: {
-  cat: BoardCatConfig
-  boards: BoardDashHealth[]
-  thresholds: BoardThresholds
-  preparedPinsByBoard: Map<string, { entwurf: number; geplant: number }>
-}) {
-  const visible = boards.slice(0, 3)
-  const remaining = boards.length - visible.length
-
-  return (
-    <details
-      className="group rounded-lg border border-gray-200 bg-white shadow-sm"
-    >
-      <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
-        <span className="text-2xl leading-none text-gray-400" aria-hidden>
-          <span className="inline group-open:hidden">▸</span>
-          <span className="hidden group-open:inline">▾</span>
-        </span>
-        <span
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-gray-300 bg-white text-base text-gray-700"
-          aria-hidden
-        >
-          {cat.emoji}
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1 text-sm font-medium text-gray-900">
-            <LabelWithTooltip label={cat.label} tooltip={cat.tooltip} />
-          </div>
-          <p className="mt-0.5 text-xs text-gray-600">{cat.subtitle}</p>
-        </div>
-        <span
-          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-            boards.length === 0
-              ? 'bg-gray-100 text-gray-400'
-              : 'bg-orange-100 text-orange-700'
-          }`}
-        >
-          {boards.length === 0 && cat.emptyTooltip ? (
-            <LabelWithTooltip
-              label={String(boards.length)}
-              tooltip={cat.emptyTooltip}
-            />
-          ) : (
-            boards.length
-          )}
-        </span>
-      </summary>
-
-      {boards.length === 0 ? (
-        <div className="border-t border-gray-200 px-4 py-6 text-center text-sm text-gray-600">
-          {cat.emptyMessage}
-        </div>
-      ) : (
-        <div className="border-t border-gray-200">
-          <ul>
-            {visible.map((b) => (
-              <BoardRow
-                key={b.id}
-                board={b}
-                cat={cat}
-                thresholds={thresholds}
-                prepared={
-                  preparedPinsByBoard.get(b.id) ?? { entwurf: 0, geplant: 0 }
-                }
-              />
-            ))}
-          </ul>
-          {remaining > 0 && (
-            <details className="group border-t border-gray-100">
-              <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
-                <span className="text-lg leading-none text-gray-400" aria-hidden>
-                  <span className="inline group-open:hidden">▸</span>
-                  <span className="hidden group-open:inline">▾</span>
-                </span>
-                <span>
-                  {remaining} weitere Board{remaining === 1 ? '' : 's'} anzeigen
-                </span>
-              </summary>
-              <ul>
-                {boards.slice(3).map((b) => (
-                  <BoardRow
-                key={b.id}
-                board={b}
-                cat={cat}
-                thresholds={thresholds}
-                prepared={
-                  preparedPinsByBoard.get(b.id) ?? { entwurf: 0, geplant: 0 }
-                }
-              />
-                ))}
-              </ul>
-            </details>
-          )}
-        </div>
-      )}
-    </details>
-  )
-}
-
-// Deutsche ER-Formatierung mit Komma als Dezimaltrenner.
-function fmtErDe(n: number | null, digits = 1): string {
-  if (n === null || !Number.isFinite(n)) return '-'
-  return `${n.toFixed(digits).replace('.', ',')}%`
-}
-
-// Vormonatsvergleich-Block.
-//   - Verbesserung: 'ER 7,1% ↑ (Vormonat: 6,5%)' — nur Pfeil grün, Klammer grau.
-//   - Verschlechterung: 'ER 7,1% ↓ (Vormonat: 7,8%)' — nur Pfeil rot, Klammer grau.
-//   - 0%-Differenz: → in Grau.
-//   - Kein Vormonat: 'ER 7,1% (kein Vormonat verfügbar)' — Klammer in Grau.
-function ErWithTrend({ board }: { board: BoardDashHealth }) {
-  const er = board.engagementRate
-  const erPrev = board.engagementRatePrev
-  const trend = board.trendPct
-  if (erPrev === null || trend === null) {
-    return (
-      <span>
-        Engagement Rate{' '}
-        <strong className="text-gray-900">{fmtErDe(er)}</strong>{' '}
-        <span className="text-gray-500">(kein Vormonat verfügbar)</span>
-      </span>
-    )
-  }
-  const arrow = trend > 0 ? '↑' : trend < 0 ? '↓' : '→'
-  const arrowCls =
-    trend > 0
-      ? 'text-green-700'
-      : trend < 0
-        ? 'text-red-700'
-        : 'text-gray-500'
-  return (
-    <span>
-      Engagement Rate{' '}
-      <strong className="text-gray-900">{fmtErDe(er)}</strong>{' '}
-      <span className={`font-semibold ${arrowCls}`}>{arrow}</span>{' '}
-      <span className="text-gray-500">(Vormonat: {fmtErDe(erPrev)})</span>
-    </span>
-  )
-}
-
-// Hinweis „vorbereitete Pins in der Datenbank" — nur dort, wo
-// Reaktivierungs-Potenzial besteht. Für aktive Boards uninteressant.
-// Die Box wird nur gezeigt, wenn mindestens einer der beiden Counts > 0 ist.
-function buildPinsInDbLine(
-  cat: BoardCat,
-  prepared: { entwurf: number; geplant: number }
-): { entwurf: number; geplant: number } | null {
-  if (cat === 'aktiv') return null
-  if (prepared.entwurf === 0 && prepared.geplant === 0) return null
-  return prepared
-}
-
-// Warum-Hinweis als Achtung-Box. Nur Kategorien mit Handlungsbedarf
-// (Gruppe A) zeigen einen Hinweis. Aktive Boards laufen wie gewünscht.
-function buildWarumText(cat: BoardCat, b: BoardDashHealth): string | null {
-  switch (cat) {
-    case 'aktiv':
-      return null
-    case 'inaktiv': {
-      const tage = b.lastPinAlterTage !== null ? `${b.lastPinAlterTage}` : '-'
-      return `⚠️ Seit ${tage} Tagen kein neuer Pin. Pinterest spielt inaktive Boards seltener aus. Du verschenkst Reichweite.`
-    }
-    case 'wenig_aktiv': {
-      const tage = b.lastPinAlterTage !== null ? `${b.lastPinAlterTage}` : '-'
-      return `⚠️ Seit ${tage} Tagen kein neuer Pin. Frühe Warnstufe: jetzt reaktivieren bevor die Sichtbarkeit fällt.`
-    }
-    case 'ohne_aktivitaet': {
-      const pins = b.pinsInDb
-      return `⚠️ ${pins} ${pins === 1 ? 'Pin liegt' : 'Pins liegen'} in der Datenbank, aber noch nichts ist veröffentlicht. Solange nichts live ist, sieht Pinterest dieses Board nicht.`
-    }
-  }
-}
-
-function BoardRow({
-  board,
-  cat,
-  thresholds,
-  prepared,
-}: {
-  board: BoardDashHealth
-  cat: BoardCatConfig
-  thresholds: BoardThresholds
-  prepared: { entwurf: number; geplant: number }
-}) {
-  const pins = board.anzahlPins ?? 0
-  const isEmpty = pins <= 0
-  const lastPinNode =
-    board.lastPinAlterTage === null ? (
-      'Noch kein veröffentlichter Pin'
-    ) : board.lastPinAlterTage === 0 ? (
-      <>Letzter Pin: heute</>
-    ) : board.lastPinAlterTage === 1 ? (
-      <>
-        Letzter Pin: vor <strong>1</strong> Tag
-      </>
-    ) : (
-      <>
-        Letzter Pin: vor <strong>{board.lastPinAlterTage}</strong> Tagen
-      </>
-    )
-  const scoreTooltip = boardScoreTooltip({
-    score: board.score,
-    er: board.engagementRate,
-    erVormonat: board.engagementRatePrev,
-    trendPct: board.trendPct,
-    dataInsufficient: board.dataInsufficient,
-    thresholds,
-    short: true,
-  })
-  const warum = buildWarumText(cat.key, board)
-
-  const metricEls = cat.metrics
-    .map((kind) => {
-      switch (kind) {
-        case 'er':
-          return <ErWithTrend key={kind} board={board} />
-        case 'impressionen':
-          return (
-            <span key={kind}>
-              Impressionen{' '}
-              <strong className="text-gray-900">
-                {formatZahl(board.impressionen)}
-              </strong>
-            </span>
-          )
-        case 'klicks':
-          return (
-            <span key={kind}>
-              Ausg. Klicks{' '}
-              <strong className="text-gray-900">
-                {formatZahl(board.klicks)}
-              </strong>
-            </span>
-          )
-        default:
-          return null
-      }
-    })
-    .filter((el): el is JSX.Element => el !== null)
-
-  return (
-    <li className="border-b border-gray-100 px-4 py-3 last:border-b-0 hover:bg-gray-50">
-      {/* Zeile 1 — Board-Name links | Buttons rechts */}
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-1.5 text-base font-semibold text-gray-900">
-          <span className="truncate">{board.name}</span>
-          <InfoTooltip text={scoreTooltip} className="text-gray-400" />
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <Link
-            href={cat.primary.href(board)}
-            className={`rounded-md px-3 py-1 text-xs font-medium ${cat.primaryButtonClass}`}
-          >
-            {cat.primary.label}
-          </Link>
-          {board.pinterestUrl && (
-            <a
-              href={board.pinterestUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-md border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
-            >
-              Zum Board ↗
-            </a>
-          )}
-        </div>
-      </div>
-      {/* Zeile 2 — Aktivität (Pins veröffentlicht · Letzter Pin) */}
-      <div className="mt-1.5 text-xs text-gray-500">
-        {isEmpty ? (
-          'Leeres Board · erste Pins veröffentlichen'
-        ) : (
-          <>
-            <strong>{pins}</strong>{' '}
-            {pins === 1 ? 'Pin veröffentlicht' : 'Pins veröffentlicht'} ·{' '}
-            {board.lastPinId ? (
-              <Link
-                href={`/dashboard/pin-produktion?highlight=${board.lastPinId}`}
-                className="underline underline-offset-2 hover:text-red-700"
-                title="Zum Pin in der Pin-Datenbank springen"
-              >
-                {lastPinNode}
-              </Link>
-            ) : (
-              lastPinNode
-            )}
-          </>
-        )}
-      </div>
-      {/* Zeile 3 — Metriken (ER, Impressionen, Klicks) */}
-      {metricEls.length > 0 && (
-        <div className="mt-1 flex flex-wrap items-center gap-y-1 text-[13px] text-gray-500">
-          {metricEls.map((el, idx) => (
-            <span key={idx} className="inline-flex items-center">
-              {idx > 0 && (
-                <span className="mx-2 text-gray-400" aria-hidden>
-                  ·
-                </span>
-              )}
-              {el}
-            </span>
-          ))}
-        </div>
-      )}
-      {/* Zeile 4 — Achtung-Box (warum) */}
-      {warum && (
-        <div className="achtung-box mt-2 !px-2 !py-1.5 text-xs">{warum}</div>
-      )}
-      {/* Zeile 5 — Success-Box (vorbereitete Pins) */}
-      {(() => {
-        const pinsHint = buildPinsInDbLine(cat.key, prepared)
-        if (!pinsHint) return null
-        const marginCls = warum ? 'mt-1' : 'mt-2'
-        const { entwurf, geplant } = pinsHint
-        const showEntwurf = entwurf > 0
-        const showGeplant = geplant > 0
-        const entwurfHref = `/dashboard/pin-produktion?filter[board]=${board.id}&filter[status]=entwurf`
-        const geplantHref = `/dashboard/pin-produktion?filter[board]=${board.id}&filter[status]=geplant`
-        const linkCls = 'underline underline-offset-2 hover:text-green-800'
-        return (
-          <div className={`${marginCls} text-xs text-green-700`}>
-            ✅{' '}
-            {showEntwurf && (
-              <>
-                <Link href={entwurfHref} className={linkCls}>
-                  {entwurf} {entwurf === 1 ? 'Pin' : 'Pins'} als Entwurf
-                  gespeichert
-                </Link>{' '}
-                – einplanen und veröffentlichen.
-              </>
-            )}
-            {showEntwurf && showGeplant && ' '}
-            {showGeplant && (
-              <>
-                <Link href={geplantHref} className={linkCls}>
-                  {geplant} {geplant === 1 ? 'Pin' : 'Pins'} bereits eingeplant
-                </Link>{' '}
-                – Veröffentlichung vorziehen möglich.
-              </>
-            )}
-          </div>
-        )
-      })()}
-    </li>
-  )
 }
 
 function PerformanceVerlaufSection({ points }: { points: ChartPoint[] }) {

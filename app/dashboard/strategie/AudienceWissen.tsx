@@ -30,6 +30,20 @@ export default function AudienceWissen() {
         wie du sie für deine Pin-Strategie nutzt.
       </p>
 
+      <div className="rounded-md border border-teal-200 border-l-[3px] border-l-teal-400 bg-teal-50 p-4 text-sm leading-relaxed text-teal-800">
+        Bevor du auch nur einen Pin gestaltest, musst du eine Frage beantworten
+        können: Für wen mache ich das? Marketing funktioniert nicht, wenn man
+        für alle pinnt. Es funktioniert, wenn man für einen bestimmten Menschen
+        pinnt, dessen Wünsche und Sorgen man kennt.{' '}
+        <strong>
+          Die Zielgruppe ist nicht ein Aspekt deiner Strategie unter vielen. Sie
+          ist das Fundament, auf dem alles andere steht
+        </strong>
+        : deine Themen, deine Hooks, deine Keywords, deine Cover. Wer seine
+        Zielgruppe nicht kennt, optimiert Pins, die an den richtigen Menschen
+        vorbeigehen.
+      </div>
+
       <Toggle title="Wer ist deine Zielgruppe und warum es sich lohnt, sie auszuarbeiten">
         <Para>
           Pinterest zeigt dir später, wer tatsächlich auf deine Pins reagiert.
@@ -136,6 +150,20 @@ export default function AudienceWissen() {
         </Para>
       </Toggle>
 
+      <Toggle title="Was Pinterest dir nicht zeigt">
+        <Para>
+          Audience Insights zeigt dir, wofür sich deine Zielgruppe interessiert.
+          Es zeigt dir nicht, warum. Pinterest sagt dir, dass deine Leute eine
+          hohe Affinität zu Gartenarbeit haben, aber nicht, ob sie selbst
+          gärtnern oder nur davon träumen, ob sie Anfänger oder Profis sind, ob
+          sie kaufen wollen oder nur sammeln. Diese Lücke füllt kein
+          Datenbericht, sondern nur dein eigenes Bild vom Wunschkunden. Deshalb
+          ersetzt Audience Insights das Nachdenken über deine Zielgruppe nicht,
+          es schärft es. Die Daten zeigen dir das Was, dein Wunschkunden-Bild
+          liefert das Warum.
+        </Para>
+      </Toggle>
+
       <Toggle title="Den Zielgruppen-Bericht richtig lesen">
         <H4>Welche Zielgruppe</H4>
         <Para>
@@ -181,14 +209,14 @@ export default function AudienceWissen() {
             </>,
             <>
               <span className="font-medium text-amber-700">
-                🟡 Affinität 0,5 bis 1,5
+                🟡 Affinität 0,8 bis 1,5
               </span>
               : durchschnittlich. Deine Zielgruppe teilt das Interesse mit dem
               Pinterest-Schnitt: <strong>neutral</strong>.
             </>,
             <>
               <span className="font-medium text-red-700">
-                🔴 Affinität &lt; 0,5
+                🔴 Affinität &lt; 0,8
               </span>
               : unterdurchschnittlich. Deine Zielgruppe interessiert sich
               spürbar weniger als der Durchschnitt:{' '}
@@ -206,6 +234,32 @@ export default function AudienceWissen() {
         </div>
       </Toggle>
 
+      <Toggle title="Die häufigsten Denkfehler beim Lesen der Zielgruppe">
+        <Para>
+          Drei Fehler passieren beim Lesen der Zielgruppe besonders oft.
+        </Para>
+        <Bullets
+          items={[
+            <>
+              <strong>Höchster Anteil statt höchste Affinität.</strong> Ein
+              Thema, das 80 Prozent deiner Zielgruppe interessiert, ist oft nur
+              ein allgemeines Pinterest-Thema, das fast jeden interessiert. Die
+              hohe Affinität bei einem kleineren Thema sagt dir viel mehr.
+            </>,
+            <>
+              <strong>Sich von fremden Themen verführen lassen.</strong> Nicht
+              jede hohe Affinität ist eine Chance, nur die, zu der du eine echte
+              Brücke zu deinem Geschäft bauen kannst.
+            </>,
+            <>
+              <strong>Einen einzelnen Snapshot für die Wahrheit halten.</strong>{' '}
+              Erst über mehrere Monate zeigt sich, was stabil ist und was Zufall
+              war.
+            </>,
+          ]}
+        />
+      </Toggle>
+
       <Toggle title="Wie nutzt du diese Daten für deine Pin-Strategie?">
         <H4>Gleiche ab mit deiner Vorstellung</H4>
         <Para>
@@ -218,6 +272,11 @@ export default function AudienceWissen() {
           ein Hinweis, entweder deine Positionierung zu schärfen oder deine Pins
           anders auszurichten.
         </Para>
+        <p className="text-sm font-medium leading-relaxed text-gray-900">
+          Diese Lücke zwischen dem, wen du erreichen willst, und dem, wen du
+          tatsächlich erreichst, ist die wertvollste Information, die dir die
+          Zielgruppen-Daten liefern.
+        </p>
         <Para>
           Pin-Flow nimmt dir einen Teil davon ab: Im Analytics-Bereich und auf
           deinem Dashboard gleicht Pin-Flow deine Hauptnische automatisch mit der
@@ -258,6 +317,17 @@ export default function AudienceWissen() {
           oder neu priorisieren, um die starke Affinität besser zu treffen?
           Manchmal reicht eine veränderte Pin-Aufmachung (Cover, Hook,
           Keywords), um dieselbe Botschaft anders auszuspielen.
+        </Para>
+        <Para>
+          Deine echten Affinitäts-Werte und die Interessen deiner Zielgruppe
+          siehst du im Analytics-Bereich unter{' '}
+          <Link
+            href="/dashboard/analytics?tab=audience"
+            className="font-medium text-red-600 hover:underline"
+          >
+            Zielgruppe
+          </Link>
+          .
         </Para>
       </Toggle>
 

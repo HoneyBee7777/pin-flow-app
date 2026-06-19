@@ -67,12 +67,15 @@ function formatGrowthPercent(pct: number): string {
 
 export function AudienceSizeBlock({
   engaged,
+  onEditInteragierende,
 }: {
   engaged: EngagedAudience | null
+  // Wechselt zum Profil-Entwicklungs-Tab (dort Wert via Bearbeiten-Stift ändern).
+  onEditInteragierende?: () => void
 }) {
   if (!engaged) {
     return (
-      <div className="rounded-lg border border-gray-200 bg-white p-5">
+      <div className="h-full rounded-lg border border-gray-200 bg-white p-5">
         <p className="text-sm font-medium text-gray-500">
           Deine interagierende Zielgruppe
         </p>
@@ -92,7 +95,7 @@ export function AudienceSizeBlock({
   const arrow = up ? '↑' : down ? '↓' : '·'
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-5">
+    <div className="h-full rounded-lg border border-gray-200 bg-white p-5">
       <p className="text-sm font-medium text-gray-500">
         Deine interagierende Zielgruppe
       </p>
@@ -100,7 +103,21 @@ export function AudienceSizeBlock({
         {formatCount(engaged.value)} Personen
       </p>
       <p className="mt-1 text-sm text-gray-500">
-        Stand: {formatDateDe(engaged.dateIso)} (letztes Analytics-Update)
+        Stand: {formatDateDe(engaged.dateIso)}, aus deinem zuletzt
+        eingetragenen Zeitraum.
+      </p>
+      <p className="mt-1 text-xs text-gray-500">
+        Dieser Wert stammt aus deiner manuellen Eingabe und ist im{' '}
+        <button
+          type="button"
+          onClick={onEditInteragierende}
+          className="font-medium text-red-600 hover:underline"
+        >
+          Tab Profil-Entwicklung
+        </button>{' '}
+        über den Bearbeiten-Button änderbar. Die Zielgruppe-CSV gibt die Größe
+        nur grob gerundet an, deshalb zeigt Pin-Flow hier deinen genauen
+        eingetragenen Wert.
       </p>
       {showTrend && (
         <p
@@ -131,10 +148,12 @@ export function AudienceDemographics({
     (a) => a.percent
   )
   const topCountries = sortByPercentDesc(snapshot.data.countries).slice(0, 5)
-  const topDevices = sortByPercentDesc(snapshot.data.devices).slice(0, 3)
 
+  // Drei kompakte Listen als sekundäre Einordnung unter den Interessen.
+  // Geräte-Block bewusst entfernt (für Content-Entscheidungen irrelevant); die
+  // Daten bleiben geparst/in der DB, nur die Anzeige entfällt.
   return (
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+    <div className="grid h-full grid-cols-1 gap-3 md:grid-cols-3">
       <DemoBlock
         title="Geschlecht"
         items={sortedGender.map((g) => ({
@@ -156,13 +175,6 @@ export function AudienceDemographics({
           percent: c.percent,
         }))}
       />
-      <DemoBlock
-        title="Top-3-Geräte"
-        items={topDevices.map((d) => ({
-          label: d.name,
-          percent: d.percent,
-        }))}
-      />
     </div>
   )
 }
@@ -175,12 +187,12 @@ function DemoBlock({
   items: { label: string; percent: number }[]
 }) {
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4">
-      <h4 className="text-sm font-semibold text-gray-900">{title}</h4>
+    <div className="h-full rounded-lg border border-gray-200 bg-white p-3">
+      <h4 className="text-xs font-semibold text-gray-900">{title}</h4>
       {items.length === 0 ? (
         <p className="mt-2 text-xs text-gray-400">Keine Daten</p>
       ) : (
-        <ul className="mt-2 space-y-1 text-sm text-gray-700">
+        <ul className="mt-1.5 space-y-1 text-xs text-gray-700">
           {items.map((item, i) => (
             <li key={i} className="flex items-baseline justify-between gap-2">
               <span className="truncate">{item.label}</span>

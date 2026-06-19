@@ -94,10 +94,33 @@ export default function BoardsTab({
 
   return (
     <div className="space-y-6">
-      <p style={{ color: '#111827', fontWeight: '600', fontSize: '14px' }}>
-        Boards sind entscheidend für deine Reichweite auf Pinterest: korrekte
-        Keywords im Board-Namen helfen Pinterest zu verstehen, worum es auf
-        deinem Profil geht.
+      <p className="text-sm text-gray-700">
+        Hier siehst du die Auswertung deiner Boards aus den CSV-Importen.
+        <br />
+        Alle Werte sind sichtbar: Impressionen, ausgehende Klicks, Saves,
+        Klickrate und Save-Rate, dazu der Aktivitäts-Status, die Anzahl deiner
+        zugeordneten Pins und die passende Handlung.
+        <br />
+        Die Klickrate und Save-Rate werden gegen deinen eigenen
+        Board-Durchschnitt gemessen, die Wirkungs-Diagnose erscheint, sobald du
+        genug Boards mit ausreichender Reichweite hast.
+        <br />
+        Das Coaching zu deinen Boards mit konkreten nächsten Schritten findest
+        du im{' '}
+        <Link
+          href="/dashboard#board-gesundheit"
+          className="font-medium text-red-600 hover:underline"
+        >
+          Dashboard unter Board-Gesundheit
+        </Link>
+        . Tiefergehende Erklärungen stehen in den{' '}
+        <Link
+          href="/dashboard/strategie?tab=analytics"
+          className="font-medium text-red-600 hover:underline"
+        >
+          Wissensseiten
+        </Link>
+        .
       </p>
 
       {publicBoardsWithoutAnalytics.length > 0 && (
@@ -128,7 +151,7 @@ export default function BoardsTab({
       <ThresholdInfo />
 
       {boardAnalytics.some((r) => r.wirkungGated) && (
-        <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+        <div className="rounded-md border border-teal-200 border-l-[3px] border-l-teal-400 bg-teal-50 p-3 text-sm text-teal-900">
           Die Wirkungs-Diagnose deiner Boards zeigt sich, sobald du genug Boards
           mit ausreichender Reichweite hast. Aktuell sind es noch zu wenige für
           einen verlässlichen Vergleich. Die Aktivität deiner Boards siehst du
@@ -744,7 +767,7 @@ function SortableTh({
 // ===========================================================
 function ThresholdInfo() {
   return (
-    <details className="group rounded-lg border border-gray-200 bg-white shadow-sm">
+    <details className="group max-w-3xl rounded-lg border border-gray-200 bg-white shadow-sm">
       <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-4 text-base font-semibold text-gray-900 hover:bg-red-50 [&::-webkit-details-marker]:hidden">
         <span
           className="text-lg leading-none text-gray-400 transition-transform"
@@ -784,16 +807,6 @@ function ThresholdInfo() {
             dann lohnt eher das Optimieren als das Archivieren.
           </p>
         </div>
-        <p className="text-xs text-gray-500">
-          Werte anpassen in den{' '}
-          <Link
-            href="/dashboard/einstellungen"
-            className="font-medium text-red-600 hover:underline"
-          >
-            Einstellungen
-          </Link>
-          .
-        </p>
       </div>
     </details>
   )

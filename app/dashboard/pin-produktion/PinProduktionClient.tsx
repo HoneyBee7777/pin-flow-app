@@ -54,6 +54,7 @@ import {
   type StrategieTyp,
   type ZielUrlOption,
 } from './utils'
+import { keywordInText } from '../analytics/utils'
 import { ZIELFLAECHEN, type Zielflaeche } from '../strategie/lib'
 
 // Menschenlesbares Label je Zielfläche, abgeleitet aus der zentralen
@@ -102,11 +103,10 @@ function checkKeywordPresence(
   beschreibung: string | null,
   boardName: string | null
 ): KeywordPresence {
-  const kw = keyword.toLowerCase()
   return {
-    inTitel: (titel ?? '').toLowerCase().includes(kw),
-    inBeschreibung: (beschreibung ?? '').toLowerCase().includes(kw),
-    inBoardName: (boardName ?? '').toLowerCase().includes(kw),
+    inTitel: keywordInText(keyword, titel),
+    inBeschreibung: keywordInText(keyword, beschreibung),
+    inBoardName: keywordInText(keyword, boardName),
   }
 }
 

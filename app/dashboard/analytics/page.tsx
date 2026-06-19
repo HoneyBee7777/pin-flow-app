@@ -18,13 +18,11 @@ import {
   type BoardAnalyticsRow,
   type BoardOption,
   type EinstellungenSchwellwerte,
-  type EinstellungenSchwellwerteBoard,
   type PinAnalyticsRow,
   type PinOption,
   type ProfilAnalytics,
 } from './utils'
 import { loadUserBenchmark } from './benchmark'
-import { loadAccountNicheProfile } from './account-niche'
 import { getAudienceSnapshots } from '@/lib/audience-snapshot'
 
 type RawPinAnalyticsRow = {
@@ -74,10 +72,7 @@ export default async function AnalyticsPage() {
          schwellwert_min_klicks_nutzer_signal,
          schwellwert_top_performer_max_alter,
          schwellwert_schlafender_gewinner_alter,
-         schwellwert_ctr_boost_faktor,
-         schwellwert_board_wenig_aktiv, schwellwert_board_inaktiv,
-         schwellwert_board_top_er, schwellwert_board_top_prozent,
-         schwellwert_board_schwach_er, schwellwert_board_wachstum_trend`
+         schwellwert_ctr_boost_faktor`
       )
       .eq('user_id', user.id)
       .maybeSingle(),
@@ -138,9 +133,8 @@ export default async function AnalyticsPage() {
   const pins = (pinsRes.data ?? []) as PinOption[]
 
   const today = todayIso()
-  const [benchmark, nicheProfile, audienceSnapshots] = await Promise.all([
+  const [benchmark, audienceSnapshots] = await Promise.all([
     loadUserBenchmark(user.id),
-    loadAccountNicheProfile(user.id),
     getAudienceSnapshots(),
   ])
   const thresholds = thresholdsFromSettings(
@@ -201,9 +195,7 @@ export default async function AnalyticsPage() {
     created_at: string | null
   }>
 
-  const boardThresholds = boardThresholdsFromSettings(
-    settingsRes.data as Partial<EinstellungenSchwellwerteBoard> | null
-  )
+  const boardThresholds = boardThresholdsFromSettings()
 
   const lastPinByBoard = new Map<string, string>()
   // Pflegestand: Anzahl der in Pin-Flow diesem Board zugeordneten Pins. Aus der
@@ -426,7 +418,6 @@ export default async function AnalyticsPage() {
         deletedPinAnalytics={deletedPinAnalytics}
         thresholds={thresholds}
         benchmark={benchmark}
-        nicheProfile={nicheProfile}
         boards={boards}
         boardAnalytics={boardAnalytics}
         boardHistory={Object.fromEntries(historyByBoard)}

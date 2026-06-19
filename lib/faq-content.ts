@@ -314,7 +314,7 @@ Pinterest belohnt Varianten desselben Inhalts als **frischen Content**: du nutzt
 - Filter- und Sortier-Optionen
 - Möglichkeit, Pin-Inhalte zu bearbeiten und neue Pin-Varianten zu produzieren
 
-**Schnellzugriff vom Dashboard:** Im Bereich „Bestehende Pins optimieren" siehst du direkt, welche Pins gerade Aufmerksamkeit brauchen. Klick auf die Kategorie öffnet die konkrete Pin-Liste.`,
+**Schnellzugriff vom Dashboard:** Im Bereich „Pins recyceln" siehst du direkt, welche Pins gerade Aufmerksamkeit brauchen. Klick auf die Kategorie öffnet die konkrete Pin-Liste.`,
       },
       {
         question: 'Wie pflege ich meine Keywords, Inhalte und URLs?',

@@ -26,15 +26,19 @@ import {
 } from './csvImport'
 import {
   addDays,
+  effectiveZeitraum,
   formatDateDe,
+  formatMonthDe,
   PIN_STATUS_BADGE,
   PIN_STATUS_LABEL,
   naechsterMonatZeitraum,
   todayIso,
   type BoardOption,
+  type PinAnalyticsRow,
   type PinOption,
   type ProfilAnalyticsWithGrowth,
 } from './utils'
+import type { AudienceSnapshot } from '@/lib/audience-types'
 import AudienceCsvUpload from './AudienceCsvUpload'
 import { HinweisBox } from '@/components/HinweisBox'
 
@@ -53,11 +57,162 @@ function parseTsdInput(s: string): number {
   return Math.max(0, Math.round(n * 1000))
 }
 
+// Invertiert parseTsdInput für die Vorbefüllung beim Bearbeiten: absoluter
+// DB-Wert (5500) → Tsd.-Eingabetext ("5,5"). round() beim Speichern fängt
+// Float-Reste wieder ab, daher verlustfrei hin und zurück.
+function toTsdInput(absolute: number): string {
+  return String(absolute / 1000).replace('.', ',')
+}
+
+// Bearbeiten-Anforderung aus der Profil-Verlaufstabelle: der zu ladende
+// Eintrag + ein nonce, das bei jedem Klick steigt (erzwingt erneutes
+// Vorbefüllen, auch bei wiederholtem Klick auf dieselbe Zeile).
+export type ProfilEditRequest = {
+  entry: ProfilAnalyticsWithGrowth
+  nonce: number
+}
+
 const TSD_FIELDS = [
   'impressionen',
   'gesamte_zielgruppe',
-  'interagierende_zielgruppe',
 ] as const
+
+// Grünes Häkchen für „erledigt" — funktionales Icon im App-Stil (kein Deko-Emoji).
+function CheckIcon() {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      fill="currentColor"
+      aria-hidden
+      className="h-4 w-4 shrink-0 text-green-600"
+    >
+      <path
+        fillRule="evenodd"
+        d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z"
+        clipRule="evenodd"
+      />
+    </svg>
+  )
+}
+
+// Offener, gedämpfter Kreis für „noch offen".
+function OpenCircleIcon() {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      aria-hidden
+      className="h-4 w-4 shrink-0 text-gray-400"
+    >
+      <circle cx="10" cy="10" r="7.25" />
+    </svg>
+  )
+}
+
+// Automatische Monats-Checkliste: zeigt, ob für den letzten ABGESCHLOSSENEN
+// Kalendermonat alle drei Importe erfasst sind. Referenzmonat stabil aus
+// `today` über naechsterMonatZeitraum(null) (= voller Vormonat), NICHT aus dem
+// geteilten latestZeitraumBis (das wandert nach dem ersten Import). Jede der
+// drei Prüfungen vergleicht direkt gegen die jeweilige Quelle per YYYY-MM.
+function MonatsCheckliste({
+  profilAnalytics,
+  pinAnalytics,
+  audienceSnapshots,
+}: {
+  profilAnalytics: ProfilAnalyticsWithGrowth[]
+  pinAnalytics: PinAnalyticsRow[]
+  audienceSnapshots: AudienceSnapshot[]
+}) {
+  // Letzter abgeschlossener Kalendermonat (von = 1. des Vormonats).
+  const { von } = naechsterMonatZeitraum(null)
+  const refMonth = von.slice(0, 7) // YYYY-MM
+  const monatLabel = formatMonthDe(von) // z. B. „Mai 2026"
+
+  // Punkt 1 — Profil-Daten: ∃ profil_analytics mit zeitraum_bis (Fallback datum)
+  // im Referenzmonat.
+  const profilDone = profilAnalytics.some(
+    (r) => (r.zeitraum_bis ?? r.datum).slice(0, 7) === refMonth
+  )
+  // Punkt 2 — Pins + Boards: ∃ pin_analytics mit zeitraum_bis (Fallback datum)
+  // im Referenzmonat. Boards stammen aus demselben Import.
+  const pinsDone = pinAnalytics.some(
+    (r) => (r.zeitraum_bis ?? r.datum).slice(0, 7) === refMonth
+  )
+  // Punkt 3 — Zielgruppe: ∃ audience_snapshot mit audienceDate im Referenzmonat
+  // (Kalendermonat-Vergleich, das CSV-Datum kann mitten im Monat liegen).
+  const audienceDone = audienceSnapshots.some(
+    (s) => s.audienceDate.slice(0, 7) === refMonth
+  )
+
+  const items = [
+    {
+      key: 'profil',
+      label: 'Profil-Daten eingetragen',
+      done: profilDone,
+      targetId: 'analytics-profil-form',
+    },
+    {
+      key: 'pins',
+      label: 'Pins und Boards importiert',
+      done: pinsDone,
+      targetId: 'analytics-csv-import',
+    },
+    {
+      key: 'audience',
+      label: 'Zielgruppe importiert',
+      done: audienceDone,
+      targetId: 'analytics-zielgruppe-import',
+    },
+  ]
+  const allDone = items.every((it) => it.done)
+
+  function scrollTo(id: string) {
+    document
+      .getElementById(id)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  return (
+    <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+      <h2 className="text-sm font-semibold text-gray-900">
+        Dein Stand für {monatLabel}
+      </h2>
+      <ul className="mt-3 space-y-2">
+        {items.map((it) =>
+          it.done ? (
+            <li
+              key={it.key}
+              className="flex items-center gap-2 text-sm text-gray-700"
+            >
+              <CheckIcon />
+              <span>{it.label}</span>
+            </li>
+          ) : (
+            <li key={it.key}>
+              <button
+                type="button"
+                onClick={() => scrollTo(it.targetId)}
+                className="flex w-full items-center gap-2 text-left text-sm text-gray-500 hover:text-gray-700"
+              >
+                <OpenCircleIcon />
+                <span>{it.label}</span>
+                <span className="text-xs text-gray-400">noch offen</span>
+              </button>
+            </li>
+          )
+        )}
+      </ul>
+      {allDone && (
+        <p className="mt-3 flex items-center gap-2 text-sm font-medium text-green-700">
+          <CheckIcon />
+          Für {monatLabel} ist alles erfasst.
+        </p>
+      )}
+    </div>
+  )
+}
 
 // Periodenformat für die CSV-Slot-Erkennung: gleiches Jahr → "01.02. – 28.02.2026".
 function formatPeriodCompact(von: string, bis: string): string {
@@ -74,6 +229,8 @@ function formatPeriodCompact(von: string, bis: string): string {
 // ===========================================================
 export default function EingabeTab({
   profilAnalytics,
+  pinAnalytics,
+  audienceSnapshots,
   pins,
   boards,
   latestZeitraumBis,
@@ -90,8 +247,12 @@ export default function EingabeTab({
   onUnmatchedPinResolved,
   unmatchedBoards,
   onUnmatchedBoardResolved,
+  editRequest,
 }: {
   profilAnalytics: ProfilAnalyticsWithGrowth[]
+  // Für die Monats-Checkliste (nur Lesezugriff, keine neue DB-Abfrage).
+  pinAnalytics?: PinAnalyticsRow[]
+  audienceSnapshots?: AudienceSnapshot[]
   pins: PinOption[]
   boards: BoardOption[]
   latestZeitraumBis: string | null
@@ -122,6 +283,9 @@ export default function EingabeTab({
   // AnalyticsClient sie verdrahtet.
   unmatchedBoards?: UnmatchedBoard[]
   onUnmatchedBoardResolved?: (boardSlug: string) => void
+  // Bearbeiten-Anforderung aus der Profil-Verlaufstabelle (Profil-Tab) —
+  // befüllt das „1) Profil-Daten"-Formular mit den Werten dieses Zeitraums.
+  editRequest?: ProfilEditRequest | null
 }) {
   // Getrennte Pin-/Board-Zähler für die Hinweis-Box — aus den bereits
   // übergebenen Listen abgeleitet, ohne zusätzliche Durchreichung.
@@ -138,6 +302,12 @@ export default function EingabeTab({
         Pin-Flow noch nicht kennt, ordnest du weiter unten einmalig deinen
         angelegten Pins und Boards zu.
       </p>
+
+      <MonatsCheckliste
+        profilAnalytics={profilAnalytics}
+        pinAnalytics={pinAnalytics ?? []}
+        audienceSnapshots={audienceSnapshots ?? []}
+      />
 
       {pendingNotice && (
         <HinweisBox variant="tipp">
@@ -221,13 +391,17 @@ export default function EingabeTab({
           </p>
         </div>
         <Schritt1ProfilForm
+          editRequest={editRequest}
           profilAnalytics={profilAnalytics}
           latestZeitraumBis={latestZeitraumBis}
         />
       </section>
 
       {/* Karte 2 — Top Pins und Boards */}
-      <section className="space-y-4 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+      <section
+        id="analytics-csv-import"
+        className="scroll-mt-6 space-y-4 rounded-lg border border-gray-200 bg-white p-6 shadow-sm"
+      >
         <div>
           <h2 className="text-lg font-semibold text-gray-900">
             2. Top Pins und Boards importieren
@@ -274,7 +448,10 @@ export default function EingabeTab({
       )}
 
       {/* Karte 3 — Zielgruppe */}
-      <section className="space-y-4 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+      <section
+        id="analytics-zielgruppe-import"
+        className="scroll-mt-6 space-y-4 rounded-lg border border-gray-200 bg-white p-6 shadow-sm"
+      >
         <div>
           <h2 className="text-lg font-semibold text-gray-900">
             3. Zielgruppe importieren
@@ -431,9 +608,11 @@ function CombinedHowToToggle({
 function Schritt1ProfilForm({
   profilAnalytics,
   latestZeitraumBis,
+  editRequest,
 }: {
   profilAnalytics: ProfilAnalyticsWithGrowth[]
   latestZeitraumBis: string | null
+  editRequest?: ProfilEditRequest | null
 }) {
   const [zeitraumVon, setZeitraumVon] = useState('')
   const [zeitraumBis, setZeitraumBis] = useState('')
@@ -455,6 +634,23 @@ function Schritt1ProfilForm({
     if (von) setZeitraumVon((prev) => prev || von)
     if (bis) setZeitraumBis((prev) => prev || bis)
   }, [latestZeitraumBis])
+
+  // Bearbeiten: Werte des gewählten Zeitraums vorbefüllen. Einheiten-
+  // Rückrechnung passend zur Speicher-Logik — TSD-Felder (impressionen,
+  // gesamte_zielgruppe) als „x,y"-Tsd. (÷1000), die übrigen 1:1. zeitraum_bis
+  // (= datum) sorgt beim Speichern für UPSERT auf denselben Eintrag.
+  useEffect(() => {
+    if (!editRequest) return
+    const e = editRequest.entry
+    const { von, bis } = effectiveZeitraum(e)
+    setZeitraumVon(von)
+    setZeitraumBis(bis)
+    setImpressionen(toTsdInput(e.impressionen))
+    setKlicks(String(e.ausgehende_klicks))
+    setSaves(String(e.saves))
+    setZielgruppe(toTsdInput(e.gesamte_zielgruppe))
+    setInteragierend(String(e.interagierende_zielgruppe))
+  }, [editRequest])
 
   const existingForBis = useMemo(
     () => profilAnalytics.find((r) => r.datum === zeitraumBis) ?? null,
@@ -597,22 +793,22 @@ function Schritt1ProfilForm({
           </Field>
 
           <Field
-            label="Interagierende Zielgruppe (Tsd.)"
+            label="Interagierende Zielgruppe (Personen)"
             htmlFor="profil_interagierende_zielgruppe"
           >
             <input
               id="profil_interagierende_zielgruppe"
               name="interagierende_zielgruppe"
               type="text"
-              inputMode="decimal"
+              inputMode="numeric"
               required
-              placeholder="5,5"
+              placeholder="113"
               value={interagierend}
               onChange={(e) => setInteragierend(e.target.value)}
               className={inputCls}
             />
             <p className="mt-1 text-xs text-gray-500">
-              z.B. 5,5 für 5.500
+              Gib die echte Personenzahl ein, z.B. 113
             </p>
           </Field>
         </div>

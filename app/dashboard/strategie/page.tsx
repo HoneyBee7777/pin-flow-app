@@ -73,8 +73,8 @@ export default async function StrategiePage() {
         <h1 className="text-3xl font-bold text-gray-900">Pinterest-Wissen</h1>
         <p className="mt-1 text-sm text-gray-600">
           Alles, was du für sichtbare Pins und eine klare Strategie brauchst:
-          von den Grundlagen über Keywords und Pin-Gestaltung bis zur
-          Analytics-Auswertung.
+          von deiner Zielgruppe über die Pinterest-Grundlagen und Keywords bis
+          zur Pin-Gestaltung und Analytics-Auswertung.
         </p>
       </header>
 

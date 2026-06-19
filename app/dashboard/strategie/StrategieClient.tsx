@@ -31,22 +31,22 @@ const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'grundlagen', label: 'So funktioniert Pinterest' },
   { key: 'faktoren', label: 'Erfolgsfaktoren' },
   { key: 'strategien', label: 'Strategie verstehen' },
+  { key: 'audience', label: 'Zielgruppe verstehen' },
   { key: 'meine', label: 'Strategie festlegen' },
   { key: 'design', label: 'Pin-Gestaltung' },
   { key: 'keywords', label: 'Sichtbarkeit & Keywords' },
   { key: 'analytics', label: 'Analytics' },
-  { key: 'audience', label: 'Zielgruppe verstehen' },
 ]
 
 const TAB_KEYS: TabKey[] = [
   'grundlagen',
   'faktoren',
   'strategien',
+  'audience',
   'meine',
   'design',
   'keywords',
   'analytics',
-  'audience',
 ]
 
 export default function StrategieClient({
@@ -495,9 +495,10 @@ function TabFaktoren() {
           <H4>4. Board-Beschreibung</H4>
           <Para>
             Wird von Pinterest vollständig gelesen und zur thematischen
-            Einordnung genutzt. Verwende möglichst viele relevante Keywords und
-            Longtail-Keywords, die wichtigsten weit vorne, natürlich in Sätze
-            eingebettet. Maximal 500 Zeichen.
+            Einordnung genutzt. Bau 2 bis 3 Sätze mit deinen wichtigsten
+            Keywords, das Haupt-Keyword im ersten Satz, natürlich eingebettet
+            statt aneinandergereiht. Etwa 200 bis 300 Zeichen reichen meist,
+            die 500 sind die Grenze, kein Ziel.
           </Para>
         </div>
 
@@ -618,9 +619,9 @@ function TabFaktoren() {
               Longtail-Keyword.
             </>,
             <>
-              <strong>Board-Beschreibung:</strong> Schöpfe die 500 Zeichen aus,
-              eine kurze Beschreibung plus die meistgesuchten
-              Longtail-Keywords.
+              <strong>Board-Beschreibung:</strong> 2 bis 3 keywordreiche Sätze,
+              das Haupt-Keyword zuerst. Etwa 200 bis 300 Zeichen sind ideal,
+              lieber lesbar als vollgestopft.
             </>,
             <>
               <strong>So findest du starke Keywords:</strong> Gib dein Thema in
@@ -3268,8 +3269,8 @@ function TabKeywords() {
         <Para>
           Weniger als du denkst. Ein Account mit 10 starken, klar
           definierten Boards ist besser als 30 unstrukturierte Boards.
-          Faustregel: Ein Board pro Hauptthema, nicht mehr als 15 bis 20
-          Boards insgesamt.
+          Faustregel: Ein Board pro Hauptthema, etwa 5 bis 20 Boards
+          insgesamt, lieber wenige scharfe als viele schwache.
         </Para>
 
         <HinweisBox>
@@ -3290,13 +3291,15 @@ function TabKeywords() {
           Zwei Dinge solltest du im Blick behalten:
         </Para>
         <Para>
-          Reaktiviere inaktive Boards. Boards, auf denen lange nichts Neues
-          erschienen ist, spielt Pinterest seltener aus. Speichere regelmäßig
-          neue Pins darauf, idealerweise 3 bis 5 pro Woche, bis das Board wieder
-          als aktiv gilt.
+          Reaktiviere eingeschlafene Boards. Pin-Flow zeigt dir ein Board als
+          aktiv, wenn der letzte Pin weniger als 30 Tage her ist, als wenig
+          aktiv zwischen 30 und 90 Tagen und als eingeschlafen ab 90 Tagen.
+          Eingeschlafene Boards spielt Pinterest seltener aus. Speichere wieder
+          regelmäßig neue Pins darauf, idealerweise 3 bis 5 pro Woche, bis das
+          Board wieder aktiv ist.
         </Para>
         <Para>
-          Prüfe nach rund 30 Tagen, ob sich etwas getan hat. Läuft das Board
+          Prüfe nach einigen Wochen, ob sich etwas getan hat. Läuft das Board
           besser, bleibe dabei. Wenn nicht, schärfe die Keywords im Namen und in
           der Beschreibung nach oder überdenke das Thema grundsätzlich.
         </Para>
@@ -3958,8 +3961,7 @@ function TabAnalytics() {
           </Para>
           <Para>
             Das ist dein effizientester Hebel. Im Dashboard zeigt dir
-            „Bestehende Pins optimieren" automatisch, welche Pins sich fürs
-            Recyceln anbieten.
+            „Pins recyceln" automatisch, welche Pins sich dafür anbieten.
           </Para>
         </div>
 
@@ -4033,28 +4035,29 @@ function TabAnalytics() {
 
         <H4>Worauf es bei deinen Board-Zahlen ankommt</H4>
         <Para>
-          Zwei Zahlen helfen dir, ein Board einzuschätzen, aber sie beantworten
-          verschiedene Fragen:
+          Zwei Raten helfen dir, ein Board einzuschätzen, und beide misst
+          Pin-Flow gegen deinen eigenen Board-Durchschnitt, nicht gegen feste
+          Branchenwerte:
         </Para>
         <Bullets
           items={[
-            'Die Engagement-Rate = (Saves + ausgehende Klicks) ÷ Impressionen × 100. Sie fasst zusammen, wie gut die Pins auf einer Pinnwand insgesamt ankommen. Ein nützlicher Überblickswert, aber sie steuert nichts. Für die Sichtbarkeit eines Boards zählen thematische Klarheit, Aktualität und regelmäßiges Pinnen zum Kernthema.',
-            'Ausgehende Klicks zeigen, ob ein Board Besucher auf deine Website bringt. Das ist der direkte Geschäftswert: Wie viel Website-Traffic kommt von diesem Board?',
+            'Die Klickrate, also ausgehende Klicks geteilt durch Impressionen, zeigt, wie gut ein Board seine Reichweite in Website-Besuche umwandelt. Das ist der direkte Geschäftswert. Pin-Flow vergleicht sie mit deinem eigenen Durchschnitt: deutlich darüber ist stark, deutlich darunter schwach.',
+            'Die Save-Rate, also Saves geteilt durch Impressionen, zeigt, wie oft Nutzer Pins von diesem Board speichern. Saves sind das stärkste Signal dafür, dass Pinterest deine Inhalte weiter ausspielt.',
           ]}
         />
         <HinweisBox variant="merke">
-          Die Engagement-Rate zeigt dir das Gesamtbild, wie gut die Pins einer
-          Pinnwand ankommen. Die ausgehenden Klicks zeigen, wie viel
-          Website-Traffic die Pinnwand bringt. Zusammen geben sie dir ein gutes
-          Gefühl dafür, ob ein Board für dich arbeitet.
+          Die Klickrate zeigt dir, ob ein Board Besucher auf deine Website
+          bringt, also den direkten Geschäftswert. Die Save-Rate zeigt, ob
+          Pinterest die Inhalte mag und weiterträgt. Zusammen geben sie dir ein
+          gutes Gefühl dafür, ob ein Board für dich arbeitet.
         </HinweisBox>
 
         <H4>Was du daraus ableitest:</H4>
         <Bullets
           items={[
-            'Board mit hohen Impressionen, aber wenig Klicks → Hook-Problem: Die Pins darauf überzeugen nicht zum Klicken, Design und Hook überarbeiten',
-            'Board mit wenig Impressionen → Sichtbarkeits-Problem: Board-Name und Beschreibung sind zu schwach, Keywords optimieren',
-            'Board mit niedriger Engagement-Rate: ein Hinweis, dass die Pins darauf noch nicht gut ankommen. Prüfe, ob Thema, Pin-Qualität und Aktivität zusammenpassen, und pinne regelmäßiger zum Kernthema des Boards',
+            'Board mit Reichweite, aber niedriger Klickrate: Die Pins überzeugen nicht zum Klicken, überarbeite Hook und Design.',
+            'Board mit wenig Impressionen: Sichtbarkeits-Problem, Board-Name und Beschreibung sind zu schwach, optimiere die Keywords.',
+            'Board mit Reichweite und Klicks, aber kaum Saves: Die Inhalte führen zwar zum Klick, werden aber selten gespeichert. Prüfe, ob Thema und Pin-Qualität wirklich zum Board passen, und pinne regelmäßig zum Kernthema.',
           ]}
         />
 

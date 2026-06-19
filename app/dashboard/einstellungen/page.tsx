@@ -24,9 +24,6 @@ export default async function EinstellungenPage() {
        schwellwert_top_performer_max_alter,
        schwellwert_schlafender_gewinner_alter,
        schwellwert_ctr_boost_faktor,
-       schwellwert_board_wenig_aktiv, schwellwert_board_inaktiv,
-       schwellwert_board_top_er, schwellwert_board_top_prozent,
-       schwellwert_board_schwach_er, schwellwert_board_wachstum_trend,
        cp_min_pins_gesamt, cp_min_pins_ohne_aktuell, cp_tage_ohne_pin,
        cp_min_ctr_goldnugget, cp_max_pins_goldnugget`
       )
@@ -68,55 +65,8 @@ export default async function EinstellungenPage() {
           websiteUrl: data?.website_url ?? '',
           tailwindUrl: data?.tailwind_url ?? '',
         }}
-        initialSchwellwerte={{
-          beobachtung: data?.schwellwert_beobachtung ?? null,
-          minKlicksTopPerformer: data?.schwellwert_min_klicks ?? null,
-          minImpCtrUrteil: data?.schwellwert_min_imp_ctr_urteil ?? null,
-          minImpReichweiteStark:
-            data?.schwellwert_min_imp_reichweite_stark ?? null,
-          minKlicksNutzerSignal:
-            data?.schwellwert_min_klicks_nutzer_signal ?? null,
-          topPerformerMaxAlter:
-            data?.schwellwert_top_performer_max_alter ?? null,
-          schlafenderGewinnerAlter:
-            data?.schwellwert_schlafender_gewinner_alter ?? null,
-          ctrBoostFaktor:
-            data?.schwellwert_ctr_boost_faktor === null ||
-            data?.schwellwert_ctr_boost_faktor === undefined
-              ? null
-              : Number(data.schwellwert_ctr_boost_faktor),
-          fallbackCtr:
-            data?.schwellwert_ctr === null ||
-            data?.schwellwert_ctr === undefined
-              ? null
-              : Number(data.schwellwert_ctr),
-        }}
         initialBenchmark={benchmark}
         initialNicheProfile={nicheProfile}
-        initialBoardSchwellwerte={{
-          wenigAktiv: data?.schwellwert_board_wenig_aktiv ?? null,
-          inaktiv: data?.schwellwert_board_inaktiv ?? null,
-          topEr:
-            data?.schwellwert_board_top_er === null ||
-            data?.schwellwert_board_top_er === undefined
-              ? null
-              : Number(data.schwellwert_board_top_er),
-          topProzent:
-            data?.schwellwert_board_top_prozent === null ||
-            data?.schwellwert_board_top_prozent === undefined
-              ? null
-              : Number(data.schwellwert_board_top_prozent),
-          schwachEr:
-            data?.schwellwert_board_schwach_er === null ||
-            data?.schwellwert_board_schwach_er === undefined
-              ? null
-              : Number(data.schwellwert_board_schwach_er),
-          wachstumTrend:
-            data?.schwellwert_board_wachstum_trend === null ||
-            data?.schwellwert_board_wachstum_trend === undefined
-              ? null
-              : Number(data.schwellwert_board_wachstum_trend),
-        }}
         initialContentPipelineSchwellwerte={{
           minPinsGesamt: data?.cp_min_pins_gesamt ?? null,
           minPinsOhneAktuell: data?.cp_min_pins_ohne_aktuell ?? null,
