@@ -501,6 +501,7 @@ type Filters = {
   contentId: string
   vorlageId: string
   urlId: string
+  saisonEventId: string
   // Pin-Ziel: 'ohne-url' zeigt nur Pins ohne verknüpfte Ziel-URL, eine
   // konkrete Zielfläche zeigt nur Pins, deren Ziel-URL diese Zielfläche hat.
   pinziel: '' | 'ohne-url' | Zielflaeche
@@ -517,13 +518,14 @@ const EMPTY_FILTERS: Filters = {
   contentId: '',
   vorlageId: '',
   urlId: '',
+  saisonEventId: '',
   pinziel: '',
   keyword: '',
 }
 
 // Liest die unterstützten ?filter[…]=… Query-Parameter und liefert ein
 // Filters-Objekt für die initiale Tabellen-Anzeige. Aktuell unterstützt:
-// strategie, format, board, content, vorlage, url, status.
+// strategie, format, board, content, vorlage, url, saison_event, status.
 // Wert „keine-angabe" → NONE-Sentinel (deckt NULL / '' / undefined ab).
 // Sonstige Werte: board / content / vorlage / url werden direkt als ID
 // übernommen; status wird gegen die STATUS-Enum-Werte validiert.
@@ -552,6 +554,13 @@ function filtersFromSearchParams(
   const url = params.get('filter[url]')
   if (isNone(url)) next.urlId = NONE
   else if (url) next.urlId = url
+
+  // Saison-Event-Filter (Deep-Link aus dem Saisonkalender): filter[saison_event]
+  // = saison_event_id, analog zum board-Filter. „keine-angabe" → nur Pins ohne
+  // Saison-Tag.
+  const saisonEvent = params.get('filter[saison_event]')
+  if (isNone(saisonEvent)) next.saisonEventId = NONE
+  else if (saisonEvent) next.saisonEventId = saisonEvent
 
   const status = params.get('filter[status]')
   if (status && (STATUS as readonly string[]).includes(status)) {
@@ -739,6 +748,13 @@ function PinTable({
         if (filters.urlId === NONE) {
           if (p.ziel_url_id) return false
         } else if (p.ziel_url_id !== filters.urlId) {
+          return false
+        }
+      }
+      if (filters.saisonEventId) {
+        if (filters.saisonEventId === NONE) {
+          if (p.saison_event_id) return false
+        } else if (p.saison_event_id !== filters.saisonEventId) {
           return false
         }
       }

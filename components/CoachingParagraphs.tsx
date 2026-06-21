@@ -16,7 +16,7 @@ import type { CoachingBlock } from '@/lib/audience-types'
 // Wandelt „… **wichtig** …" in React-Knoten mit <strong> um. Splittet an
 // `**`; jedes ungerade Segment ist fett. Robust auch ohne/mit ungeraden
 // Markern (dann bleibt der Rest normaler Text).
-function renderWithBold(text: string): ReactNode[] {
+export function renderWithBold(text: string): ReactNode[] {
   return text.split('**').map((segment, i) =>
     i % 2 === 1 ? (
       <strong key={i} className="font-semibold">
@@ -54,7 +54,7 @@ export default function CoachingParagraphs({
           →{' '}
           <Link
             href="/dashboard/ressourcen#bruecken-themen"
-            className="font-medium text-red-600 hover:underline"
+            className="font-medium text-link underline"
           >
             Brücken-Themen-Ideen generieren
           </Link>

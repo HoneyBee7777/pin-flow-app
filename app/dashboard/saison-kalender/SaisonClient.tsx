@@ -71,6 +71,8 @@ export default function SaisonClient({
 
   const formOpen = showAddForm || editing !== null
   const isEvergreen = saisonTyp === 'evergreen'
+  // Freie Zeitraum-Typen: hier pflegt der Nutzer Start + Enddatum selbst.
+  const isZeitraum = saisonTyp === 'saison' || saisonTyp === 'anlass'
 
   function toggleSort(key: SortKey) {
     setSort((cur) => {
@@ -149,6 +151,16 @@ export default function SaisonClient({
     setFormError(null)
     const form = e.currentTarget
     const formData = new FormData(form)
+
+    // Zeitraum-Validierung: Enddatum muss nach dem Startdatum liegen.
+    if (isZeitraum) {
+      const start = String(formData.get('event_datum') ?? '')
+      const ende = String(formData.get('event_datum_ende') ?? '')
+      if (start && ende && ende <= start) {
+        setFormError('Das Enddatum muss nach dem Startdatum liegen.')
+        return
+      }
+    }
 
     const result = editing
       ? await (() => {
@@ -284,7 +296,9 @@ export default function SaisonClient({
               htmlFor="event_datum"
               className="block text-sm font-medium text-gray-700"
             >
-              Datum {!isEvergreen && <span className="text-red-600">*</span>}
+              {/* Dynamisches Label: bei Zeitraum-Typen „Startdatum", sonst „Datum". */}
+              {isZeitraum ? 'Startdatum' : 'Datum'}{' '}
+              {!isEvergreen && <span className="text-red-600">*</span>}
             </label>
             <input
               id="event_datum"
@@ -301,6 +315,30 @@ export default function SaisonClient({
               </p>
             )}
           </div>
+
+          {/* Enddatum nur für freie Zeitraum-Typen (Saison/Anlass). Optional;
+              wenn gesetzt, muss es nach dem Startdatum liegen. */}
+          {isZeitraum && (
+            <div>
+              <label
+                htmlFor="event_datum_ende"
+                className="block text-sm font-medium text-gray-700"
+              >
+                Enddatum
+              </label>
+              <input
+                id="event_datum_ende"
+                name="event_datum_ende"
+                type="date"
+                defaultValue={editing?.event_datum_ende ?? ''}
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                Ende des Zeitraums (optional). Während des Zeitraums steht die
+                Saison in der Hochphase. Muss nach dem Startdatum liegen.
+              </p>
+            </div>
+          )}
 
           <div>
             <label
@@ -453,7 +491,11 @@ export default function SaisonClient({
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-700">
                       <span className="inline-flex items-center gap-1.5">
-                        {formatDateDe(ev.event_datum)}
+                        {ev.event_datum_ende
+                          ? `${formatDateDe(ev.event_datum)} – ${formatDateDe(
+                              ev.event_datum_ende
+                            )}`
+                          : formatDateDe(ev.event_datum)}
                         {ev.datum_variabel && (
                           <span
                             className="text-yellow-500"

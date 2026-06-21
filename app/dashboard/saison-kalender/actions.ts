@@ -17,9 +17,14 @@ function isTyp(value: string): value is SaisonTyp {
   return (ALLOWED_TYPES as readonly string[]).includes(value)
 }
 
+// Freie Zeitraum-Typen, die der Nutzer mit Start + Enddatum pflegt. Nur hier
+// wird event_datum_ende übernommen; alle anderen Typen bleiben Stichtag (null).
+const ZEITRAUM_TYPEN: readonly SaisonTyp[] = ['saison', 'anlass'] as const
+
 type Input = {
   event_name: string
   event_datum: string | null
+  event_datum_ende: string | null
   saison_typ: SaisonTyp
   suchbeginn_tage: number | null
   notizen: string | null
@@ -41,6 +46,7 @@ function parseInput(
     return { error: 'Bitte einen gültigen Saison-Typ wählen.' }
 
   let event_datum: string | null = null
+  let event_datum_ende: string | null = null
   let suchbeginn_tage: number | null = null
   let datum_variabel = false
 
@@ -65,12 +71,26 @@ function parseInput(
     }
 
     datum_variabel = datumVariabelRaw === 'on' || datumVariabelRaw === 'true'
+
+    // Enddatum nur bei Zeitraum-Typen übernehmen; sonst bleibt es null
+    // (Stichtage bekommen kein Enddatum, auch wenn versehentlich gesendet).
+    if (ZEITRAUM_TYPEN.includes(typRaw)) {
+      const endeRaw = String(formData.get('event_datum_ende') ?? '').trim()
+      if (endeRaw) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(endeRaw))
+          return { error: 'Ungültiges Enddatum-Format.' }
+        if (endeRaw <= event_datum)
+          return { error: 'Das Enddatum muss nach dem Startdatum liegen.' }
+        event_datum_ende = endeRaw
+      }
+    }
   }
 
   return {
     input: {
       event_name,
       event_datum,
+      event_datum_ende,
       saison_typ: typRaw,
       suchbeginn_tage,
       notizen,

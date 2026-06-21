@@ -5,7 +5,6 @@ import { toggleDashboardErledigt } from './actions/dashboard-erledigt'
 import {
   diffDays,
   formatDateDe,
-  PIN_DIAGNOSE_BADGE,
   PIN_DIAGNOSE_LABEL,
   type PinDiagnose,
 } from './analytics/utils'
@@ -66,16 +65,16 @@ export default function BearbeitetRow({
         checked={true}
         onChange={onUncheck}
         disabled={isPending}
-        className="h-4 w-4 cursor-pointer rounded border-gray-300 text-red-600 focus:ring-red-500"
+        className="h-4 w-4 cursor-pointer rounded border-gray-300 accent-[var(--status-gut)]"
         aria-label="Erledigt-Markierung entfernen"
         title='Haken entfernen — Pin erscheint wieder in „Pins recyceln"'
       />
       <span className="flex-1 text-gray-700 line-through">
         {row.titel ?? <span className="text-gray-400">(ohne Titel)</span>}
       </span>
-      <span
-        className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${PIN_DIAGNOSE_BADGE[row.kategorie]}`}
-      >
+      {/* Lokal neutralisiert (Blaugrau), unabhängig von der zentralen
+          PIN_DIAGNOSE_BADGE-Farb-Map (die im Analytics-Bereich bunt bleibt). */}
+      <span className="inline-flex items-center rounded-full bg-marke-blaugrau-hell px-2 py-0.5 text-xs font-medium text-marke-blaugrau">
         {PIN_DIAGNOSE_LABEL[row.kategorie]}
       </span>
       <span className="text-xs text-gray-500">

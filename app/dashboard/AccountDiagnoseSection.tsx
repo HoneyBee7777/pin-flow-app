@@ -1,29 +1,22 @@
 'use client'
 
-// V3.2.1 — „Befunde" als Sub-Sektion innerhalb des Profil-Status-Blocks
-// (früher eigenständige Sektion „Profil-Diagnose"). Dieses Modul ist jetzt
-// rein präsentational: Hydration, Dismiss-State und Filterung liegen im
-// ProfilGesundheitBlock (eine Quelle für Status + Liste), hier nur das
-// Rendering der Liste und der einzelnen Befund-Toggles.
-//
-// Coaching-Logik: lib/account-coaching.ts.
+// „Befunde"-Liste (Account-Diagnosen). Rein präsentational; die Coaching-Logik
+// liegt in lib/account-coaching.ts. Die Block-Überschrift liegt im Aufrufer
+// (Dashboard-Sektion „Was dein Profil dir zeigt") — hier nur Liste + Karten.
 
 import Link from 'next/link'
 import {
   type CoachingDiagnosis,
   type CoachingSeverity,
 } from '@/lib/account-coaching'
+import { StatusDot, type StatusTone } from '@/components/StatusDot'
 
-const SEVERITY_BORDER: Record<CoachingSeverity, string> = {
-  kritisch: 'border-red-300',
-  wichtig: 'border-blue-300',
-  hinweis: 'border-gray-300',
-}
-
-const SEVERITY_BADGE: Record<CoachingSeverity, string> = {
-  kritisch: 'bg-red-100 text-red-700',
-  wichtig: 'bg-blue-100 text-blue-700',
-  hinweis: 'bg-gray-100 text-gray-700',
+// Schweregrad → einheitlicher Status-Ton (StatusDot/status-Tokens):
+// kritisch = schlecht, wichtig = achtung, hinweis = neutral.
+const SEVERITY_TONE: Record<CoachingSeverity, StatusTone> = {
+  kritisch: 'schlecht',
+  wichtig: 'achtung',
+  hinweis: 'neutral',
 }
 
 const SEVERITY_LABEL: Record<CoachingSeverity, string> = {
@@ -32,99 +25,111 @@ const SEVERITY_LABEL: Record<CoachingSeverity, string> = {
   hinweis: 'Hinweis',
 }
 
-// Befund-Liste inkl. Sub-Überschrift. `diagnoses` ist die server-seitig
-// berechnete Liste — V3.2.2: keine Dismiss-Filterung mehr, Befunde sind
-// rein datengetrieben und verschwinden nur, wenn sich die Werte bessern.
+// Coaching-Fließtext. Zeilen, die mit „• " beginnen, werden zu einer echten
+// semantischen <ul>-Liste zusammengefasst (das Bullet-Zeichen aus den Daten
+// wird entfernt und durch list-disc ersetzt). Vorangehende Zeilen bleiben ein
+// Absatz. Texte ohne Bullet-Marker rendern wie bisher als <p>.
+function CoachingText({ text }: { text: string }) {
+  const lines = text.split('\n')
+  const firstBullet = lines.findIndex((l) => l.trimStart().startsWith('• '))
+  if (firstBullet === -1) {
+    return <p className="mt-1 whitespace-pre-line">{text}</p>
+  }
+  const lead = lines.slice(0, firstBullet).join('\n').trim()
+  const items = lines
+    .slice(firstBullet)
+    .filter((l) => l.trimStart().startsWith('• '))
+    .map((l) => l.trimStart().slice(2).trim())
+  return (
+    <div className="mt-1 space-y-1.5">
+      {lead && <p className="whitespace-pre-line">{lead}</p>}
+      <ul className="list-disc space-y-1 pl-5">
+        {items.map((item, i) => (
+          <li key={i}>{item}</li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+// Liste der Befund-Karten. Ohne eigene Überschrift — die kommt vom Aufrufer.
 export function BefundeListe({
   diagnoses,
 }: {
   diagnoses: ReadonlyArray<CoachingDiagnosis>
 }) {
-  return (
-    <div>
-      <h3 className="text-base font-semibold text-gray-900">Befunde</h3>
-      <p className="text-sm text-gray-600">
-        Automatisch erkannte Muster in deinem Profil.
-      </p>
-
-      <div className="mt-3">
-        {diagnoses.length === 0 ? (
-          <div className="rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-700">
-            ✓ Keine kritischen Probleme erkannt. Dein Profil zeigt eine
-            solide Grundstruktur — fokussiere dich auf die individuellen
-            Pin-Empfehlungen unten.
-          </div>
-        ) : (
-          <ul className="space-y-3">
-            {diagnoses.map((d) => (
-              <DiagnoseCard key={d.id} diagnose={d} />
-            ))}
-          </ul>
-        )}
+  if (diagnoses.length === 0) {
+    return (
+      <div className="rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-700 shadow-sm">
+        Keine kritischen Probleme erkannt. Dein Profil zeigt eine solide
+        Grundstruktur. Fokussiere dich auf die individuellen Pin-Empfehlungen
+        weiter unten.
       </div>
-    </div>
+    )
+  }
+  return (
+    <ul className="space-y-3">
+      {diagnoses.map((d) => (
+        <DiagnoseCard key={d.id} diagnose={d} />
+      ))}
+    </ul>
   )
 }
 
-// V3.2.1 Fix 3 — Toggle-Layout konsistent zu den anderen App-Toggles
-// (vgl. „Zielgruppe verstehen", AudienceWissen.tsx): natives
-// <details>/<summary>, ▸/▾-Pfeil ganz links, ganze Zeile klickbar,
-// Hover-Highlight. Aufgeklappter Inhalt (Problem/Ursache/Handlung)
-// unverändert.
+// Ruhige Befund-Karte im neutralen Karten-Stil (heller Hintergrund, dezenter
+// Rahmen) wie die Profil-Performance-Kacheln. Schweregrad nur über einen
+// farbigen Punkt + kleines Label, kein farbiger Vollrahmen. Natives
+// <details>/<summary>, ganze Zeile klickbar.
 export function DiagnoseCard({
   diagnose: d,
 }: {
   diagnose: CoachingDiagnosis
 }) {
   return (
-    <li
-      className={`rounded-lg border-2 bg-white shadow-sm ${SEVERITY_BORDER[d.severity]}`}
-    >
+    <li className="rounded-lg border border-gray-200 bg-white shadow-sm">
       <details className="group">
-        <summary className="flex cursor-pointer list-none items-start gap-3 px-4 py-3 hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
-          <span
-            aria-hidden
-            className="mt-0.5 text-lg leading-none text-gray-400 transition-transform"
-          >
+        <summary className="flex cursor-pointer list-none items-center gap-2.5 px-4 py-3 hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
+          <span aria-hidden className="text-base leading-none text-gray-400">
             <span className="inline group-open:hidden">▸</span>
             <span className="hidden group-open:inline">▾</span>
           </span>
-          <span
-            className={`mt-0.5 inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-semibold ${SEVERITY_BADGE[d.severity]}`}
-          >
+          <StatusDot tone={SEVERITY_TONE[d.severity]} />
+          <span className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-gray-500">
             {SEVERITY_LABEL[d.severity]}
           </span>
           <span className="min-w-0 flex-1 text-sm font-semibold text-gray-900">
             {d.titel}
           </span>
         </summary>
-        <div className="space-y-3 border-t border-gray-100 px-4 py-3 text-sm text-gray-700">
+        {/* Coaching-Bereich: nur Camel-Streifen links (kein zweiter weißer
+            Kasten, da die Befund-Karte selbst schon weiß ist). */}
+        <div className="space-y-3 border-t border-l-[3px] border-gray-100 border-l-marke-ocker px-4 py-3 text-sm text-marke-tanne">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+            <p className="text-xs font-semibold tracking-wide text-gray-500">
               Problem
             </p>
-            <p className="mt-1 whitespace-pre-line">{d.problem}</p>
+            <CoachingText text={d.problem} />
           </div>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+            <p className="text-xs font-semibold tracking-wide text-gray-500">
               Ursache
             </p>
-            <p className="mt-1 whitespace-pre-line">{d.ursache}</p>
+            <CoachingText text={d.ursache} />
           </div>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+            <p className="text-xs font-semibold tracking-wide text-gray-500">
               Handlung
             </p>
-            <p className="mt-1 whitespace-pre-line">{d.handlung}</p>
+            <CoachingText text={d.handlung} />
           </div>
           {d.weiterführend && (
-            // Pfeil → bleibt außerhalb des verlinkten Bereichs — nur das
-            // Label ist klickbar (App-Konvention).
+            // Pfeil → bleibt außerhalb des verlinkten Bereichs, nur das Label
+            // ist klickbar (App-Konvention).
             <p className="text-xs text-gray-500">
               Mehr dazu: →{' '}
               <Link
                 href={d.weiterführend.href}
-                className="font-medium text-red-600 hover:underline"
+                className="font-medium text-link underline"
               >
                 {d.weiterführend.label}
               </Link>{' '}

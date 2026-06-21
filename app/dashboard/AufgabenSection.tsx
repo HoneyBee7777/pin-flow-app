@@ -12,6 +12,7 @@ import {
   updateAufgabe,
 } from './actions/aufgaben'
 import { formatDateDe } from './analytics/utils'
+import { StatusDot } from '@/components/StatusDot'
 
 function PencilIcon() {
   return (
@@ -91,7 +92,7 @@ function DoneList({ tasks }: { tasks: Aufgabe[] }) {
 
   return (
     <div className="mt-4 border-t border-gray-200 pt-3">
-      <p className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-500">
+      <p className="mb-1 text-xs font-semibold tracking-wide text-gray-500">
         Erledigt
       </p>
       <ul className="divide-y divide-gray-100">
@@ -170,7 +171,7 @@ function TaskRow({ task, today }: { task: Aufgabe; today: string }) {
         checked={task.erledigt}
         onChange={onToggle}
         disabled={isPending}
-        className="h-4 w-4 cursor-pointer rounded border-gray-300 text-red-600 focus:ring-red-500"
+        className="h-4 w-4 cursor-pointer rounded border-gray-300 accent-[var(--status-gut)]"
         aria-label={task.erledigt ? 'Wieder öffnen' : 'Als erledigt markieren'}
       />
       <span
@@ -181,8 +182,12 @@ function TaskRow({ task, today }: { task: Aufgabe; today: string }) {
         }`}
       >
         {task.prioritaet && !task.erledigt && (
-          <span className="mr-1.5" aria-label="Hohe Priorität" title="Hohe Priorität">
-            🟢
+          <span
+            className="mr-1.5 inline-flex align-middle"
+            aria-label="Hohe Priorität"
+            title="Hohe Priorität"
+          >
+            <StatusDot tone="gut" />
           </span>
         )}
         {task.titel}
@@ -197,13 +202,13 @@ function TaskRow({ task, today }: { task: Aufgabe; today: string }) {
         </span>
       )}
       {isOverdue && (
-        <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
-          🔴 Überfällig
+        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-haupt">
+          <StatusDot tone="schlecht" /> Überfällig
         </span>
       )}
       {isToday && (
-        <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">
-          🟡 Heute fällig
+        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-haupt">
+          <StatusDot tone="achtung" /> Heute fällig
         </span>
       )}
       <button
@@ -300,14 +305,15 @@ function EditForm({
           type="checkbox"
           checked={prioritaet}
           onChange={(e) => setPrioritaet(e.target.checked)}
-          className="h-4 w-4 cursor-pointer rounded border-gray-300 text-red-600 focus:ring-red-500"
+          className="h-4 w-4 cursor-pointer rounded border-gray-300 accent-[var(--marke-blaugrau)]"
         />
-        🟢 Hohe Priorität
+        Hohe Priorität
       </label>
+      {/* Token-System: button-primaer = Marke Blaugrau + weißer Text. */}
       <button
         type="submit"
         disabled={isPending || !titel.trim()}
-        className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+        className="rounded-md bg-marke-blaugrau px-4 py-2 text-sm font-medium text-white hover:bg-marke-blaugrau-dunkel disabled:opacity-50"
       >
         {isPending ? 'Speichert…' : 'Speichern'}
       </button>
@@ -395,14 +401,15 @@ function AddForm() {
           type="checkbox"
           checked={prioritaet}
           onChange={(e) => setPrioritaet(e.target.checked)}
-          className="h-4 w-4 cursor-pointer rounded border-gray-300 text-red-600 focus:ring-red-500"
+          className="h-4 w-4 cursor-pointer rounded border-gray-300 accent-[var(--marke-blaugrau)]"
         />
-        🟢 Hohe Priorität
+        Hohe Priorität
       </label>
+      {/* Token-System: button-primaer = Marke Blaugrau + weißer Text. */}
       <button
         type="submit"
         disabled={isPending || !titel.trim()}
-        className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+        className="rounded-md bg-marke-blaugrau px-4 py-2 text-sm font-medium text-white hover:bg-marke-blaugrau-dunkel disabled:opacity-50"
       >
         {isPending ? 'Speichert…' : 'Hinzufügen'}
       </button>

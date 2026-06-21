@@ -7,7 +7,6 @@ import type { StrategieRow } from './lib'
 import type { PinAnalyticsThresholds } from '../analytics/utils'
 import AudienceWissen from './AudienceWissen'
 import MyStrategy from './MyStrategy'
-import PinLifecycleSection from './PinLifecycleSection'
 import { HinweisBox } from '@/components/HinweisBox'
 
 type TabKey =
@@ -3739,6 +3738,31 @@ function TabAnalytics() {
           drei Fragen: Wie viel Reichweite hat der Pin? Klicken die Menschen?
           Speichern sie ihn? Aus den Antworten ergeben sich acht Situationen,
           die jeweils eine andere Handlung erfordern.
+        </Para>
+
+        <Para>
+          Eine Diagnose ist eine{' '}
+          <strong>Momentaufnahme, kein festes Urteil</strong>. Sie beschreibt,
+          wo ein Pin gerade steht, mit den Zahlen dieses Zeitraums.
+        </Para>
+
+        <Para>
+          Bei jedem Daten-Import bewertet die App neu, deshalb{' '}
+          <strong>kann sich die Diagnose eines Pins ändern</strong>: Ein Hidden
+          Gem, dessen Save-Rate über deinen Durchschnitt steigt, wird zum Top
+          Performer. Ein früher starker Pin, dessen Reichweite über Monate
+          einbricht, wird zum eingeschlafenen Gewinner.
+        </Para>
+
+        <Para>
+          Du beeinflusst diese Bewegung{' '}
+          <strong>
+            nicht, indem du alte Pins bearbeitest, sondern indem du aus jeder
+            Diagnose lernst
+          </strong>
+          : Dein nächster Pin zum selben Thema startet mit einem stärkeren
+          Cover, klareren Keywords oder einer deutlicheren Handlungsaufforderung,
+          je nachdem, was die Diagnose dir zeigt.
         </Para>
 
         <Table

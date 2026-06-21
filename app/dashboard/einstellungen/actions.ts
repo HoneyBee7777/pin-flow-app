@@ -66,13 +66,6 @@ export async function saveEinstellungen(
       'schwellwert_schlafender_gewinner_alter',
       'Eingeschlafener Gewinner ab Alter',
     ],
-    ['cp_min_pins_gesamt', 'Mindest-Pin-Anzahl pro Inhalt'],
-    [
-      'cp_min_pins_ohne_aktuell',
-      'Mindest-Pin-Anzahl für Sub-Liste „Ohne aktuellen Pin"',
-    ],
-    ['cp_tage_ohne_pin', 'Tage seit letztem Pin'],
-    ['cp_max_pins_goldnugget', 'Maximale Pin-Anzahl für Goldnugget-URLs'],
   ] as const
   for (const [name, label] of intFields) {
     if (!formData.has(name)) continue
@@ -92,7 +85,6 @@ export async function saveEinstellungen(
   const decFields = [
     ['schwellwert_ctr', 'Mindest-CTR (Fallback)'],
     ['schwellwert_ctr_boost_faktor', 'CTR-Boost-Faktor'],
-    ['cp_min_ctr_goldnugget', 'Mindest-CTR für Goldnugget-URLs'],
   ] as const
   for (const [name, label] of decFields) {
     if (!formData.has(name)) continue

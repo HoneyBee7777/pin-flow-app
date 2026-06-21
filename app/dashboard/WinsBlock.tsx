@@ -2,16 +2,17 @@
 //
 // Sitzt zwischen Profil-Status („Wo stehe ich?") und Gesamt-Profil-
 // Performance („Wie entwickelt sich's?") und ist der emotionale Übergang:
-// Anerkennung der Erfolge der letzten 30 Tage. Erstes Element der App,
-// das den Käufer für Fortschritt belohnt statt nur Probleme zu zeigen.
+// Anerkennung der Erfolge im Vergleich zum letzten Monat. Erstes Element der
+// App, das den Käufer für Fortschritt belohnt statt nur Probleme zu zeigen.
 //
 // Conditional Rendering: Die Sektion erscheint NUR, wenn echte Erfolge
 // vorliegen (hasShowableWins). Sonst rendert die Komponente nichts —
 // kein Leer-State, kein „Noch keine Erfolge"-Platzhalter.
 //
-// Visueller Stil: weiße Sektions-Box wie die Nachbar-Sektionen, darin der
-// lila Coaching-Block (.coaching-box) konsistent zu ZielgruppeCoaching-
-// Block. 🎉 (nicht 🎯) signalisiert die positive Stimmung.
+// Visueller Stil: freier Block-Kopf am Seitenrand (h2 + gedämpfte
+// Subheadline, keine äußere Karte) wie „Was dein Profil dir zeigt", darunter
+// der lila Coaching-Block (.coaching-box) konsistent zum ZielgruppeCoaching-
+// Block.
 
 import type { ReactNode } from 'react'
 import type { ProfilAnalyticsWithGrowth } from './analytics/utils'
@@ -55,11 +56,9 @@ export default function WinsBlock({
   const input: WinsInput = {
     klicksGrowth: latest.klicks_growth,
     savesGrowth: latest.saves_growth,
-    engagementGrowth: latest.engagement_growth,
     ctrGrowth: latest.ctr_growth,
     impressionenGrowth: latest.impressionen_growth,
     interagierendGrowth: latest.interagierend_growth,
-    engagementPct: latest.engagement,
     ctrPct: latest.ctr,
     hasPrevious: previous !== null,
     nicheLabel: nicheProfile.primaryNiche?.label ?? null,
@@ -71,20 +70,20 @@ export default function WinsBlock({
   const block = buildWinsBlock(input)
 
   return (
-    <section className="space-y-4 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-      <div>
-        <p className="text-base font-semibold text-gray-900">
-          🎉 Was hat funktioniert?
-        </p>
-        <p className="mt-1 text-sm text-gray-700">
-          Deine Erfolge der letzten 30 Tage.
-        </p>
-      </div>
+    <section>
+      {/* Freier Block-Kopf am Seitenrand — gleiches Muster wie „Was dein
+          Profil dir zeigt" (h2 text-lg + gedämpfte Subheadline, keine äußere
+          Karte). */}
+      <h2 className="text-lg font-semibold text-haupt">
+        Was hat funktioniert?
+      </h2>
+      <p className="mt-1 text-sm text-gray-600">
+        Deine Erfolge im Vergleich zum letzten Monat.
+      </p>
 
-      {/* Lila Coaching-Block — identisches Layout wie ZielgruppeCoaching-
-          Block (.coaching-box in globals.css): linker 3-px-Akzentbalken,
-          lila Flächen-/Textfarbe. */}
-      <div className="coaching-box">
+      {/* Lila Coaching-Block — eigener Wins-Stil (.coaching-box in
+          globals.css): linker 3-px-Akzentbalken, lila Flächen-/Textfarbe. */}
+      <div className="coaching-box mt-3">
         <div className="space-y-2">
           <p className="leading-relaxed">
             {renderWithBold(block.observation)}

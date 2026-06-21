@@ -152,6 +152,63 @@ function joinGermanList(names: string[]): string {
   return `${names.slice(0, -1).join(', ')} und ${names[names.length - 1]}`
 }
 
+// Schwelle (Prozentpunkte) für die Trend-Divergenz interagierende vs. gesamte
+// Zielgruppe. Vorläufig 5; bewusst als benannte Konstante zum Justieren.
+export const LUECKE_SCHWELLE_PUNKTE = 5
+
+// Lücken-Coaching: vergleicht das Wachstum der gesamten Zielgruppe (Reichweite)
+// mit dem der interagierenden Zielgruppe gegen den Vormonat. Liefert einen
+// Coaching-Satz oder null (Baustein weglassen). Pure Funktion — die Growth-
+// Werte (zielgruppe_growth / interagierend_growth aus ProfilAnalyticsWithGrowth)
+// gibt der Aufrufer rein.
+export function buildLueckenCoaching(args: {
+  // false, wenn es keinen Vormonat gibt (kein Vergleich möglich).
+  hasPrevious: boolean
+  // Wachstum gesamte Zielgruppe (Reichweite) in % gegen Vormonat.
+  zielgruppeGrowth: number | null
+  // Wachstum interagierende Zielgruppe in % gegen Vormonat.
+  interagierendGrowth: number | null
+}): string | null {
+  const { hasPrevious, zielgruppeGrowth: g, interagierendGrowth: i } = args
+  // Kein Vormonat oder ein Wert fehlt / nicht vergleichbar → weglassen.
+  if (!hasPrevious || g === null || i === null) return null
+  if (!Number.isFinite(g) || !Number.isFinite(i)) return null
+
+  const diff = g - i // > 0: Reichweite verändert sich günstiger als Interaktion
+
+  // Fall 3 — interagierende Zielgruppe hält sich relativ besser. Wird in zwei
+  // Zweigen genutzt (Wachstum UND beidseitiger Rückgang), daher einmal benannt.
+  const interaktionStaerker =
+    'Deine interagierende Zielgruppe wächst stärker als deine Gesamtreichweite. Die Menschen, die dich sehen, reagieren zunehmend, ein starkes Zeichen, dass dein Content trifft. **Bleib bei dem, was wirkt**: hochwertige Pins mit relevanten Keywords und starken Hooks. Genau das bringt mehr von den richtigen Leuten zu dir.'
+
+  // Beide rückläufig: eigener Zweig. interagierend fällt stärker → Fall 4;
+  // hält sich relativ besser (diff < -Schwelle) → Fall 3; etwa gleich → Fall 5.
+  if (g < 0 && i < 0) {
+    if (diff > LUECKE_SCHWELLE_PUNKTE) {
+      // Fall 4 — beide fallen, interagierende deutlich stärker.
+      return 'Beide Werte gehen zurück, und deine interagierende Zielgruppe fällt stärker als deine Reichweite. Das passiert oft, wenn längere Zeit keine neuen Pins dazukommen, dann verlierst du zuerst die aktiven Leute. Der beste Hebel ist, **wieder regelmäßig zu pinnen**, mit den Themen, die früher Interaktion ausgelöst haben.'
+    }
+    if (diff < -LUECKE_SCHWELLE_PUNKTE) {
+      // Fall 3 — interagierende hält sich relativ besser.
+      return interaktionStaerker
+    }
+    // Fall 5 — beide fallen etwa gleich.
+    return 'Deine Reichweite und deine interagierende Zielgruppe gehen beide zurück. Das ist normal, wenn eine Weile keine neuen Pins dazukommen. **Sobald du wieder regelmäßig pinnst**, drehen sich diese Zahlen meist von selbst wieder.'
+  }
+
+  // Mindestens einer wächst (≥ 0): bestehende Einstufung.
+  if (diff > LUECKE_SCHWELLE_PUNKTE) {
+    // Fall 1 — Lücke öffnet sich.
+    return 'Deine Reichweite wächst schneller als die Zahl der Menschen, die wirklich reagieren. Mehr Leute sehen deine Pins, aber vergleichsweise wenige klicken oder speichern. Das liegt selten an der Reichweite, sondern eher am **Pin-Design oder Hook** oder daran, dass das Thema nicht zur Suche passt. Schau dir an, welche deiner Pins wirklich Interaktion auslösen, und erstelle mehr davon.'
+  }
+  if (diff < -LUECKE_SCHWELLE_PUNKTE) {
+    // Fall 3 — Interaktion wächst stärker als Reichweite.
+    return interaktionStaerker
+  }
+  // Fall 2 — Gleichschritt.
+  return 'Deine interagierende Zielgruppe **wächst im Takt mit deiner Reichweite**. Die Menschen, die du erreichst, reagieren auch, das ist genau das Verhältnis, das du willst. Halte den Kurs und baue auf den Themen auf, die das tragen.'
+}
+
 // V3.0.9 — strukturierter 3-Absatz-Coaching-Text (Beobachtung → Warum →
 // Reflexion). Nutzt dieselbe Match/Mismatch/Fallback-Heuristik wie
 // `buildNicheGapHint` (Hauptnische × Top-Affinitäten). Liefert null, wenn
@@ -201,7 +258,7 @@ export function buildCoachingBlock(
     return {
       variant: 'B',
       observation: `Deine Zielgruppe interessiert sich besonders stark für ${list} — Themen, die du noch wenig bedienst. Deine Hauptnische ist ${nicheLabel}.`,
-      explanation: `${explanationBase} Wenn du Brücken-Themen bedienst — also Inhalte, die deine Nische mit den Interessen deiner Zielgruppe verbinden — erreichst du mehrere Zielgruppen gleichzeitig: **mehr Reichweite, mehr Saves, weniger Konkurrenz** in der Pinterest-Suche.`,
+      explanation: `${explanationBase} Wenn du Brücken-Themen bedienst, also Inhalte, die deine Nische mit den Interessen deiner Zielgruppe verbinden, **erreichst du mehrere Zielgruppen gleichzeitig**: mehr Reichweite, mehr Saves, weniger Konkurrenz in der Pinterest-Suche.`,
       reflection:
         'Überlege: Welche zwei oder drei Brücken-Themen passen authentisch zu deiner Marke?',
     }

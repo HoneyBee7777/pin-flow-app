@@ -4,6 +4,7 @@
 
 import Link from 'next/link'
 import type { ReactNode } from 'react'
+import { StatusDot, type StatusTone } from '@/components/StatusDot'
 import { PINNING_FREQUENZ_OPTIONS } from '../strategie/lib'
 import type {
   AbweichungStatus,
@@ -15,59 +16,38 @@ import type {
   ZielflaechenCheck,
 } from './lib'
 
-const STATUS_META: Record<
-  StrategieGesamtStatus,
-  { label: string; cls: string }
-> = {
-  auf_kurs: { label: 'Auf Kurs', cls: 'bg-green-100 text-green-800' },
-  leicht_daneben: {
-    label: 'Kleine Abweichung',
-    cls: 'bg-amber-100 text-amber-800',
-  },
-  deutlich_daneben: {
-    label: 'Größere Abweichung',
-    cls: 'bg-red-100 text-red-700',
-  },
-  unbekannt: { label: 'Noch keine Daten', cls: 'bg-gray-100 text-gray-600' },
+// Nur noch das Label; die Status-Farbe trägt der StatusDot (status-Tokens),
+// das Status-Wort steht einheitlich in Blaugrau (text-haupt).
+const STATUS_META: Record<StrategieGesamtStatus, { label: string }> = {
+  auf_kurs: { label: 'Auf Kurs' },
+  leicht_daneben: { label: 'Kleine Abweichung' },
+  deutlich_daneben: { label: 'Größere Abweichung' },
+  unbekannt: { label: 'Noch keine Daten' },
 }
 
+// Per-Item-Abweichung (Zielflächen): Textfarbe + Balkenfarbe über status-Tokens
+// statt lokaler green/yellow/red-Werte.
 const ABWEICHUNG_TEXT_CLS: Record<AbweichungStatus, string> = {
-  im_plan: 'text-green-700',
-  leicht_daneben: 'text-amber-700',
-  deutlich_daneben: 'text-red-700',
+  im_plan: 'text-status-gut-text',
+  leicht_daneben: 'text-status-achtung-text',
+  deutlich_daneben: 'text-status-schlecht-text',
 }
 
 const ABWEICHUNG_BAR_HEX: Record<AbweichungStatus, string> = {
-  im_plan: '#22c55e', // green-500
-  leicht_daneben: '#facc15', // yellow-400
-  deutlich_daneben: '#ef4444', // red-500
+  im_plan: 'var(--status-gut)',
+  leicht_daneben: 'var(--status-achtung)',
+  deutlich_daneben: 'var(--status-schlecht)',
 }
 
-// Ampel-System: Signalfarbe je Bereich, konsistent mit dem Balken-Schema
-// (green-500 / yellow-400 / red-500), grau für „noch keine Daten".
+// Ampel-System: ein Zustand je Bereich, abgebildet auf die einheitlichen
+// Status-Töne (StatusDot/status-Tokens).
 type Ampel = 'gruen' | 'gelb' | 'rot' | 'grau'
 
-const AMPEL_DOT: Record<Ampel, string> = {
-  gruen: 'bg-green-500',
-  gelb: 'bg-yellow-400',
-  rot: 'bg-red-500',
-  grau: 'bg-gray-300',
-}
-
-// Kräftiger linker Kartenrand in der Status-Farbe.
-const AMPEL_BORDER: Record<Ampel, string> = {
-  gruen: 'border-l-green-500',
-  gelb: 'border-l-yellow-400',
-  rot: 'border-l-red-500',
-  grau: 'border-l-gray-300',
-}
-
-// Farbe des Status-Satzes unter der Bereichsüberschrift.
-const AMPEL_TEXT: Record<Ampel, string> = {
-  gruen: 'text-green-700',
-  gelb: 'text-amber-700',
-  rot: 'text-red-700',
-  grau: 'text-gray-500',
+const AMPEL_TONE: Record<Ampel, StatusTone> = {
+  gruen: 'gut',
+  gelb: 'achtung',
+  rot: 'schlecht',
+  grau: 'neutral',
 }
 
 const GESAMT_AMPEL: Record<StrategieGesamtStatus, Ampel> = {
@@ -75,6 +55,24 @@ const GESAMT_AMPEL: Record<StrategieGesamtStatus, Ampel> = {
   leicht_daneben: 'gelb',
   deutlich_daneben: 'rot',
   unbekannt: 'grau',
+}
+
+// Getönte Status-Leiste (ruhig, linker Akzentrand) je Ampel — über
+// status-*-flaeche + status-* Akzentrand, keine grelle Vollfarbe.
+const AMPEL_LEISTE: Record<Ampel, string> = {
+  gruen: 'border-status-gut-flaeche border-l-status-gut bg-status-gut-flaeche',
+  gelb: 'border-status-achtung-flaeche border-l-status-achtung bg-status-achtung-flaeche',
+  rot: 'border-status-schlecht-flaeche border-l-status-schlecht bg-status-schlecht-flaeche',
+  grau: 'border-status-neutral-flaeche border-l-status-neutral bg-status-neutral-flaeche',
+}
+
+// Erklärender Halbsatz hinter dem Status-Klartext in der prominenten Leiste.
+const STATUS_SATZ: Record<StrategieGesamtStatus, string> = {
+  auf_kurs: 'deine Pins folgen deiner Strategie.',
+  leicht_daneben: 'kleinere Abweichungen, schau dir die Bereiche unten an.',
+  deutlich_daneben:
+    'deine Pins weichen deutlich von deiner Strategie ab, die Bereiche unten zeigen wo.',
+  unbekannt: 'noch nicht genug Daten für eine Einschätzung.',
 }
 
 // Pin-Ziel-Verteilung: die schlimmste Einzelabweichung bestimmt die Farbe.
@@ -108,17 +106,8 @@ function saeulenAmpel(s: SaeulenCheck): Ampel {
   return 'gelb'
 }
 
-function StatusPunkt({ ampel }: { ampel: Ampel }) {
-  return (
-    <span
-      className={`h-2.5 w-2.5 shrink-0 rounded-full ${AMPEL_DOT[ampel]}`}
-      aria-hidden
-    />
-  )
-}
-
-// Kurzer Status-Satz in der jeweiligen Signalfarbe. Spacing steuert der
-// jeweilige Eltern-Container (kein eigener Außenabstand).
+// Kurzer Status-Satz: flacher Punkt + Text einheitlich in Blaugrau (text-haupt),
+// nicht in der Signalfarbe. Spacing steuert der Eltern-Container.
 function StatusSatz({
   ampel,
   children,
@@ -127,7 +116,10 @@ function StatusSatz({
   children: ReactNode
 }) {
   return (
-    <p className={`text-sm font-medium ${AMPEL_TEXT[ampel]}`}>{children}</p>
+    <p className="flex items-start gap-2 text-sm font-medium text-haupt">
+      <StatusDot tone={AMPEL_TONE[ampel]} />
+      <span>{children}</span>
+    </p>
   )
 }
 
@@ -150,26 +142,26 @@ export default function StrategieCheckSection({
   result: StrategieCheckV2
 }) {
   const status = STATUS_META[result.gesamtStatus]
+  const amp = GESAMT_AMPEL[result.gesamtStatus]
 
   return (
     <section id="strategie-check" className="scroll-mt-4">
-      <div className="mb-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-        <h2 className="text-lg font-semibold text-gray-900">Strategie-Check</h2>
-        <span className="inline-flex items-center gap-1.5">
-          <StatusPunkt ampel={GESAMT_AMPEL[result.gesamtStatus]} />
-          <span
-            title="Zeigt, wie stark deine tatsächliche Pin-Verteilung von deiner geplanten Strategie abweicht."
-            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${status.cls}`}
-          >
-            {status.label}
-          </span>
-        </span>
-      </div>
+      <h2 className="text-lg font-semibold text-gray-900">Strategie-Check</h2>
       <p className="mb-3 text-sm text-gray-600">
         Vergleicht deine Pin-Arbeit der letzten {result.fensterTage} Tage mit
         deiner festgelegten Strategie. Der Status zeigt, wie stark deine
         tatsächliche Pin-Verteilung von deiner geplanten Strategie abweicht.
       </p>
+
+      {/* Prominente, getönte Gesamt-Status-Leiste über den Karten. */}
+      <div
+        className={`mb-3 rounded-md border border-l-[3px] p-3 ${AMPEL_LEISTE[amp]}`}
+      >
+        <p className="text-sm">
+          <span className="font-semibold text-haupt">{status.label}</span>
+          <span className="text-gray-700">, {STATUS_SATZ[result.gesamtStatus]}</span>
+        </p>
+      </div>
 
       {result.pinsImFenster === 0 ? (
         <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm leading-relaxed text-gray-600">
@@ -197,14 +189,13 @@ function ZielflaechenCard({ result }: { result: StrategieCheckV2 }) {
     <Card
       title="Pin-Ziel-Verteilung"
       subtitle="Wohin deine Pins die Menschen führen"
-      ampel={amp}
     >
       {!z.hatSoll ? (
         <Hinweis>
           Du hast noch keine Pin-Ziel-Verteilung festgelegt.{' '}
           <Link
             href="/dashboard/strategie?tab=meine"
-            className="font-medium text-red-600 hover:underline"
+            className="font-medium text-link underline"
           >
             Strategie festlegen
           </Link>
@@ -267,7 +258,7 @@ function ZielflaechenCard({ result }: { result: StrategieCheckV2 }) {
             Verknüpfe deine Pins in der{' '}
             <Link
               href="/dashboard/pin-produktion?filter=ohne-url"
-              className="font-medium text-red-600 hover:underline"
+              className="font-medium text-link underline"
             >
               Pin-Produktion
             </Link>{' '}
@@ -275,7 +266,7 @@ function ZielflaechenCard({ result }: { result: StrategieCheckV2 }) {
             Pins, deren URL noch kein Pin-Ziel hat, ergänzt du in der{' '}
             <Link
               href="/dashboard/ziel-urls?filter=ohne-zielflaeche"
-              className="font-medium text-red-600 hover:underline"
+              className="font-medium text-link underline"
             >
               Ziel-URL-Datenbank
             </Link>
@@ -316,14 +307,13 @@ function FrequenzCard({ result }: { result: StrategieCheckV2 }) {
     <Card
       title="Pinning-Frequenz"
       subtitle="Wie regelmäßig du neue Pins erstellst"
-      ampel={amp}
     >
       {f.sollFrequenz === null ? (
         <Hinweis>
           Du hast noch keinen Pinning-Rhythmus festgelegt.{' '}
           <Link
             href="/dashboard/strategie?tab=meine"
-            className="font-medium text-red-600 hover:underline"
+            className="font-medium text-link underline"
           >
             Strategie festlegen
           </Link>
@@ -372,7 +362,6 @@ function SaeulenCard({ result }: { result: StrategieCheckV2 }) {
     <Card
       title="Content-Säulen"
       subtitle="Welche deiner Themen-Schwerpunkte neue Pins bekommen"
-      ampel={amp}
     >
       {!s.hatSaeulen ? (
         <Hinweis>
@@ -380,7 +369,7 @@ function SaeulenCard({ result }: { result: StrategieCheckV2 }) {
           werden im Strategie-Setup bestätigt.{' '}
           <Link
             href="/dashboard/strategie?tab=meine"
-            className="font-medium text-red-600 hover:underline"
+            className="font-medium text-link underline"
           >
             Strategie festlegen
           </Link>
@@ -395,12 +384,7 @@ function SaeulenCard({ result }: { result: StrategieCheckV2 }) {
           <ul className="space-y-2 text-sm">
           {s.items.map((item) => (
             <li key={item.saeule} className="flex items-center gap-3">
-              <span
-                className={`h-2.5 w-2.5 shrink-0 rounded-full ${
-                  item.aktiv ? 'bg-green-500' : 'bg-gray-300'
-                }`}
-                aria-hidden
-              />
+              <StatusDot tone={item.aktiv ? 'gut' : 'neutral'} />
               <span className="flex-1 text-gray-900">{item.saeule}</span>
               <span
                 className={`text-xs ${
@@ -426,20 +410,14 @@ function SaeulenCard({ result }: { result: StrategieCheckV2 }) {
 function Card({
   title,
   subtitle,
-  ampel,
   children,
 }: {
   title: string
   subtitle?: string
-  ampel?: Ampel
   children: ReactNode
 }) {
   return (
-    <div
-      className={`rounded-lg border border-gray-200 border-l-4 bg-white p-5 shadow-sm ${
-        ampel ? AMPEL_BORDER[ampel] : 'border-l-gray-300'
-      }`}
-    >
+    <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
       <h3 className="text-base font-semibold text-gray-900">{title}</h3>
       {subtitle && <p className="mt-0.5 text-xs text-gray-500">{subtitle}</p>}
       <div className="mt-3">{children}</div>

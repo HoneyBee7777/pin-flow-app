@@ -38,42 +38,33 @@ export type ChartPoint = {
   impressionen: number
   ausgehende_klicks: number
   saves: number
-  engagement: number | null
+  saveRate: number | null
 }
 
-type Metric = 'klicks' | 'saves' | 'impressionen' | 'engagement'
+type Metric = 'klicks' | 'saves' | 'impressionen' | 'saveRate'
 
+// Linienfarbe ist einheitlich (siehe LINE_*-Konstanten unten) — der Graph
+// zeigt immer nur EINE Kennzahl, daher braucht keine Kennzahl eine eigene
+// Unterscheidungsfarbe mehr. METRIC_CONFIG hält nur noch Label/Key/Einheit.
 const METRIC_CONFIG: Record<
   Metric,
   {
     label: string
     key: keyof Omit<ChartPoint, 'datum'>
-    color: string
     isPercent?: boolean
   }
 > = {
-  klicks: {
-    label: 'Ausg. Klicks',
-    key: 'ausgehende_klicks',
-    color: '#ea580c',
-  },
-  saves: {
-    label: 'Saves',
-    key: 'saves',
-    color: '#16a34a',
-  },
-  impressionen: {
-    label: 'Impressionen',
-    key: 'impressionen',
-    color: '#2563eb',
-  },
-  engagement: {
-    label: 'Engagement Rate',
-    key: 'engagement',
-    color: '#9333ea',
-    isPercent: true,
-  },
+  klicks: { label: 'Ausg. Klicks', key: 'ausgehende_klicks' },
+  saves: { label: 'Saves', key: 'saves' },
+  impressionen: { label: 'Impressionen', key: 'impressionen' },
+  saveRate: { label: 'Save-Rate', key: 'saveRate', isPercent: true },
 }
+
+// Einheitliche Graph-Farben über die Marken-Tokens (CSS-Variablen, da Recharts
+// echte Farbwerte braucht, keine Tailwind-Klassen). Linie + ruhige Punkte in
+// Blaugrau, der aktive (gehoverte) Punkt als warmer Camel-Akzent.
+const LINE_COLOR = 'var(--marke-blaugrau)'
+const ACTIVE_DOT_COLOR = 'var(--marke-ocker)'
 
 export default function PerformanceChart({ data }: { data: ChartPoint[] }) {
   const [metric, setMetric] = useState<Metric>('klicks')
@@ -100,8 +91,8 @@ export default function PerformanceChart({ data }: { data: ChartPoint[] }) {
             onClick={() => setMetric(m)}
             className={`rounded px-3 py-1 text-xs font-medium transition-colors ${
               metric === m
-                ? 'bg-gray-900 text-white'
-                : 'text-gray-600 hover:bg-gray-100'
+                ? 'bg-marke-blaugrau text-white'
+                : 'text-sekundaer hover:bg-marke-blaugrau-hell'
             }`}
           >
             {METRIC_CONFIG[m].label}
@@ -144,10 +135,10 @@ export default function PerformanceChart({ data }: { data: ChartPoint[] }) {
               type="monotone"
               dataKey="value"
               name={cfg.label}
-              stroke={cfg.color}
+              stroke={LINE_COLOR}
               strokeWidth={2}
-              dot={{ r: 3 }}
-              activeDot={{ r: 5 }}
+              dot={{ r: 3, fill: LINE_COLOR, stroke: LINE_COLOR }}
+              activeDot={{ r: 5, fill: ACTIVE_DOT_COLOR, stroke: ACTIVE_DOT_COLOR }}
             />
           </LineChart>
         </ResponsiveContainer>

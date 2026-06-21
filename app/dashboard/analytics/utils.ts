@@ -478,15 +478,18 @@ export const BOARD_STATUS = ['aktiv', 'wenig_aktiv', 'inaktiv'] as const
 export type BoardStatus = (typeof BOARD_STATUS)[number]
 
 export const BOARD_STATUS_LABEL: Record<BoardStatus, string> = {
-  aktiv: '✅ Aktiv',
-  wenig_aktiv: '⚠️ Wenig aktiv',
-  inaktiv: '❌ Inaktiv',
+  aktiv: 'Aktiv',
+  wenig_aktiv: 'Wenig aktiv',
+  inaktiv: 'Inaktiv',
 }
 
+// Ruhige Status-Tönungen (leise Fläche + getönter Text) statt kräftiger
+// Vollfarbe — konsistent zum übrigen Status-System. Färbt sowohl das
+// Pin-Board-Badge (HandlungsbedarfPinRow) als auch den Boards-Tab.
 export const BOARD_STATUS_BADGE: Record<BoardStatus, string> = {
-  aktiv: 'bg-green-200 text-green-700',
-  wenig_aktiv: 'bg-amber-200 text-amber-800',
-  inaktiv: 'bg-red-200 text-red-700',
+  aktiv: 'bg-status-gut-flaeche text-status-gut-text',
+  wenig_aktiv: 'bg-status-achtung-flaeche text-status-achtung-text',
+  inaktiv: 'bg-status-schlecht-flaeche text-status-schlecht-text',
 }
 
 export type BoardThresholds = {

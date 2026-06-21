@@ -30,6 +30,10 @@ type DefaultEventDef = {
   suchbeginn_tage: number
   datum_variabel: boolean
   dateFor: (year: number) => string
+  // Optionales Zeitraum-Enddatum (nur Jahreszeiten). Bekommt dasselbe `year`
+  // wie dateFor (= Start-Jahr); der Winter-Sonderfall rechnet intern auf das
+  // Folgejahr. Ohne dateEndFor bleibt das Event ein Stichtag (Ende = null).
+  dateEndFor?: (year: number) => string
 }
 
 function iso(year: number, month: number, day: number): string {
@@ -89,15 +93,16 @@ const DEFAULT_EVENTS: DefaultEventDef[] = [
   { event_name: 'Black Friday',  saison_typ: 'shopping_event', suchbeginn_tage: 90, datum_variabel: true,  dateFor: (y) => iso(y, 11, lastWeekdayOfMonth(y, 10, 5)) },
   { event_name: 'Weihnachten',   saison_typ: 'feiertag',       suchbeginn_tage: 90, datum_variabel: false, dateFor: (y) => iso(y, 12, 25) },
   { event_name: 'Silvester',     saison_typ: 'feiertag',       suchbeginn_tage: 60, datum_variabel: false, dateFor: (y) => iso(y, 12, 31) },
-  // Jahreszeiten
-  { event_name: 'Frühling',      saison_typ: 'jahreszeit',     suchbeginn_tage: 60, datum_variabel: false, dateFor: (y) => iso(y, 3, 20) },
-  { event_name: 'Sommer',        saison_typ: 'jahreszeit',     suchbeginn_tage: 60, datum_variabel: false, dateFor: (y) => iso(y, 6, 21) },
-  { event_name: 'Herbst',        saison_typ: 'jahreszeit',     suchbeginn_tage: 60, datum_variabel: false, dateFor: (y) => iso(y, 9, 23) },
-  { event_name: 'Winter',        saison_typ: 'jahreszeit',     suchbeginn_tage: 60, datum_variabel: false, dateFor: (y) => iso(y, 12, 21) },
+  // Jahreszeiten (fester astronomischer Zeitraum: Start = dateFor, Ende =
+  // dateEndFor). Winter läuft über die Jahresgrenze → Ende im Folgejahr (y + 1).
+  { event_name: 'Frühling',      saison_typ: 'jahreszeit',     suchbeginn_tage: 60, datum_variabel: false, dateFor: (y) => iso(y, 3, 20),  dateEndFor: (y) => iso(y, 6, 20) },
+  { event_name: 'Sommer',        saison_typ: 'jahreszeit',     suchbeginn_tage: 60, datum_variabel: false, dateFor: (y) => iso(y, 6, 21),  dateEndFor: (y) => iso(y, 9, 22) },
+  { event_name: 'Herbst',        saison_typ: 'jahreszeit',     suchbeginn_tage: 60, datum_variabel: false, dateFor: (y) => iso(y, 9, 23),  dateEndFor: (y) => iso(y, 12, 20) },
+  { event_name: 'Winter',        saison_typ: 'jahreszeit',     suchbeginn_tage: 60, datum_variabel: false, dateFor: (y) => iso(y, 12, 21), dateEndFor: (y) => iso(y + 1, 3, 19) },
 ]
 
 const SELECT_FIELDS =
-  'id, event_name, event_datum, saison_typ, suchbeginn_tage, notizen, datum_variabel, created_at'
+  'id, event_name, event_datum, event_datum_ende, saison_typ, suchbeginn_tage, notizen, datum_variabel, created_at'
 
 export default async function SaisonKalenderPage() {
   const supabase = createClient()
@@ -132,6 +137,7 @@ export default async function SaisonKalenderPage() {
         user_id: user.id,
         event_name: def.event_name,
         event_datum: def.dateFor(year),
+        event_datum_ende: def.dateEndFor ? def.dateEndFor(year) : null,
         saison_typ: def.saison_typ,
         suchbeginn_tage: def.suchbeginn_tage,
         notizen: null,
@@ -143,6 +149,7 @@ export default async function SaisonKalenderPage() {
       user_id: user.id,
       event_name: 'Evergreen',
       event_datum: null,
+      event_datum_ende: null,
       saison_typ: 'evergreen' as const,
       suchbeginn_tage: null,
       notizen: null,
@@ -176,6 +183,7 @@ export default async function SaisonKalenderPage() {
       ...e,
       statusInfo: computeStatus(
         e.event_datum,
+        e.event_datum_ende,
         e.saison_typ,
         e.suchbeginn_tage,
         today

@@ -23,9 +23,7 @@ export default async function EinstellungenPage() {
        schwellwert_min_klicks_nutzer_signal,
        schwellwert_top_performer_max_alter,
        schwellwert_schlafender_gewinner_alter,
-       schwellwert_ctr_boost_faktor,
-       cp_min_pins_gesamt, cp_min_pins_ohne_aktuell, cp_tage_ohne_pin,
-       cp_min_ctr_goldnugget, cp_max_pins_goldnugget`
+       schwellwert_ctr_boost_faktor`
       )
       .eq('user_id', user.id)
       .maybeSingle(),
@@ -40,10 +38,7 @@ export default async function EinstellungenPage() {
         <p className="mt-1 max-w-3xl text-sm leading-relaxed text-gray-600">
           Hier richtest du Pin-Flow für dich ein: deinen Profilnamen für die
           Begrüßung, die Links zu deinem Pinterest-Konto und deinen Tools, und
-          die Signalwörter für deine Pin-Texte. Weiter unten kannst du in den
-          erweiterten Einstellungen die Schwellwerte anpassen, nach denen
-          Pin-Flow deine Pins, Boards und deinen Content bewertet. Wenn du dir
-          unsicher bist, lass die Standardwerte einfach stehen.
+          die Signalwörter für deine Pin-Texte.
         </p>
       </header>
 
@@ -67,17 +62,6 @@ export default async function EinstellungenPage() {
         }}
         initialBenchmark={benchmark}
         initialNicheProfile={nicheProfile}
-        initialContentPipelineSchwellwerte={{
-          minPinsGesamt: data?.cp_min_pins_gesamt ?? null,
-          minPinsOhneAktuell: data?.cp_min_pins_ohne_aktuell ?? null,
-          tageOhnePin: data?.cp_tage_ohne_pin ?? null,
-          minCtrGoldnugget:
-            data?.cp_min_ctr_goldnugget === null ||
-            data?.cp_min_ctr_goldnugget === undefined
-              ? null
-              : Number(data.cp_min_ctr_goldnugget),
-          maxPinsGoldnugget: data?.cp_max_pins_goldnugget ?? null,
-        }}
       />
     </div>
   )

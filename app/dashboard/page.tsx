@@ -17,11 +17,12 @@ import {
   boardWirkungMediane,
   BOARD_WIRKUNG_DEFAULTS,
   calcCtr,
+  calcGrowth,
+  calcSaveRate,
   calcUpdateStatusMonat,
   diagnoseBoard,
   diffDays,
   formatDateDe,
-  formatGrowth,
   formatPercent,
   formatZahl,
   thresholdsFromSettings,
@@ -48,13 +49,18 @@ import { loadAccountNicheProfile } from './analytics/account-niche'
 import { calculateCoachingDiagnoses } from '@/lib/account-coaching'
 import ZielgruppeCoachingBlock from './ZielgruppeCoachingBlock'
 import { getAudienceSnapshots } from '@/lib/audience-snapshot'
-import type { AudienceSnapshot } from '@/lib/audience-types'
-import type { AccountNicheProfile } from '@/lib/account-niche-profile'
-import ProfilGesundheitBlock from './ProfilGesundheitBlock'
+import { RichtungsAmpelVertikal } from './ProfilGesundheitBlock'
+import { KpiCard } from '@/components/KpiCard'
+import { StatusDot, type StatusTone } from '@/components/StatusDot'
+import { PinKategorieIcon } from '@/components/PinKategorieIcon'
+import { AnzahlBadge } from '@/components/AnzahlBadge'
+import { computeRichtungsAmpel } from '@/lib/profil-gesundheit'
+import { BefundeListe } from './AccountDiagnoseSection'
 import WinsBlock from './WinsBlock'
 import {
   computeStatus,
   type SaisonEvent,
+  type SaisonTyp,
 } from './saison-kalender/utils'
 import PerformanceChart, { type ChartPoint } from './PerformanceChart'
 import AufgabenSection, { type Aufgabe } from './AufgabenSection'
@@ -66,7 +72,6 @@ import BearbeitetRow, { type BearbeitetRowData } from './BearbeitetRow'
 import StrategieCheckSection from './strategie-check/StrategieCheckSection'
 import BriefingSection from './briefing/BriefingSection'
 import {
-  buildBriefingItems,
   buildNextStepsItems,
   type BriefingItem,
 } from './briefing/lib'
@@ -78,21 +83,29 @@ import {
 } from './strategie-check/lib'
 import { parseStrategieRow, type StrategieRow } from './strategie/lib'
 
-// Pin-Pipeline-Defaults — greifen, wenn `einstellungen` für den User
-// (noch) keine Zeile bzw. NULL-Werte enthält. Nutzer-Werte werden in
-// /dashboard/einstellungen unter „Content-Pipeline-Schwellwerte" gepflegt.
-const PIPELINE_DEFAULT_MIN_PINS_GESAMT = 3
-const PIPELINE_DEFAULT_MIN_PINS_OHNE_AKTUELL = 3
-const PIPELINE_DEFAULT_TAGE_OHNE_PIN = 30
-const PIPELINE_DEFAULT_MIN_CTR_GOLDNUGGET = 1.5
-const PIPELINE_DEFAULT_MAX_PINS_GOLDNUGGET = 5
-
 type PipelineThresholds = {
   minPinsGesamt: number
   minPinsOhneAktuell: number
   tageOhnePin: number
   minCtrGoldnugget: number
   maxPinsGoldnugget: number
+}
+
+// Content-Pipeline-Schwellwerte — fachlich gesetzte Pinterest-Methodik der
+// Expertin, bewusst NICHT nutzer-konfigurierbar (eine sinnvolle Bedienung
+// setzt Pinterest-Know-how voraus). Einzige Quelle der Wahrheit; hier zentral
+// anpassbar, falls die Methodik sich ändert.
+//   minPinsGesamt      — unter so vielen Pins gilt ein Inhalt als unterversorgt
+//   minPinsOhneAktuell — ab so vielen Pins zählt ein Inhalt als „stale"-fähig
+//   tageOhnePin        — so viele Tage ohne neuen Pin = „ohne aktuellen Pin"
+//   minCtrGoldnugget   — Ø-CTR darüber macht eine URL zum Goldnugget (in %)
+//   maxPinsGoldnugget  — nur URLs mit weniger Pins gelten als Goldnugget
+const PIPELINE_THRESHOLDS: PipelineThresholds = {
+  minPinsGesamt: 3,
+  minPinsOhneAktuell: 3,
+  tageOhnePin: 30,
+  minCtrGoldnugget: 1.5,
+  maxPinsGoldnugget: 5,
 }
 
 type PinPipelineInhalt = {
@@ -117,10 +130,14 @@ type KanbanEvent = {
   id: string
   event_name: string
   event_datum: string
+  saison_typ: SaisonTyp
   pinStart: string
   pinEnd: string
   suchbeginnTage: number
   countdownDays: number
+  // Optionaler, vorgerechneter Countdown-Text (überschreibt formatCountdown).
+  // Genutzt für Zeitraum-Events in der Hochphase („läuft noch bis …").
+  countdownLabelOverride?: string
 }
 
 type SaisonKanbanColumns = {
@@ -240,11 +257,11 @@ type CoachingRestBoard = {
 
 type HandlungsCategory = {
   diagnose: PinDiagnose
-  emoji: string
   label: string
   subtitle: string
   tooltip: string
-  iconBg: string
+  // counterBg: aktuell ungenutzt (Count-Badge ist hartkodiert) — bleibt für den
+  // separaten Count-Badge-Schritt erhalten.
   counterBg: string
   primaryAction: ActionButton
   metrics: Array<
@@ -261,12 +278,10 @@ type HandlungsCategory = {
 const HANDLUNGS_CATEGORIES: HandlungsCategory[] = [
   {
     diagnose: 'aktiver_top_performer',
-    emoji: '⭐',
     label: 'Aktiver Top Performer',
     subtitle:
       'Diese Pins laufen stark – produziere Varianten solange der Algorithmus pusht.',
     tooltip: PIN_DIAGNOSE_TOOLTIP.aktiver_top_performer,
-    iconBg: 'bg-green-100 text-green-700',
     counterBg: 'bg-green-100 text-green-700',
     primaryAction: {
       type: 'variante',
@@ -285,12 +300,10 @@ const HANDLUNGS_CATEGORIES: HandlungsCategory[] = [
   },
   {
     diagnose: 'hidden_gem',
-    emoji: '💎',
     label: 'Hidden Gem',
     subtitle:
       'Hohe Klickrate, aber wenig Reichweite — das Cover überzeugt, nur findet Pinterest den Pin kaum. Die Keywords sind der Hebel.',
     tooltip: PIN_DIAGNOSE_TOOLTIP.hidden_gem,
-    iconBg: 'bg-blue-100 text-blue-700',
     counterBg: 'bg-blue-100 text-blue-700',
     primaryAction: {
       type: 'variante',
@@ -307,12 +320,10 @@ const HANDLUNGS_CATEGORIES: HandlungsCategory[] = [
   },
   {
     diagnose: 'reichweite_ohne_wirkung',
-    emoji: '🔧',
     label: 'Reichweite ohne Wirkung',
     subtitle:
       'Pinterest spielt diesen Pin gut aus – aber zu wenige Menschen klicken durch.',
     tooltip: PIN_DIAGNOSE_TOOLTIP.reichweite_ohne_wirkung,
-    iconBg: 'bg-orange-100 text-orange-700',
     counterBg: 'bg-orange-100 text-orange-700',
     primaryAction: {
       type: 'variante',
@@ -329,12 +340,10 @@ const HANDLUNGS_CATEGORIES: HandlungsCategory[] = [
   },
   {
     diagnose: 'save_magnet',
-    emoji: '🧲',
     label: 'Save-Magnet',
     subtitle:
       'Wird oft gespeichert, aber selten geklickt – das Cover zieht, der Klick fehlt.',
     tooltip: PIN_DIAGNOSE_TOOLTIP.save_magnet,
-    iconBg: 'bg-purple-100 text-purple-700',
     counterBg: 'bg-purple-100 text-purple-700',
     primaryAction: {
       type: 'variante',
@@ -351,12 +360,10 @@ const HANDLUNGS_CATEGORIES: HandlungsCategory[] = [
   },
   {
     diagnose: 'eingeschlafener_gewinner',
-    emoji: '♻️',
     label: 'Eingeschlafener Gewinner',
     subtitle:
       'Pins, die früher stark liefen — Pinterest spielt sie kaum noch aus. Zeit für einen frischen Pin.',
     tooltip: PIN_DIAGNOSE_TOOLTIP.eingeschlafener_gewinner,
-    iconBg: 'bg-amber-100 text-amber-800',
     counterBg: 'bg-amber-100 text-amber-800',
     primaryAction: {
       type: 'variante',
@@ -425,8 +432,6 @@ export default async function DashboardPage() {
          schwellwert_top_performer_max_alter,
          schwellwert_schlafender_gewinner_alter,
          schwellwert_ctr_boost_faktor,
-         cp_min_pins_gesamt, cp_min_pins_ohne_aktuell, cp_tage_ohne_pin,
-         cp_min_ctr_goldnugget, cp_max_pins_goldnugget,
          strategie_business_modell, strategie_hauptnische,
          ziel_soll_blog, ziel_soll_shop, ziel_soll_etsy, ziel_soll_affiliate,
          ziel_soll_landingpage, ziel_soll_newsletter, ziel_soll_buchung,
@@ -455,7 +460,7 @@ export default async function DashboardPage() {
     supabase
       .from('saison_events')
       .select(
-        'id, event_name, event_datum, saison_typ, suchbeginn_tage, notizen, datum_variabel, created_at'
+        'id, event_name, event_datum, event_datum_ende, saison_typ, suchbeginn_tage, notizen, datum_variabel, created_at'
       )
       .order('event_datum', { ascending: true, nullsFirst: false }),
     supabase.from('ziel_urls').select('id, titel, url, zielflaeche'),
@@ -476,7 +481,7 @@ export default async function DashboardPage() {
       supabase
         .from('pins')
         .select(
-          'id, status, created_at, geplante_veroeffentlichung, board_id, content_id, ziel_url_id, strategie_typ, conversion_ziel, pin_format'
+          'id, status, created_at, geplante_veroeffentlichung, board_id, content_id, ziel_url_id, strategie_typ, conversion_ziel, pin_format, saison_event_id'
         )
     ).catch((err: unknown) => {
       console.error('[Dashboard] pins query failed:', err)
@@ -556,29 +561,8 @@ export default async function DashboardPage() {
     benchmark
   )
 
-  type RawPipelineSettings = {
-    cp_min_pins_gesamt: number | null
-    cp_min_pins_ohne_aktuell: number | null
-    cp_tage_ohne_pin: number | null
-    cp_min_ctr_goldnugget: number | string | null
-    cp_max_pins_goldnugget: number | null
-  }
-  const cpRaw = settingsRes.data as Partial<RawPipelineSettings> | null
-  const pipelineThresholds: PipelineThresholds = {
-    minPinsGesamt:
-      cpRaw?.cp_min_pins_gesamt ?? PIPELINE_DEFAULT_MIN_PINS_GESAMT,
-    minPinsOhneAktuell:
-      cpRaw?.cp_min_pins_ohne_aktuell ??
-      PIPELINE_DEFAULT_MIN_PINS_OHNE_AKTUELL,
-    tageOhnePin: cpRaw?.cp_tage_ohne_pin ?? PIPELINE_DEFAULT_TAGE_OHNE_PIN,
-    minCtrGoldnugget:
-      cpRaw?.cp_min_ctr_goldnugget === null ||
-      cpRaw?.cp_min_ctr_goldnugget === undefined
-        ? PIPELINE_DEFAULT_MIN_CTR_GOLDNUGGET
-        : Number(cpRaw.cp_min_ctr_goldnugget),
-    maxPinsGoldnugget:
-      cpRaw?.cp_max_pins_goldnugget ?? PIPELINE_DEFAULT_MAX_PINS_GOLDNUGGET,
-  }
+  // Feste Pinterest-Methodik (siehe PIPELINE_THRESHOLDS oben), keine DB-Quelle.
+  const pipelineThresholds: PipelineThresholds = PIPELINE_THRESHOLDS
 
   const today = todayIso()
   const rawPinAnalytics =
@@ -729,10 +713,14 @@ export default async function DashboardPage() {
   for (const event of saisonRows) {
     if (event.saison_typ === 'evergreen') continue
     if (!event.event_datum) continue
-    if (today >= event.event_datum) continue
+    // Stichtag-Events fallen ab event_datum raus (wie bisher); Zeitraum-Events
+    // (mit event_datum_ende) bleiben bis zum Zeitraum-Ende sichtbar.
+    const abschluss = event.event_datum_ende ?? event.event_datum
+    if (today >= abschluss) continue
 
     const statusInfo = computeStatus(
       event.event_datum,
+      event.event_datum_ende,
       event.saison_typ,
       event.suchbeginn_tage,
       today
@@ -745,6 +733,7 @@ export default async function DashboardPage() {
       id: event.id,
       event_name: event.event_name,
       event_datum: event.event_datum,
+      saison_typ: event.saison_typ,
       pinStart: statusInfo.pinStart,
       pinEnd: statusInfo.pinEnd,
       suchbeginnTage: event.suchbeginn_tage ?? 60,
@@ -759,6 +748,11 @@ export default async function DashboardPage() {
       saisonKanban.hochphase.push({
         ...base,
         countdownDays: diffDays(today, event.event_datum),
+        // Zeitraum-Events: kein „bis Event"-Countdown (Start ist schon vorbei),
+        // sondern Hinweis bis zum Zeitraum-Ende. Stichtage behalten den Countdown.
+        countdownLabelOverride: event.event_datum_ende
+          ? `läuft noch bis ${formatDateDe(event.event_datum_ende)}`
+          : undefined,
       })
     } else {
       const daysToPinStart = diffDays(today, statusInfo.pinStart)
@@ -776,12 +770,31 @@ export default async function DashboardPage() {
     }
   }
 
-  const byEventDate = (a: KanbanEvent, b: KanbanEvent) =>
-    a.event_datum.localeCompare(b.event_datum)
-  saisonKanban.jetztProduzieren.sort(byEventDate)
-  saisonKanban.jetztPinnen.sort(byEventDate)
-  saisonKanban.hochphase.sort(byEventDate)
-  saisonKanban.nochZeit.sort(byEventDate)
+  // Sortierung pro Spalte: erst nach Typ-Priorität (einzelne Events vor freien
+  // Saisons vor Jahreszeiten), dann innerhalb gleicher Stufe nach frühestem
+  // Pin-Start aufsteigend (das Event, das zuerst gepinnt werden muss, oben),
+  // bei gleichem Pin-Start als stabile dritte Stufe nach event_datum. So steht
+  // das dringlichste Event als sichtbare Karte oben, der Rest (auch im Toggle)
+  // entsprechend gewichtet. evergreen kommt hier nicht vor.
+  const SAISON_PRIO: Record<SaisonTyp, number> = {
+    feiertag: 1,
+    shopping_event: 1,
+    anlass: 2,
+    saison: 2,
+    jahreszeit: 3,
+    evergreen: 4,
+  }
+  const byPrioThenPinStart = (a: KanbanEvent, b: KanbanEvent) => {
+    const p = SAISON_PRIO[a.saison_typ] - SAISON_PRIO[b.saison_typ]
+    if (p !== 0) return p
+    const ps = a.pinStart.localeCompare(b.pinStart)
+    if (ps !== 0) return ps
+    return a.event_datum.localeCompare(b.event_datum)
+  }
+  saisonKanban.jetztProduzieren.sort(byPrioThenPinStart)
+  saisonKanban.jetztPinnen.sort(byPrioThenPinStart)
+  saisonKanban.hochphase.sort(byPrioThenPinStart)
+  saisonKanban.nochZeit.sort(byPrioThenPinStart)
 
   // ===== Performance-Verlauf (rollierende 12 Monate, ASC für Chart) =====
   const chartPoints: ChartPoint[] = profilRows
@@ -791,7 +804,8 @@ export default async function DashboardPage() {
       impressionen: r.impressionen,
       ausgehende_klicks: r.ausgehende_klicks,
       saves: r.saves,
-      engagement: r.engagement,
+      saveRate:
+        r.impressionen > 0 ? (r.saves / r.impressionen) * 100 : null,
     }))
     .reverse()
 
@@ -807,6 +821,7 @@ export default async function DashboardPage() {
     strategie_typ: string | null
     conversion_ziel: string | null
     pin_format: string | null
+    saison_event_id: string | null
   }
   type BoardRow = {
     id: string
@@ -822,7 +837,6 @@ export default async function DashboardPage() {
     (p) => p.status === 'veroeffentlicht'
   )
   const boardsRows = (boardsCountRes.data ?? []) as BoardRow[]
-  const veroeffentlichtePinsCount = pinsPublishedRows.length
   const boardsCount = boardsRows.length
 
   // Entwurf/Geplant-Pins pro Board zählen — Quelle für die grüne ✅-Box in
@@ -841,6 +855,26 @@ export default async function DashboardPage() {
     if (p.status === 'entwurf') cur.entwurf++
     else cur.geplant++
     preparedPinsByBoard.set(p.board_id, cur)
+  }
+
+  // Entwurf/Geplant-Pins pro Saison-Event zählen — dieselbe Quelle und Logik
+  // wie preparedPinsByBoard, nur gruppiert auf saison_event_id statt board_id.
+  // Speist in Häppchen 3 die Hinweis-Box je Saison-Karte. Pins ohne Saison-Tag
+  // (saison_event_id null) gehören zu keinem Event und werden übergangen.
+  const pinsBySaisonEvent = new Map<
+    string,
+    { entwurf: number; geplant: number }
+  >()
+  for (const p of allPinsRows) {
+    if (!p.saison_event_id) continue
+    if (p.status !== 'entwurf' && p.status !== 'geplant') continue
+    const cur = pinsBySaisonEvent.get(p.saison_event_id) ?? {
+      entwurf: 0,
+      geplant: 0,
+    }
+    if (p.status === 'entwurf') cur.entwurf++
+    else cur.geplant++
+    pinsBySaisonEvent.set(p.saison_event_id, cur)
   }
 
   // ===== Account-Diagnose / Coaching =====
@@ -1260,7 +1294,6 @@ export default async function DashboardPage() {
     aktivBoardsCount,
     avgLastPinDays,
   }
-  const hasAnyBoardAnalytics = boardsHealth.some((b) => b.hasAnalytics)
   // Boards ohne Analytics-Einträge: dient nur als Hinweis-Footnote in der Sektion.
   const boardsOhneAnalyticsCount = boardsHealth.filter(
     (b) => !b.hasAnalytics
@@ -1288,9 +1321,9 @@ export default async function DashboardPage() {
     return a.created_at.localeCompare(b.created_at)
   })
 
-  // ===== "Heute aktuell"-Briefing für Hero-Section =====
-  // Aggregiert pro Sektion eine kompakte Aussage. Reine Funktion in
-  // briefing/lib.ts — siehe dort für Schwellwert-Regeln.
+  // ===== Briefing: "Deine nächsten Schritte" =====
+  // saisonMinDaysToPinStart wird für den Setup-Fall (BriefingBlockEmpty)
+  // gebraucht; im Analytics-Fall speist es den Next-Steps-Event-Hinweis.
   const saisonMinDaysToPinStart =
     saisonKanban.jetztProduzieren.length > 0
       ? saisonKanban.jetztProduzieren.reduce(
@@ -1298,38 +1331,6 @@ export default async function DashboardPage() {
           Number.POSITIVE_INFINITY
         )
       : null
-  const briefingItems = buildBriefingItems({
-    saisonJetztProduzierenCount: saisonKanban.jetztProduzieren.length,
-    saisonMinDaysToPinStart:
-      saisonMinDaysToPinStart === null ||
-      !Number.isFinite(saisonMinDaysToPinStart)
-        ? null
-        : saisonMinDaysToPinStart,
-    saisonEventNames: saisonKanban.jetztProduzieren.map((e) => e.event_name),
-    hasAnyBoardAnalytics,
-    // Score-basierte Buckets („schlafende Top", „schwache") existieren nicht
-    // mehr — Klassifizierung läuft jetzt rein über Pin-Aktivität. Briefing-
-    // Items, die auf diese Konzepte abzielten, triggern entsprechend nicht.
-    schlafendeTopCount: 0,
-    aktivitaetsratePct: boardKpis.aktivitaetsratePct,
-    schwacheCount: 0,
-    strategieOnboardingDone: strategieCheckResult.onboardingAbgeschlossen,
-    strategieSchwelleRot: strategieCheckResult.schwelleRot,
-    // Der V2-Strategie-Check liefert (noch) keine Briefing-Coaching-Items;
-    // der Strategie-Status erscheint direkt in der Strategie-Check-Sektion.
-    strategieTopCoaching: null,
-    hasAnyAnalytics,
-    hiddenGemCount: groupedActions.get('hidden_gem')?.length ?? 0,
-    reichweiteOhneWirkungCount:
-      groupedActions.get('reichweite_ohne_wirkung')?.length ?? 0,
-    aktivTopPerformerCount:
-      groupedActions.get('aktiver_top_performer')?.length ?? 0,
-    eingeschlafenerGewinnerCount:
-      groupedActions.get('eingeschlafener_gewinner')?.length ?? 0,
-    inhalteOhneAktuellCount: inhaltePinBedarfB.length,
-    inhalteMitWenigPinsCount: inhaltePinBedarfA.length,
-    urlsPotenzialCount: urlPotenzial.length,
-  })
 
   // ===== "Deine nächsten Schritte" — regelbasierte Handlungsempfehlung =====
   // Reines Re-Aggregat aus bereits berechneten Werten oben.
@@ -1359,14 +1360,10 @@ export default async function DashboardPage() {
       remainingPushDays: remaining,
     }
   })()
-  // schlafende_top-Konzept gibt es nicht mehr — kein Score-basiertes Bucket
-  // mehr. „Boards reaktivieren"-Hinweis triggert deshalb nicht.
-  const nextStepBoardName: string | null = null
   const nextStepsItems = buildNextStepsItems({
     nextEvent: nextStepEvent,
     topPerformerPin: nextStepTopPerformer,
     hiddenGemCount: groupedActions.get('hidden_gem')?.length ?? 0,
-    schlafendeTopBoardName: nextStepBoardName,
   })
 
   // ===== Keywords & SEO Sektion =====
@@ -1619,73 +1616,93 @@ export default async function DashboardPage() {
   const hatStrategie = strategieCheckResult.onboardingAbgeschlossen
 
   return (
-    <div className="space-y-8 p-8">
+    // Seitenhintergrund = Rolle bg-seite (hellste Blaugrau-Stufe
+    // marke-blaugrau-xhell #EEF1F3), Haupt-Textfarbe = text-haupt (Marke Tanne).
+    <div className="space-y-8 bg-seite p-8 text-haupt">
       {showOnboardingBanner && <OnboardingBanner />}
 
-      <header>
-        <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-        <p className="mt-1 text-sm text-gray-600">
-          {greetingName
-            ? `Willkommen zurück, ${greetingName} 👋`
-            : 'Willkommen zurück 👋'}
-        </p>
+      {/* Header-Fläche = Marke Blaugrau. Kleines Orientierungs-Label oben,
+          darunter die Begrüßung als H1. Rechte Hälfte bewusst Weißraum. */}
+      <header className="relative overflow-hidden rounded-lg bg-marke-blaugrau px-6 py-4">
+        {/* CAMEL-AKZENT (dezent, leicht rücknehmbar): weicher radialer Ocker-
+            Schimmer rechts oben, niedrige Deckkraft (~22 %). Belebt die rechte
+            Hälfte, ohne laut zu sein. Zum Zurücknehmen: dieses <span> entfernen;
+            Stärke justierbar über die Prozentzahl im color-mix. */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-y-0 right-0 w-2/3"
+          style={{
+            background:
+              'radial-gradient(70% 120% at 90% 20%, color-mix(in srgb, var(--marke-ocker) 22%, transparent), transparent 65%)',
+          }}
+        />
+        <div className="relative">
+          <p className="text-xs font-medium uppercase tracking-[0.2em] text-white/60">
+            Dashboard
+          </p>
+          <h1 className="mt-1 text-3xl font-bold text-white">
+            {greetingName ? (
+              <>
+                Willkommen zurück,{' '}
+                <span className="text-marke-ocker">{greetingName}</span>
+              </>
+            ) : (
+              'Willkommen zurück'
+            )}
+          </h1>
+        </div>
       </header>
+
+      {/* Einleitung: warum dieses Cockpit zahlenbasiert ist. Ruhiger,
+          gedämpfter Ton, etwas schmaler gesetzt für gute Lesbarkeit. */}
+      <div className="space-y-3 text-sm leading-relaxed text-gray-600">
+        <p>
+          Wer nach Gefühl optimiert, kümmert sich meist um das, was sich am
+          lautesten anfühlt,{' '}
+          <strong>nicht um das, was den größten Effekt hätte</strong>. Zahlen
+          drehen das um: Sie zeigen, wo du wirklich stehst, und erst daraus
+          werden Prioritäten.
+        </p>
+        <p>
+          Dieses Cockpit nimmt dir nicht ab, alle Zahlen zu kennen. Es zeigt dir{' '}
+          <strong>die wenigen, die zählen</strong>, und was sie für deinen
+          nächsten Schritt bedeuten: Welche Pins bringen Menschen auf deine
+          Seite? Wo lohnt sich dein Einsatz, wo nicht?
+        </p>
+        <p>
+          Auf dieser Basis entscheidest du, welche Pins als Nächstes{' '}
+          <strong>wirklich lohnen</strong>, und wirst Monat für Monat{' '}
+          <strong>treffsicherer</strong>.
+        </p>
+      </div>
 
       {/* 1. Hero-Section: schmaler Analytics-Status-Banner */}
       <HeroSection
         status={updateStatusMonat}
         analyticsUpdateDatum={settingsRes.data?.analytics_update_datum ?? null}
-        pinsCount={veroeffentlichtePinsCount}
-        boardsCount={boardsCount}
       />
-
-      {/* 2. Briefing-Block: Deine Prioritäten + Deine nächsten Schritte.
-            Weiche Sektion 1: Ohne Analytics zeigen wir setup-orientierte
-            Prioritäten (Onboarding, erste Pins) statt der analytics-basierten. */}
-      {hatAnalytics ? (
-        <BriefingBlock
-          briefingItems={briefingItems}
-          nextStepsItems={nextStepsItems}
-        />
-      ) : (
-        <BriefingBlockEmpty
-          contentCount={contentInhalteRows.length}
-          pinsCount={allPinsRows.length}
-          saisonProduzierenCount={saisonKanban.jetztProduzieren.length}
-          saisonMinDaysToPinStart={saisonMinDaysToPinStart}
-        />
-      )}
 
       {/* 3. Phasen-Trenner */}
       <PhasenTrenner title="Wo stehst du?" />
 
-      {/* 4. Profil-Status (Status aus aktiven Coaching-Diagnosen + Werte).
-            V3.2.1: Die früher eigenständige „Profil-Diagnose" ist jetzt als
-            „Befunde"-Sub-Sektion in dieser Box integriert. Status + Befund-
-            Liste teilen sich denselben localStorage-Dismiss-State. */}
-      {/* Weiche Sektion 2: Ohne Analytics keine Ampel-Bewertung — neutrale
-            Info-Box statt Profil-Status, Befunde und Werte-Zeilen. */}
+      {/* 4. Profil-Performance: ein zusammenhängender Block — Richtungs-Ampel
+            (oben, in der Sektion), darunter KPI-Kacheln + Verlauf. Die früher
+            getrennten Blöcke „Profil-Status" und „Gesamt-Profil-Performance"
+            sind hier vereint. Ohne Analytics: Leer-Variante.
+            Die Befunde sind nach unten zu „Pins recyceln" gewandert. */}
       {hatAnalytics ? (
-        <ProfilGesundheitBlock
-          profilEr={latest?.engagement ?? null}
-          profilSaveRate={
-            latest && latest.impressionen > 0
-              ? (latest.saves / latest.impressionen) * 100
-              : null
-          }
-          profilCtr={latest?.ctr ?? null}
-          nicheProfile={nicheProfile}
-          coachingDiagnoses={coachingDiagnoses}
-          totalPins={allPinsRows.length}
+        <ProfilPerformanceSection
+          latest={latest}
+          previous={previous}
+          chartPoints={chartPoints}
         />
       ) : (
-        <ProfilStatusEmpty />
+        <ProfilPerformanceEmpty />
       )}
 
-      {/* 4b. V3.3 — „Was hat funktioniert?" (Erfolge der letzten 30 Tage).
-            Emotionaler Übergang vom diagnostischen Profil-Status zur
-            datengetriebenen Performance. Rendert nur bei echten Erfolgen
-            (sonst null — kein Leer-State). */}
+      {/* 4b. „Was hat funktioniert?" (Erfolge der letzten 30 Tage) — schließt
+            den Profil-Performance-Block emotional ab. Rendert nur bei echten
+            Erfolgen (sonst null — kein Leer-State). */}
       <WinsBlock
         latest={latest}
         previous={previous}
@@ -1693,21 +1710,36 @@ export default async function DashboardPage() {
         maxPinImpressionen={maxPinImpressionen}
       />
 
-      {/* 5. Gesamt-Profil-Performance (KPIs + Performance-Verlauf in 3 Spalten).
-          V3.0.8: Das ehemalige Standalone-Zielgruppen-Widget entfällt hier —
-          die Zielgruppe erscheint jetzt als Coaching-Block innerhalb dieser
-          Sektion, direkt unter dem Kontext-Streifen. */}
-      {/* Weiche Sektion 3: Ohne Analytics keine KPI-Karten / kein Chart. */}
+      {/* Profil-Befunde (Account-Diagnosen) — Status-Block direkt nach den
+            Erfolgen, eigene Überschrift hier (die Liste selbst ist
+            überschriftslos). Nur mit Analytics sinnvoll. */}
+      {hatAnalytics && (
+        <section>
+          <h2 className="text-lg font-semibold text-haupt">
+            Was dein Profil dir zeigt
+          </h2>
+          <p className="mt-1 text-sm text-gray-600">
+            Automatisch erkannte Muster in deinen Zahlen, mit dem nächsten
+            konkreten Schritt.
+          </p>
+          <div className="mt-3">
+            <BefundeListe diagnoses={coachingDiagnoses} />
+          </div>
+        </section>
+      )}
+
+      {/* Briefing-Block: Deine Prioritäten + nächste Schritte. Bewusst NACH
+            dem Wo-stehst-du-Überblick — erst der Stand, dann die Prioritäten.
+            Ohne Analytics setup-orientierte statt analytics-basierte Items. */}
       {hatAnalytics ? (
-        <ProfilPerformanceSection
-          latest={latest}
-          previous={previous}
-          chartPoints={chartPoints}
-          audienceSnapshots={audienceSnapshots}
-          nicheProfile={nicheProfile}
-        />
+        <BriefingBlock nextStepsItems={nextStepsItems} />
       ) : (
-        <ProfilPerformanceEmpty />
+        <BriefingBlockEmpty
+          contentCount={contentInhalteRows.length}
+          pinsCount={allPinsRows.length}
+          saisonProduzierenCount={saisonKanban.jetztProduzieren.length}
+          saisonMinDaysToPinStart={saisonMinDaysToPinStart}
+        />
       )}
 
       {/* 4. Phasen-Trenner */}
@@ -1722,11 +1754,27 @@ export default async function DashboardPage() {
         <StrategieCheckSection result={strategieCheckResult} />
       )}
 
+      {/* Zielgruppe-Coaching, aus der Profil-Performance herausgelöst. Eigener
+          Block (Überschrift „Deine Zielgruppe" liegt in der Komponente);
+          rendert null, wenn keine Snapshots/kein Coaching-Text vorliegen. */}
+      <ZielgruppeCoachingBlock
+        snapshots={audienceSnapshots}
+        nicheProfile={nicheProfile}
+        latest={latest}
+        previous={previous}
+      />
+
       {/* 6. Phasen-Trenner */}
-      <PhasenTrenner title="Was steht heute an?" />
+      <PhasenTrenner title="Was pinnst du als Nächstes?" />
 
       {/* 7. Saisonkalender */}
-      <SaisonKalenderSection columns={saisonKanban} />
+      <SaisonKalenderSection
+        columns={saisonKanban}
+        pinsBySaisonEvent={pinsBySaisonEvent}
+      />
+
+      {/* Strang 1: frisches Material (Neue Pins produzieren + Keyword-Einsatz). */}
+      <Zwischentitel title="Frisches Material schaffen" />
 
       {/* 8. Content Pipeline */}
       <PinPipelineSection
@@ -1741,6 +1789,9 @@ export default async function DashboardPage() {
         buckets={keywordsBuckets}
         hasAnyKeywords={keywordRows.length > 0}
       />
+
+      {/* Strang 2: Bestand neu beleben (Pins recyceln). */}
+      <Zwischentitel title="Was schon da ist neu beleben" />
 
       {/* 9. Pin-Handlungsbedarf.
             Weiche Sektion 8: Ohne Analytics keine Diagnose-Kategorien. */}
@@ -1850,16 +1901,16 @@ function BriefingBlockEmpty({
   const itemCls =
     'rounded-r bg-white/60 py-1 pl-3 pr-2 text-sm leading-snug text-gray-800'
   const linkCls =
-    'ml-1 whitespace-nowrap font-medium text-red-600 hover:underline'
+    'ml-1 whitespace-nowrap font-medium text-link underline'
   return (
     <section className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
       <div className="space-y-4">
         <div>
           <h3 className="text-sm font-semibold text-gray-900">
-            Deine Prioritäten
+            Deine nächsten Schritte
           </h3>
           <ul className="mt-2 space-y-1.5">
-            <li className={itemCls} style={{ borderLeft: '3px solid #60a5fa' }}>
+            <li className={itemCls} style={{ borderLeft: '3px solid var(--marke-blaugrau-mittel)' }}>
               Schließe dein Setup ab und setze dein Profil weiter auf.
               <Link href="/dashboard/onboarding" className={linkCls}>
                 → Zum Onboarding
@@ -1868,7 +1919,7 @@ function BriefingBlockEmpty({
             {showContentPrio && (
               <li
                 className={itemCls}
-                style={{ borderLeft: '3px solid #60a5fa' }}
+                style={{ borderLeft: '3px solid var(--marke-blaugrau-mittel)' }}
               >
                 Du hast{' '}
                 <span className="font-semibold text-gray-900">
@@ -1884,7 +1935,7 @@ function BriefingBlockEmpty({
             {saisonProduzierenCount > 0 && (
               <li
                 className={itemCls}
-                style={{ borderLeft: '3px solid #f59e0b' }}
+                style={{ borderLeft: '3px solid var(--marke-blaugrau-mittel)' }}
               >
                 <span className="font-semibold text-gray-900">
                   {saisonProduzierenCount}
@@ -1902,13 +1953,7 @@ function BriefingBlockEmpty({
               </li>
             )}
           </ul>
-        </div>
-
-        <div>
-          <h3 className="text-sm font-semibold text-gray-900">
-            Deine nächsten Schritte
-          </h3>
-          <p className="mt-2 text-sm leading-relaxed text-gray-600">
+          <p className="mt-3 text-sm leading-relaxed text-gray-600">
             Nach deinem ersten Analytics-Update erscheinen hier konkrete
             Handlungsempfehlungen auf Basis deiner Performance-Daten.
           </p>
@@ -1925,38 +1970,12 @@ function BriefingBlockEmpty({
 }
 
 // Sektion 2 — „Profil-Status" ohne Analytics: noch keine Bewertung möglich.
-function ProfilStatusEmpty() {
-  return (
-    <section>
-      <h2 className="text-lg font-semibold text-gray-900">Profil-Status</h2>
-      <div className="mt-3 rounded-lg border border-gray-200 bg-white p-4 text-sm leading-relaxed text-gray-600 shadow-sm">
-        <p className="text-base font-semibold text-gray-700">
-          Noch keine Bewertung möglich
-        </p>
-        <p className="mt-2">
-          Hier siehst du nach deinem ersten Analytics-Update, wie stark dein
-          Profil aufgestellt ist. Bewertet wird anhand automatisch erkannter
-          Muster in deinen Daten: Reichweite, Save-Rate, Klickrate und
-          Board-Aktivität. Deine Hauptnische wird aus den Kategorien deiner
-          Boards erkannt.
-        </p>
-        <Link
-          href="/dashboard/analytics"
-          className="mt-3 inline-flex font-medium text-red-600 hover:underline"
-        >
-          → Analytics einpflegen
-        </Link>
-      </div>
-    </section>
-  )
-}
-
-// Sektion 3 — „Gesamt-Profil-Performance" ohne Analytics.
+// Sektion 3 — „Profil-Performance" ohne Analytics.
 function ProfilPerformanceEmpty() {
   return (
     <section id="gesamt-profil-performance" className="scroll-mt-4">
       <h2 className="text-lg font-semibold text-gray-900">
-        Gesamt-Profil-Performance
+        Profil-Performance
       </h2>
       <DashEmptyBox>
         Nach deinem ersten Analytics-Update siehst du hier deine
@@ -1978,7 +1997,7 @@ function StrategieCheckEmptyKeineStrategie() {
         braucht er deine Strategie.{' '}
         <Link
           href="/dashboard/strategie?tab=meine"
-          className="font-medium text-red-600 hover:underline"
+          className="font-medium text-link underline"
         >
           → Strategie festlegen
         </Link>
@@ -1990,7 +2009,7 @@ function StrategieCheckEmptyKeineStrategie() {
 // Sektion 8 — „Pins recyceln" ohne Analytics.
 function HandlungsbedarfEmpty() {
   return (
-    <section id="pin-handlungsbedarf" className="scroll-mt-4">
+    <section id="pin-handlungsbedarf" className="scroll-mt-4 rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
       <h2 className="text-lg font-semibold text-gray-900">Pins recyceln</h2>
       <DashEmptyBox>
         Diese Auswertung wird aussagekräftig, sobald deine Pins in der Datenbank
@@ -2014,7 +2033,7 @@ function BoardGesundheitEmpty() {
         vorbereitete Pins ohne Veröffentlichung.{' '}
         <Link
           href="/dashboard/boards"
-          className="font-medium text-red-600 hover:underline"
+          className="font-medium text-link underline"
         >
           → Boards anlegen
         </Link>
@@ -2078,7 +2097,7 @@ function ProfilPerformanceKpiBar({
           Noch kein Analytics-Update:{' '}
           <Link
             href="/dashboard/analytics"
-            className="font-medium text-red-600 hover:underline"
+            className="font-medium text-link underline"
           >
             jetzt starten
           </Link>
@@ -2217,7 +2236,7 @@ function KpiSectionGroup({
 }) {
   return (
     <div className={`flex shrink-0 flex-col rounded-lg px-3 py-2 ${bgClass}`}>
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+      <h3 className="text-xs font-semibold tracking-wide text-slate-600">
         <LabelWithTooltip label={label} tooltip={tooltip} />
       </h3>
       <div className="mt-2 flex flex-1 items-stretch gap-2">{children}</div>
@@ -2231,71 +2250,6 @@ function KpiSectionGroup({
 // (0,15-0,25 % etc.) wurde entfernt: sie hat account-spezifische Bewertung
 // mit allgemeinen Werten vermischt.
 
-type KpiVariant = 'hero' | 'normal' | 'context'
-
-function KpiCard({
-  label,
-  value,
-  fullValue,
-  growth,
-  tooltip,
-  previousValue,
-  variant = 'normal',
-  className = '',
-}: {
-  label: string
-  value: string
-  fullValue?: number
-  growth?: number | null
-  tooltip?: string
-  previousValue?: string
-  variant?: KpiVariant
-  className?: string
-}) {
-  // Hero-Kacheln: grüner Akzent-Rahmen. Alle anderen: neutraler grauer Rahmen.
-  const borderCls =
-    variant === 'hero'
-      ? 'border-2 border-green-300'
-      : 'border border-gray-200'
-  const cardCls = `flex h-full flex-col rounded-lg ${borderCls} bg-white p-2.5 shadow-sm`
-  const labelCls =
-    'text-[10px] font-medium uppercase tracking-wide text-gray-500'
-  const valueCls = 'mt-0.5 text-[22px] font-semibold leading-tight text-gray-900'
-
-  const hasPrev =
-    previousValue !== undefined && previousValue !== null && previousValue !== ''
-
-  return (
-    <article className={`${cardCls} ${className}`}>
-      <p className={labelCls}>
-        <LabelWithTooltip label={label} tooltip={tooltip} />
-      </p>
-      <p
-        className={valueCls}
-        title={
-          fullValue !== undefined
-            ? fullValue.toLocaleString('de-DE')
-            : undefined
-        }
-      >
-        {value}
-      </p>
-      {hasPrev ? (
-        <>
-          <GrowthBadge growth={growth} />
-          <p className="mt-0.5 whitespace-nowrap text-[10px] text-gray-400">
-            {previousValue}
-          </p>
-        </>
-      ) : (
-        <p className="mt-0.5 whitespace-nowrap text-[10px] text-gray-400">
-          noch keine Vorperiode verfügbar
-        </p>
-      )}
-    </article>
-  )
-}
-
 function KpiCardEmpty({ label }: { label: string }) {
   return (
     <article className="rounded-lg border border-gray-200 bg-gray-50 p-3">
@@ -2305,28 +2259,6 @@ function KpiCardEmpty({ label }: { label: string }) {
       <p className="mt-0.5 text-sm text-gray-400">Noch keine Daten</p>
     </article>
   )
-}
-
-function GrowthBadge({ growth }: { growth: number | null | undefined }) {
-  if (growth === null || growth === undefined) return null
-  if (!Number.isFinite(growth)) {
-    return <p className="text-xs font-medium text-green-700">↑ neu</p>
-  }
-  if (growth > 0) {
-    return (
-      <p className="text-xs font-medium text-green-700">
-        ↑ {formatGrowth(growth)}
-      </p>
-    )
-  }
-  if (growth < 0) {
-    return (
-      <p className="text-xs font-medium text-red-700">
-        ↓ {formatGrowth(growth)}
-      </p>
-    )
-  }
-  return <p className="text-xs text-gray-500">→ unverändert</p>
 }
 
 // ===========================================================
@@ -2384,7 +2316,7 @@ function HandlungsbedarfSection({
         Basierend auf deinen Analytics: Welche Pins brauchen eine Reaktion?
       </p>
       <div className="mt-2">
-        <HinweisBox variant="tipp">
+        <HinweisBox variant="neutral">
           Erstelle immer einen neuen Pin, bearbeite nie den bei Pinterest
           veröffentlichten Pin. Hake den Pin ab, sobald die Handlung erfolgt
           ist.
@@ -2395,24 +2327,26 @@ function HandlungsbedarfSection({
 
   if (!hasAnyAnalytics) {
     return (
-      <section id="pin-handlungsbedarf" className="scroll-mt-4">
+      <section id="pin-handlungsbedarf" className="scroll-mt-4 rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
         {heading}
-        <div className="achtung-box mt-3">
-          ⚠️ Trage deine ersten Pin-Analytics ein um Handlungsempfehlungen zu
-          sehen.{' '}
-          <Link
-            href="/dashboard/analytics"
-            className="font-medium underline hover:opacity-80"
-          >
-            → Zum Analytics-Tab
-          </Link>
+        <div className="mt-3">
+          <HinweisBox variant="warnung" tone="achtung">
+            Trage deine ersten Pin-Analytics ein, um Handlungsempfehlungen zu
+            sehen.{' '}
+            <Link
+              href="/dashboard/analytics"
+              className="font-medium underline hover:opacity-80"
+            >
+              → Zum Analytics-Tab
+            </Link>
+          </HinweisBox>
         </div>
       </section>
     )
   }
 
   return (
-    <section id="pin-handlungsbedarf" className="scroll-mt-4">
+    <section id="pin-handlungsbedarf" className="scroll-mt-4 rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
       {heading}
       <div className="mt-3 space-y-3">
         {HANDLUNGS_CATEGORIES.map((cat) => (
@@ -2437,12 +2371,11 @@ function HandlungsbedarfSection({
                   <span className="inline group-open:hidden">▸</span>
                   <span className="hidden group-open:inline">▾</span>
                 </span>
-                <span
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-gray-300 bg-gray-100 text-base font-medium text-gray-500"
-                  aria-hidden
-                >
-                  ✓
-                </span>
+                {/* Flacher Haken in Blaugrau statt gefülltem Kreis-Haken. */}
+                <PinKategorieIcon
+                  name="check"
+                  className="h-6 w-6 shrink-0 text-marke-blaugrau"
+                />
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-medium text-gray-500">
                     Handlung abgeschlossen
@@ -2526,37 +2459,34 @@ function HandlungsbedarfKategorieCard({
 
   return (
     <details className="group rounded-lg border border-gray-200 bg-white shadow-sm">
-      <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
+      {/* Leere Kategorie (0 offene Pins): Zeile gedimmt, betroffene stechen hervor. */}
+      <summary
+        className={`flex cursor-pointer list-none items-center gap-3 px-4 py-3 hover:bg-gray-50 [&::-webkit-details-marker]:hidden ${
+          pins.length === 0 ? 'opacity-60' : ''
+        }`}
+      >
         <span className="text-2xl leading-none text-gray-400" aria-hidden>
           <span className="inline group-open:hidden">▸</span>
           <span className="hidden group-open:inline">▾</span>
         </span>
-        <span
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-gray-300 bg-white text-base text-gray-700"
-          aria-hidden
-        >
-          {cat.emoji}
-        </span>
+        {/* Kategorie-Kennzeichen: einheitliches Linien-Icon in Blaugrau, ohne
+            Kreis-Hintergrund. Unterscheidung allein über die Symbol-Form. */}
+        <PinKategorieIcon
+          name={cat.diagnose}
+          className="h-6 w-6 shrink-0 text-marke-blaugrau"
+        />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1 text-sm font-medium text-gray-900">
             <LabelWithTooltip label={cat.label} tooltip={tooltip} />
           </div>
           <p className="mt-0.5 text-xs text-gray-600">{cat.subtitle}</p>
         </div>
-        <span
-          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-            pins.length === 0
-              ? 'bg-gray-100 text-gray-400'
-              : 'bg-orange-100 text-orange-700'
-          }`}
-        >
-          {pins.length}
-        </span>
+        <AnzahlBadge count={pins.length} />
       </summary>
 
       {pins.length === 0 ? (
-        <div className="border-t border-gray-200 px-4 py-6 text-center text-sm text-green-700">
-          ✓ Alle Pins dieser Kategorie sind aktuell als bearbeitet markiert.
+        <div className="border-t border-gray-200 px-4 py-6 text-center text-sm text-sekundaer">
+          Aktuell fällt keiner deiner Pins in diese Kategorie.
         </div>
       ) : (
         <div className="border-t border-gray-200">
@@ -2576,7 +2506,7 @@ function HandlungsbedarfKategorieCard({
           </ul>
           {remaining > 0 && (
             <details className="border-t border-gray-100">
-              <summary className="cursor-pointer list-none px-4 py-2 text-xs font-medium text-red-600 hover:underline">
+              <summary className="cursor-pointer list-none px-4 py-2 text-xs font-medium text-link underline">
                 + {remaining} weitere Pin{remaining === 1 ? '' : 's'} anzeigen
               </summary>
               <ul className="space-y-2 p-3">
@@ -2604,170 +2534,167 @@ function HandlungsbedarfKategorieCard({
 // ===========================================================
 // Saison-Kalender (Kanban)
 // ===========================================================
-const SAISON_ACCENT = {
-  blue: {
-    headerBg: 'bg-blue-50',
-    border: 'border-blue-200',
-    headerText: 'text-blue-900',
-    countdown: 'text-blue-600',
-  },
-  green: {
-    headerBg: 'bg-green-50',
-    border: 'border-green-200',
-    headerText: 'text-green-900',
-    countdown: 'text-green-600',
-  },
-  orange: {
-    headerBg: 'bg-orange-50',
-    border: 'border-orange-200',
-    headerText: 'text-orange-900',
-    countdown: 'text-orange-600',
-  },
-  gray: {
-    headerBg: 'bg-gray-100',
-    border: 'border-gray-200',
-    headerText: 'text-gray-700',
-    countdown: 'text-gray-600',
-  },
-} as const
-
-type SaisonAccent = keyof typeof SAISON_ACCENT
+// Kopfband ist neutral; die Dringlichkeit trägt allein der StatusDot je Spalte
+// (tone), die Logik welche Events in welche Spalte fallen liegt in computeStatus.
 // href wird per Event in SaisonCard gebaut (`?open=new&saison_event_id=<id>`),
 // damit das Pin-Produktion-Formular automatisch mit dem Event-Tag öffnet.
 type SaisonAction = { label: string }
 
 function formatCountdown(prefix: string, days: number): string {
-  if (days <= 0) return `${prefix} heute`
-  if (days === 1) return `${prefix} in 1 Tag`
-  return `${prefix} in ${days} Tagen`
+  const rest = days <= 0 ? 'heute' : days === 1 ? 'in 1 Tag' : `in ${days} Tagen`
+  // Mit Präfix vorangestellt (z. B. „Pin-Start in 3 Tagen"); ohne Präfix
+  // (Event-Spalten) steht der Text allein, daher Satzanfang groß.
+  return prefix ? `${prefix} ${rest}` : rest.charAt(0).toUpperCase() + rest.slice(1)
 }
 
 function buildSuchstartTooltip(event: KanbanEvent): string {
   // Suchstart-Datum entspricht statusInfo.pinEnd (= event_datum - suchbeginn_tage).
   return (
     `Der Suchbeginn für ${event.event_name} liegt bei ` +
-    `${event.suchbeginnTage} Tagen vor dem Event-Datum. ` +
+    `${event.suchbeginnTage} Tagen vor dem Termin. ` +
     `Ab ${formatDateDe(event.pinEnd)} suchen Pinterest-Nutzer:innen aktiv ` +
     `nach diesem Thema. Der individuelle Suchstart wird in der ` +
-    `Saison-Kalender-Datenbank pro Event hinterlegt.`
+    `Saison-Kalender-Datenbank pro Termin hinterlegt.`
   )
 }
 
-function SaisonKalenderSection({ columns }: { columns: SaisonKanbanColumns }) {
+function SaisonKalenderSection({
+  columns,
+  pinsBySaisonEvent,
+}: {
+  columns: SaisonKanbanColumns
+  // Entwurf/Geplant-Pin-Bestand je Saison-Event (aus page.tsx-Aggregation).
+  pinsBySaisonEvent: Map<string, { entwurf: number; geplant: number }>
+}) {
   return (
     <section id="saison-kalender" className="scroll-mt-4">
       <div>
         <h2 className="flex items-center text-lg font-semibold text-gray-900">
           Saisonkalender
-          <InfoTooltip text="Pinterest-Nutzer:innen suchen 6–12 Wochen vor einem Event. Wer zu spät pinnt, verpasst die Welle. Der Saisonkalender zeigt dir auf einen Blick in welcher Phase jedes Event gerade ist." />
+          <InfoTooltip text="Pinterest-Nutzer:innen suchen 6–12 Wochen vor dem Termin. Wer zu spät pinnt, verpasst die Welle. Der Saisonkalender zeigt dir auf einen Blick in welcher Phase jeder Termin gerade ist." />
         </h2>
         <p className="mt-1 text-sm text-gray-600">
-          Saisonale Themen brauchen 6-12 Wochen Vorlauf. Hier siehst du,
+          Saisonale Themen brauchen 6 bis 12 Wochen Vorlauf.{' '}
+          <strong>Wer zu spät pinnt, verpasst die Welle.</strong> Hier siehst du,
           was wann zu tun ist.
-        </p>
-        <p className="mt-1 text-[13px]">
-          <span aria-hidden>→ </span>
-          <Link
-            href="/dashboard/strategie?tab=grundlagen&accordion=saisonalitaet"
-            className="text-red-600 underline hover:opacity-80"
-          >
-            Mehr zur Saisonalität & Pinterest-Timing
-          </Link>
         </p>
       </div>
 
       <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <SaisonColumn
-          accent="blue"
-          emoji="🎬"
+          icon="pen"
+          tone="achtung"
           title="Jetzt produzieren"
           subtitle="Material vorbereiten – Pin-Start naht"
           events={columns.jetztProduzieren}
+          pinsBySaisonEvent={pinsBySaisonEvent}
           countdownPrefix="Pin-Start"
           actionButton={{ label: 'Pins erstellen' }}
-          emptyText="Aktuell kein Event in dieser Phase."
+          emptyText="Gerade nichts in dieser Phase."
+          zeigeWeitereNamen
         />
         <SaisonColumn
-          accent="green"
-          emoji="📌"
+          icon="pin"
+          tone="gut"
           title="Jetzt pinnen"
           subtitle="Pin-Fenster offen – aktiv veröffentlichen"
           events={columns.jetztPinnen}
-          countdownPrefix="Event"
-          emptyText="Aktuell kein Event in dieser Phase."
+          pinsBySaisonEvent={pinsBySaisonEvent}
+          countdownPrefix=""
+          emptyText="Gerade nichts in dieser Phase."
+          zeigeWeitereNamen
+          kartenRahmenCamel
         />
         <SaisonColumn
-          accent="orange"
-          emoji="🚀"
+          icon="flame"
+          tone="schlecht"
           title="Hochphase"
           subtitle="Nicht mehr neu pinnen – veröffentlichte Pins beobachten"
           events={columns.hochphase}
-          countdownPrefix="Event"
-          emptyText="Aktuell kein Event in der Hochphase."
+          pinsBySaisonEvent={pinsBySaisonEvent}
+          countdownPrefix=""
+          emptyText="Gerade nichts in der Hochphase."
+          zeigeWeitereNamen
         />
         <SaisonColumn
-          accent="gray"
-          emoji="⏳"
+          icon="hourglass"
+          tone="neutral"
           title="Noch Zeit"
           subtitle="Vormerken & Ideen sammeln – Produktion startet später"
           events={columns.nochZeit}
+          pinsBySaisonEvent={pinsBySaisonEvent}
           countdownPrefix="Produktionsstart"
           actionButton={{ label: 'Pin-Idee speichern' }}
-          emptyText="Keine weiteren Events vorgemerkt."
+          emptyText="Nichts weiter vorgemerkt."
         />
       </div>
 
-      <div className="mt-4 text-right">
+      <p className="mt-1 text-[13px]">
+        <span aria-hidden>→ </span>
         <Link
           href="/dashboard/saison-kalender"
-          className="text-xs font-medium text-red-600 hover:underline"
+          className="text-link underline hover:opacity-80"
         >
-          Alle Events in der Datenbank verwalten ↗
+          Saisons und Feiertage in der Datenbank verwalten
         </Link>
-      </div>
+      </p>
+      <p className="mt-1 text-[13px]">
+        <span aria-hidden>→ </span>
+        <Link
+          href="/dashboard/strategie?tab=grundlagen&accordion=saisonalitaet"
+          className="text-link underline hover:opacity-80"
+        >
+          Mehr zur Saisonalität & Pinterest-Timing
+        </Link>
+      </p>
     </section>
   )
 }
 
 function SaisonColumn({
-  accent,
-  emoji,
+  icon,
+  tone,
   title,
   subtitle,
   events,
+  pinsBySaisonEvent,
   countdownPrefix,
   actionButton,
   emptyText,
+  zeigeWeitereNamen = false,
+  kartenRahmenCamel = false,
 }: {
-  accent: SaisonAccent
-  emoji: string
+  icon: string
+  tone: StatusTone
   title: string
   subtitle: string
   events: KanbanEvent[]
+  pinsBySaisonEvent: Map<string, { entwurf: number; geplant: number }>
   countdownPrefix: string
   actionButton?: SaisonAction
   emptyText: string
+  // true → Toggle-Auslöser listet die Namen der weiteren Events auf;
+  // false (z. B. „Noch Zeit") → nur die nackte Zahl „X weitere".
+  zeigeWeitereNamen?: boolean
+  // true → Event-Karten dieser Spalte mit Camel-Rahmen (nur „Jetzt pinnen").
+  kartenRahmenCamel?: boolean
 }) {
-  const cls = SAISON_ACCENT[accent]
   const visible = events.slice(0, 1)
   const hidden = events.slice(1)
 
   return (
-    <div
-      className={`flex flex-col rounded-lg border ${cls.border} bg-white shadow-sm`}
-    >
-      <div
-        className={`rounded-t-lg border-b ${cls.border} ${cls.headerBg} px-3 py-2`}
-      >
-        <h3
-          className={`flex items-center gap-1.5 text-sm font-semibold ${cls.headerText}`}
-        >
-          <span aria-hidden>{emoji}</span>
-          {title}
+    <div className="flex flex-col rounded-lg border border-karte-rand bg-white shadow-sm">
+      {/* Kopfband im dunklen Marken-Blaugrau (wie der Header); Icon + Titel hell
+          (weiß). Der StatusDot sitzt an der Event-Karte (am Pin-Fenster). */}
+      <div className="rounded-t-lg bg-marke-blaugrau px-3 py-2">
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-white">
+          <PinKategorieIcon
+            name={icon}
+            className="h-5 w-5 shrink-0 text-white"
+          />
+          <span>{title}</span>
         </h3>
-        <p className={`mt-0.5 text-xs ${cls.headerText} opacity-80`}>
-          {subtitle}
-        </p>
+        <p className="mt-0.5 text-xs text-white/80">{subtitle}</p>
       </div>
       <div className="flex flex-col gap-2 p-3">
         {events.length === 0 ? (
@@ -2780,19 +2707,30 @@ function SaisonColumn({
               <SaisonCard
                 key={e.id}
                 event={e}
-                countdownLabel={formatCountdown(countdownPrefix, e.countdownDays)}
-                countdownClassName={cls.countdown}
+                tone={tone}
+                countdownLabel={
+                  e.countdownLabelOverride ??
+                  formatCountdown(countdownPrefix, e.countdownDays)
+                }
+                countdownClassName="text-sekundaer"
                 actionButton={actionButton}
+                rahmenCamel={kartenRahmenCamel}
+                prepared={pinsBySaisonEvent.get(e.id) ?? null}
               />
             ))}
             {hidden.length > 0 && (
               <details className="group">
-                <summary className="cursor-pointer list-none text-xs font-medium text-red-600 hover:underline [&::-webkit-details-marker]:hidden">
-                  <span className="inline group-open:hidden">
-                    ▸ {hidden.length}{' '}
-                    {hidden.length === 1 ? 'weiteres' : 'weitere'}
+                <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+                  <span className="inline text-xs font-medium text-marke-ocker group-open:hidden">
+                    {/* Toggle-Beschriftung komplett in Camel (Pfeil + Namen). */}
+                    ▸{' '}
+                    {zeigeWeitereNamen
+                      ? hidden.map((e) => e.event_name).join(', ')
+                      : `${hidden.length} ${
+                          hidden.length === 1 ? 'weiteres' : 'weitere'
+                        }`}
                   </span>
-                  <span className="hidden group-open:inline">
+                  <span className="hidden text-xs font-medium text-marke-ocker underline group-open:inline">
                     ▾ Weniger anzeigen
                   </span>
                 </summary>
@@ -2801,12 +2739,15 @@ function SaisonColumn({
                     <SaisonCard
                       key={e.id}
                       event={e}
-                      countdownLabel={formatCountdown(
-                        countdownPrefix,
-                        e.countdownDays
-                      )}
-                      countdownClassName={cls.countdown}
+                      tone={tone}
+                      countdownLabel={
+                        e.countdownLabelOverride ??
+                        formatCountdown(countdownPrefix, e.countdownDays)
+                      }
+                      countdownClassName="text-sekundaer"
                       actionButton={actionButton}
+                      rahmenCamel={kartenRahmenCamel}
+                      prepared={pinsBySaisonEvent.get(e.id) ?? null}
                     />
                   ))}
                 </div>
@@ -2821,50 +2762,130 @@ function SaisonColumn({
 
 function SaisonCard({
   event,
+  tone,
   countdownLabel,
   countdownClassName,
   actionButton,
+  rahmenCamel = false,
+  prepared,
 }: {
   event: KanbanEvent
+  tone: StatusTone
   countdownLabel: string
   countdownClassName: string
   actionButton?: SaisonAction
+  // true → Camel-Rahmen (nur Spalte „Jetzt pinnen"), sonst neutral karte-rand.
+  rahmenCamel?: boolean
+  // Entwurf/Geplant-Pin-Bestand zu diesem Event; null = keine getaggten Pins.
+  prepared: { entwurf: number; geplant: number } | null
 }) {
+  // „Heute" ist der dringlichste Fall → hervorgehoben; normale Tageszahlen und
+  // der „läuft noch bis …"-Text bleiben dezent.
+  const istHeute = countdownLabel === 'Heute'
   return (
-    <div className="flex min-h-[170px] flex-col justify-between rounded-md border border-gray-200 bg-white p-3 shadow-sm">
+    <div
+      className={`flex min-h-[170px] flex-col justify-between rounded-md border ${
+        rahmenCamel ? 'border-marke-ocker' : 'border-karte-rand'
+      } bg-white p-3 shadow-sm`}
+    >
       <div>
-        <div className="flex items-center text-sm font-medium text-gray-900">
+        <div className="flex items-center text-sm font-semibold text-gray-900">
           <span>{event.event_name}</span>
           <InfoTooltip text={buildSuchstartTooltip(event)} />
         </div>
         <div className="mt-0.5 text-xs text-gray-500">
           {formatDateDe(event.event_datum)}
         </div>
-        <div className="mt-2 border-t border-gray-100 pt-2 text-xs text-gray-600">
-          Pin-Fenster: {formatDateDe(event.pinStart)} –{' '}
-          {formatDateDe(event.pinEnd)}
+        {/* StatusDot (Ampel) direkt vor der Pin-Fenster-Zeile: er bezieht sich
+            auf das Pin-Fenster genau dieses Events. */}
+        <div className="mt-2 flex items-center gap-1.5 border-t border-gray-100 pt-2 text-xs text-gray-600">
+          <StatusDot tone={tone} />
+          <span>
+            Pin-Fenster: {formatDateDe(event.pinStart)} –{' '}
+            {formatDateDe(event.pinEnd)}
+          </span>
         </div>
-        <div className={`mt-2 text-xs font-medium ${countdownClassName}`}>
+        <div
+          className={`mt-2 text-xs ${
+            istHeute ? 'font-semibold text-haupt' : `font-medium ${countdownClassName}`
+          }`}
+        >
           {countdownLabel}
         </div>
         {actionButton && (
           <div className="mt-1.5">
             <Link
               href={`/dashboard/pin-produktion?open=new&saison_event_id=${event.id}`}
-              className="inline-flex items-center justify-center rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700"
+              className="inline-flex items-center justify-center rounded-md bg-marke-blaugrau px-3 py-1.5 text-xs font-medium text-white hover:bg-marke-blaugrau-dunkel"
             >
               {actionButton.label}
             </Link>
           </div>
         )}
       </div>
-      {!actionButton && (
-        <div aria-hidden className="mt-1.5">
-          <span className="invisible inline-flex items-center justify-center rounded-md px-3 py-1.5 text-xs font-medium">
-            &nbsp;
-          </span>
-        </div>
+      {prepared && (prepared.entwurf > 0 || prepared.geplant > 0) ? (
+        <PreparedPinsHinweis
+          basis={`/dashboard/pin-produktion?filter[saison_event]=${event.id}`}
+          prepared={prepared}
+        />
+      ) : (
+        !actionButton && (
+          <div aria-hidden className="mt-1.5">
+            <span className="invisible inline-flex items-center justify-center rounded-md px-3 py-1.5 text-xs font-medium">
+              &nbsp;
+            </span>
+          </div>
+        )
       )}
+    </div>
+  )
+}
+
+// Einheitliche Hinweis-Zeile „vorbereitete Pins" (Entwurf/geplant) für Board-
+// und Saison-Karten: feiner Trenner + Linien-pin-Icon in Blaugrau + ruhiger
+// Text + Camel-Links. `basis` ist der Pin-Produktion-Link ohne Status, also
+// …?filter[board]=X bzw. …?filter[saison_event]=Y; der Status wird angehängt.
+// Kein Emoji, kein kräftiges Grün. Rendert nur bei Bestand > 0.
+function PreparedPinsHinweis({
+  basis,
+  prepared,
+}: {
+  basis: string
+  prepared: { entwurf: number; geplant: number }
+}) {
+  const { entwurf, geplant } = prepared
+  if (entwurf === 0 && geplant === 0) return null
+  const linkCls = 'text-link underline underline-offset-2 hover:opacity-80'
+  return (
+    <div className="mt-2 flex items-start gap-1.5 border-t border-gray-100 pt-2 text-xs text-gray-600">
+      <PinKategorieIcon
+        name="pin"
+        className="mt-0.5 h-3.5 w-3.5 shrink-0 text-marke-blaugrau"
+      />
+      <div className="space-y-0.5">
+        {entwurf > 0 && (
+          <p>
+            {entwurf} {entwurf === 1 ? 'Pin' : 'Pins'} als Entwurf gespeichert.{' '}
+            <Link
+              href={`${basis}&filter[status]=entwurf`}
+              className={linkCls}
+            >
+              Einplanen und veröffentlichen
+            </Link>
+          </p>
+        )}
+        {geplant > 0 && (
+          <p>
+            {geplant} {geplant === 1 ? 'Pin' : 'Pins'} bereits eingeplant.{' '}
+            <Link
+              href={`${basis}&filter[status]=geplant`}
+              className={linkCls}
+            >
+              Veröffentlichung vorziehen
+            </Link>
+          </p>
+        )}
+      </div>
     </div>
   )
 }
@@ -2885,10 +2906,10 @@ function PinPipelineSection({
 }) {
   const cat1Count = inhaltePinBedarfA.length + inhaltePinBedarfB.length
   return (
-    <section id="content-pipeline" className="scroll-mt-4">
+    <section id="content-pipeline" className="scroll-mt-4 rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
       <h2 className="text-lg font-semibold text-gray-900">
         <LabelWithTooltip
-          label="Neue Pins produzieren"
+          label="Wo neue Pins jetzt zählen"
           tooltip="Diese Sektion zeigt zwei Quellen: bestehende Inhalte, die mehr Pins brauchen oder veraltete Pins haben, plus URLs mit hoher CTR aber wenig Pins (Goldnugget-Logik)."
         />
       </h2>
@@ -2904,14 +2925,6 @@ function PinPipelineSection({
           thresholds={thresholds}
         />
         <PinPipelineUrlsCard urls={urlPotenzial} thresholds={thresholds} />
-      </div>
-      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-gray-500">
-        <Link
-          href="/dashboard/einstellungen#content-pipeline-schwellwerte"
-          className="font-medium text-red-600 hover:underline"
-        >
-          Schwellwerte in den Einstellungen anpassen ↗
-        </Link>
       </div>
     </section>
   )
@@ -2943,10 +2956,12 @@ const KEYWORD_TYP_LABEL: Record<KeywordSeoTyp, string> = {
   longtail: 'Longtail',
 }
 
+// Klassifizierung ohne Wertung (kein Typ ist „besser") → alle drei identisch
+// in dezenter Blaugrau-Tönung; der Unterschied steht allein im Wort.
 const KEYWORD_TYP_BADGE: Record<KeywordSeoTyp, string> = {
-  haupt: 'bg-red-100 text-red-700',
-  mid_tail: 'bg-yellow-100 text-yellow-800',
-  longtail: 'bg-green-100 text-green-700',
+  haupt: 'bg-marke-blaugrau-hell text-marke-blaugrau',
+  mid_tail: 'bg-marke-blaugrau-hell text-marke-blaugrau',
+  longtail: 'bg-marke-blaugrau-hell text-marke-blaugrau',
 }
 
 function buildKeywordPinHref(keyword: string): string {
@@ -2966,13 +2981,13 @@ function KeywordsSeoSection({
 
   if (!hasAnyKeywords) {
     return (
-      <section id="keywords-seo" className="scroll-mt-4">
+      <section id="keywords-seo" className="scroll-mt-4 rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
         {heading}
         <DashEmptyBox>
           →{' '}
           <Link
             href="/dashboard/keywords"
-            className="font-medium text-red-600 hover:underline"
+            className="font-medium text-link underline"
           >
             Zuerst Keywords in der Keyword-Datenbank anlegen
           </Link>
@@ -2983,7 +2998,7 @@ function KeywordsSeoSection({
   }
 
   return (
-    <section id="keywords-seo" className="scroll-mt-4">
+    <section id="keywords-seo" className="scroll-mt-4 rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
       {heading}
       <p className="mt-1 text-sm text-gray-600">
         Hol mehr aus deiner Keyword-Datenbank heraus.
@@ -2992,7 +3007,6 @@ function KeywordsSeoSection({
         <KeywordsSeoCard
           title="Ungenutzte Keywords"
           subtitle="Diese Keywords stecken noch in keinem Pin."
-          counterClass="bg-gray-100 text-gray-700"
           entries={buckets.unused}
           emptyText="Alle Keywords sind bereits in Pins eingesetzt."
           renderEntry={(kw) => (
@@ -3004,7 +3018,7 @@ function KeywordsSeoSection({
         →{' '}
         <Link
           href="/dashboard/keywords"
-          className="font-medium text-red-600 hover:underline"
+          className="font-medium text-link underline"
         >
           Zur Keyword-Datenbank
         </Link>
@@ -3016,58 +3030,69 @@ function KeywordsSeoSection({
 function KeywordsSeoCard({
   title,
   subtitle,
-  counterClass,
   entries,
   emptyText,
   renderEntry,
 }: {
   title: string
   subtitle: string
-  counterClass: string
   entries: KeywordSeoEntry[]
   emptyText: string
   renderEntry: (kw: KeywordSeoEntry) => JSX.Element
 }) {
-  const visible = entries.slice(0, 5)
-  const remaining = entries.length - visible.length
+  const visible = entries.slice(0, 3)
+  const hidden = entries.slice(3)
   return (
     <details className="group rounded-lg border border-gray-200 bg-white shadow-sm">
-      <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
+      {/* Leere Kategorie (0 ungenutzte Keywords): Zeile gedimmt. */}
+      <summary
+        className={`flex cursor-pointer list-none items-center gap-3 px-4 py-3 hover:bg-gray-50 [&::-webkit-details-marker]:hidden ${
+          entries.length === 0 ? 'opacity-60' : ''
+        }`}
+      >
         <span className="text-2xl leading-none text-gray-400" aria-hidden>
           <span className="inline group-open:hidden">▸</span>
           <span className="hidden group-open:inline">▾</span>
         </span>
+        {/* Kopf-Icon im einheitlichen Linien-Stil (Blaugrau, kein Kreis). */}
+        <PinKategorieIcon
+          name="tag"
+          className="h-6 w-6 shrink-0 text-marke-blaugrau"
+        />
         <div className="min-w-0 flex-1">
           <div className="text-sm font-medium text-gray-900">{title}</div>
           <p className="mt-0.5 text-xs text-gray-600">{subtitle}</p>
         </div>
-        <span
-          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-            entries.length === 0 ? 'bg-gray-100 text-gray-400' : counterClass
-          }`}
-        >
-          {entries.length}
-        </span>
+        <AnzahlBadge count={entries.length} variant="ruhig" />
       </summary>
 
       <div className="border-t border-gray-200 px-4 py-2">
         {entries.length === 0 ? (
           <p className="px-1 py-3 text-sm text-gray-500">{emptyText}</p>
         ) : (
-          <ul className="divide-y divide-gray-100">
-            {visible.map((kw) => renderEntry(kw))}
-          </ul>
-        )}
-        {remaining > 0 && (
-          <p className="px-1 pb-2 pt-3 text-xs text-gray-500">
-            + {remaining} weitere, siehe{' '}
-            <Link
-              href="/dashboard/keywords"
-              className="font-medium text-red-600 hover:underline"
-            >
-              Keyword-Datenbank
-            </Link>
-          </p>
+          <>
+            <ul className="divide-y divide-gray-100">
+              {visible.map((kw) => renderEntry(kw))}
+            </ul>
+            {hidden.length > 0 && (
+              // Rest hinter nativem Toggle (Server-Komponente → kein useState);
+              // Camel-Link-Stil + ▸/▾ wie im Saisonkalender. Eigener benannter
+              // group/more-Scope, damit er nicht mit dem äußeren Card-group kollidiert.
+              <details className="group/more">
+                <summary className="cursor-pointer list-none px-1 py-2 [&::-webkit-details-marker]:hidden">
+                  <span className="text-xs font-medium text-marke-ocker group-open/more:hidden">
+                    ▸ {hidden.length} weitere anzeigen
+                  </span>
+                  <span className="hidden text-xs font-medium text-marke-ocker underline group-open/more:inline">
+                    ▾ Weniger anzeigen
+                  </span>
+                </summary>
+                <ul className="divide-y divide-gray-100">
+                  {hidden.map((kw) => renderEntry(kw))}
+                </ul>
+              </details>
+            )}
+          </>
         )}
       </div>
     </details>
@@ -3095,7 +3120,7 @@ function KeywordRowUnused({ kw }: { kw: KeywordSeoEntry }) {
         </div>
         <Link
           href={buildKeywordPinHref(kw.keyword)}
-          className="inline-flex shrink-0 items-center justify-center rounded-md bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700"
+          className="inline-flex shrink-0 items-center justify-center rounded-md bg-marke-blaugrau px-3 py-1 text-xs font-medium text-white hover:bg-marke-blaugrau-dunkel"
         >
           Pin erstellen
         </Link>
@@ -3117,17 +3142,22 @@ function PinPipelineInhalteCard({
 }) {
   return (
     <details className="group rounded-lg border border-gray-200 bg-white shadow-sm">
-      <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
+      {/* Leere Kategorie (totalCount 0): Zeile gedimmt, damit betroffene
+          Kategorien hervorstechen. */}
+      <summary
+        className={`flex cursor-pointer list-none items-center gap-3 px-4 py-3 hover:bg-gray-50 [&::-webkit-details-marker]:hidden ${
+          totalCount === 0 ? 'opacity-60' : ''
+        }`}
+      >
         <span className="text-2xl leading-none text-gray-400" aria-hidden>
           <span className="inline group-open:hidden">▸</span>
           <span className="hidden group-open:inline">▾</span>
         </span>
-        <span
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-gray-300 bg-white text-base text-gray-700"
-          aria-hidden
-        >
-          📖
-        </span>
+        {/* Einheitliches Linien-Icon (Blaugrau, kein Kreis) wie in Pins recyceln. */}
+        <PinKategorieIcon
+          name="inhalt"
+          className="h-6 w-6 shrink-0 text-marke-blaugrau"
+        />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1 text-sm font-medium text-gray-900">
             <LabelWithTooltip
@@ -3140,21 +3170,13 @@ function PinPipelineInhalteCard({
             – größter Hebel für Reichweite.
           </p>
         </div>
-        <span
-          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-            totalCount === 0
-              ? 'bg-gray-100 text-gray-400'
-              : 'bg-orange-100 text-orange-700'
-          }`}
-        >
-          {totalCount}
-        </span>
+        <AnzahlBadge count={totalCount} />
       </summary>
 
       <div className="border-t border-gray-200">
         <div className="coaching-box mx-4 my-3 space-y-1 text-xs font-medium">
           <div>
-            🎯 <strong>Der Hebel:</strong> Pinterest belohnt frische
+            <strong>Der Hebel:</strong> Pinterest belohnt frische
             Pin-Varianten pro Inhalt. Wer pro Inhalt regelmäßig neue Pins mit
             anderen Hooks produziert, maximiert die Reichweite jedes
             einzelnen Themas.
@@ -3168,14 +3190,14 @@ function PinPipelineInhalteCard({
 
         <div className="divide-y divide-gray-200">
           <PinPipelineInhalteSubList
-            heading="🆕 INHALTE MIT ZU WENIGEN PINS"
+            heading="Inhalte mit zu wenigen Pins"
             items={subA}
             kind="few_pins"
             emptyText="Aktuell keine Inhalte mit zu wenigen Pins – stark, alle Themen haben Material."
             thresholds={thresholds}
           />
           <PinPipelineInhalteSubList
-            heading="💤 INHALTE OHNE AKTUELLEN PIN"
+            heading="Inhalte ohne aktuellen Pin"
             items={subB}
             kind="stale"
             emptyText="Aktuell keine Inhalte mit langer Pin-Pause – alle Themen werden regelmäßig bepinnt."
@@ -3208,35 +3230,29 @@ function PinPipelineInhalteSubList({
       ? `Inhalte mit weniger als ${thresholds.minPinsGesamt} Pins insgesamt. ` +
         'Pinterest belohnt mehrere Pin-Varianten pro Inhalt – idealerweise ' +
         '3+ Hooks und Designs für denselben Inhalt. Hinweis: Jeder Inhalt ' +
-        'erscheint nur in einer Sub-Liste. Schwellwert in den Einstellungen ' +
-        'anpassbar.'
+        'erscheint nur in einer Sub-Liste.'
       : `Inhalte mit ausreichend Pins (${thresholds.minPinsOhneAktuell}+ insgesamt), bei denen ` +
         `aber seit über ${thresholds.tageOhnePin} Tagen kein neuer Pin mehr ` +
         'veröffentlicht wurde. Pinterest belohnt kontinuierliche Aktivität ' +
         'pro Inhalt. Hinweis: Inhalte mit zu wenigen Pins erscheinen in ' +
-        'Sub-Liste A, auch wenn der letzte Pin lange zurückliegt. ' +
-        'Schwellwerte in den Einstellungen anpassbar.'
+        'Sub-Liste A, auch wenn der letzte Pin lange zurückliegt.'
 
   return (
     <details className="group/sub">
-      <summary className="flex cursor-pointer list-none items-center gap-2 bg-gray-50 py-2 pl-8 pr-4 hover:bg-gray-100 [&::-webkit-details-marker]:hidden">
+      <summary
+        className={`flex cursor-pointer list-none items-center gap-2 bg-gray-50 py-2 pl-8 pr-4 hover:bg-gray-100 [&::-webkit-details-marker]:hidden ${
+          items.length === 0 ? 'opacity-60' : ''
+        }`}
+      >
         <span className="text-base leading-none text-gray-400" aria-hidden>
           <span className="inline group-open/sub:hidden">▸</span>
           <span className="hidden group-open/sub:inline">▾</span>
         </span>
-        <span className="flex flex-1 items-center text-[13px] font-semibold uppercase tracking-wide text-gray-700">
+        <span className="flex flex-1 items-center text-[13px] font-semibold tracking-wide text-gray-700">
           {heading}
           <InfoTooltip text={tooltip} />
         </span>
-        <span
-          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
-            items.length === 0
-              ? 'bg-gray-100 text-gray-400'
-              : 'bg-orange-100 text-orange-700'
-          }`}
-        >
-          {items.length}
-        </span>
+        <AnzahlBadge count={items.length} />
       </summary>
 
       {items.length === 0 ? (
@@ -3257,7 +3273,7 @@ function PinPipelineInhalteSubList({
           </ul>
           {remaining > 0 && (
             <details className="group/more border-t border-gray-100">
-              <summary className="cursor-pointer list-none px-4 py-2 text-xs font-medium text-red-600 hover:underline [&::-webkit-details-marker]:hidden">
+              <summary className="cursor-pointer list-none px-4 py-2 text-xs font-medium text-link underline [&::-webkit-details-marker]:hidden">
                 <span className="inline group-open/more:hidden">
                   ▸ {remaining} weitere Inhalte anzeigen
                 </span>
@@ -3312,16 +3328,12 @@ function PinPipelineInhaltRow({
     item.letzterPinTage > thresholds.tageOhnePin
   const hint =
     kind === 'stale'
-      ? `⚠️ Letzter Pin vor ${item.letzterPinTage ?? 0} Tagen – kontinuierliche Pin-Produktion fehlt, neue Variante mit anderem Hook produzieren.`
+      ? `Letzter Pin vor ${item.letzterPinTage ?? 0} Tagen – kontinuierliche Pin-Produktion fehlt, neue Variante mit anderem Hook produzieren.`
       : fewPinsIsStale
-        ? `⚠️ Nur ${item.pinCount} Pin${pinPlural} und seit ${item.letzterPinTage} Tagen kein neuer – kontinuierliche Pin-Produktion fehlt.`
+        ? `Nur ${item.pinCount} Pin${pinPlural} und seit ${item.letzterPinTage} Tagen kein neuer – kontinuierliche Pin-Produktion fehlt.`
         : item.pinCount === 0
-          ? `⚠️ Noch keinen Pin zu diesem Inhalt erstellt – pro Inhalt sollten ${thresholds.minPinsGesamt}+ Varianten existieren.`
-          : `⚠️ Nur ${item.pinCount} Pin${pinPlural} – pro Inhalt sollten ${thresholds.minPinsGesamt}+ Varianten existieren.`
-  const hintBoxCls =
-    kind === 'stale' || fewPinsIsStale
-      ? 'bg-orange-50 text-orange-800'
-      : 'bg-yellow-50 text-yellow-800'
+          ? `Noch keinen Pin zu diesem Inhalt erstellt – pro Inhalt sollten ${thresholds.minPinsGesamt}+ Varianten existieren.`
+          : `Nur ${item.pinCount} Pin${pinPlural} – pro Inhalt sollten ${thresholds.minPinsGesamt}+ Varianten existieren.`
   const visibleBoards = item.boardNames.slice(0, 2)
   const hiddenBoards = item.boardNames.slice(2)
   const chipCls =
@@ -3337,7 +3349,7 @@ function PinPipelineInhaltRow({
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           <Link
             href={`/dashboard/pin-produktion?content_id=${item.id}&open=new`}
-            className="inline-flex items-center justify-center rounded-md bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700"
+            className="inline-flex items-center justify-center rounded-md bg-marke-blaugrau px-3 py-1 text-xs font-medium text-white hover:bg-marke-blaugrau-dunkel"
           >
             Pin erstellen
           </Link>
@@ -3365,7 +3377,7 @@ function PinPipelineInhaltRow({
           ))}
           {hiddenBoards.length > 0 && (
             <details className="contents">
-              <summary className="cursor-pointer list-none text-xs font-medium text-red-600 hover:underline [&::-webkit-details-marker]:hidden">
+              <summary className="cursor-pointer list-none text-xs font-medium text-link underline [&::-webkit-details-marker]:hidden">
                 + {hiddenBoards.length} weitere
               </summary>
               {hiddenBoards.map((name) => (
@@ -3377,8 +3389,10 @@ function PinPipelineInhaltRow({
           )}
         </div>
       )}
-      <div className={`rounded-md px-2 py-1.5 text-xs ${hintBoxCls}`}>
-        {hint}
+      <div className="mt-1">
+        <HinweisBox variant="warnung" tone="achtung" compact>
+          {hint}
+        </HinweisBox>
       </div>
     </li>
   )
@@ -3399,22 +3413,24 @@ function PinPipelineUrlsCard({
   const urlsTooltip =
     `URLs deren Pins eine Ø-CTR über ${ctrText}% haben und gleichzeitig ` +
     `weniger als ${thresholds.maxPinsGoldnugget} Pins haben. Hier zahlt sich ` +
-    'jeder zusätzliche Pin besonders aus, weil das Thema bewiesen funktioniert. ' +
-    'Pinterest-Durchschnitt liegt bei 0,3-0,8%. Schwellwerte in den ' +
-    'Einstellungen anpassbar.'
+    'jeder zusätzliche Pin besonders aus, weil das Thema bewiesen funktioniert.'
   return (
     <details className="group rounded-lg border border-gray-200 bg-white shadow-sm">
-      <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
+      {/* Leere Kategorie (0 URLs): Zeile gedimmt. */}
+      <summary
+        className={`flex cursor-pointer list-none items-center gap-3 px-4 py-3 hover:bg-gray-50 [&::-webkit-details-marker]:hidden ${
+          urls.length === 0 ? 'opacity-60' : ''
+        }`}
+      >
         <span className="text-2xl leading-none text-gray-400" aria-hidden>
           <span className="inline group-open:hidden">▸</span>
           <span className="hidden group-open:inline">▾</span>
         </span>
-        <span
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-gray-300 bg-white text-base text-gray-700"
-          aria-hidden
-        >
-          🔗
-        </span>
+        {/* Einheitliches Linien-Icon (Blaugrau, kein Kreis) wie in Pins recyceln. */}
+        <PinKategorieIcon
+          name="url"
+          className="h-6 w-6 shrink-0 text-marke-blaugrau"
+        />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1 text-sm font-medium text-gray-900">
             <LabelWithTooltip label="URLs mit Potenzial" tooltip={urlsTooltip} />
@@ -3423,15 +3439,7 @@ function PinPipelineUrlsCard({
             URLs mit hoher CTR aber wenigen Pins – ungenutztes Goldnugget.
           </p>
         </div>
-        <span
-          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-            urls.length === 0
-              ? 'bg-gray-100 text-gray-400'
-              : 'bg-orange-100 text-orange-700'
-          }`}
-        >
-          {urls.length}
-        </span>
+        <AnzahlBadge count={urls.length} />
       </summary>
 
       {urls.length === 0 ? (
@@ -3443,7 +3451,7 @@ function PinPipelineUrlsCard({
         <div className="border-t border-gray-200">
           <div className="coaching-box mx-4 my-3 space-y-1 text-xs font-medium">
             <div>
-              🎯 <strong>Der Hebel:</strong> Eine URL mit hoher CTR und
+              <strong>Der Hebel:</strong> Eine URL mit hoher CTR und
               wenigen Pins ist ein bewiesenes Erfolgs-Thema mit ungenutztem
               Volumen. Jeder neue Pin auf dieses Thema bringt vorhersehbar
               Traffic.
@@ -3461,7 +3469,7 @@ function PinPipelineUrlsCard({
           </ul>
           {remaining > 0 && (
             <details className="border-t border-gray-100">
-              <summary className="cursor-pointer list-none px-4 py-2 text-xs font-medium text-red-600 hover:underline">
+              <summary className="cursor-pointer list-none px-4 py-2 text-xs font-medium text-link underline">
                 + {remaining} weitere URL{remaining === 1 ? '' : 's'} anzeigen
               </summary>
               <ul className="divide-y divide-gray-100">
@@ -3506,7 +3514,7 @@ function PinPipelineUrlRow({ url }: { url: UrlPotenzialRow }) {
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           <Link
             href="/dashboard/pin-produktion?open=new"
-            className="inline-flex items-center justify-center rounded-md bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700"
+            className="inline-flex items-center justify-center rounded-md bg-marke-blaugrau px-3 py-1 text-xs font-medium text-white hover:bg-marke-blaugrau-dunkel"
           >
             Pin erstellen
           </Link>
@@ -3537,7 +3545,7 @@ function PinPipelineUrlRow({ url }: { url: UrlPotenzialRow }) {
           ))}
           {hiddenBoards.length > 0 && (
             <details className="contents">
-              <summary className="cursor-pointer list-none text-xs font-medium text-red-600 hover:underline [&::-webkit-details-marker]:hidden">
+              <summary className="cursor-pointer list-none text-xs font-medium text-link underline [&::-webkit-details-marker]:hidden">
                 + {hiddenBoards.length} weitere
               </summary>
               {hiddenBoards.map((name) => (
@@ -3550,7 +3558,7 @@ function PinPipelineUrlRow({ url }: { url: UrlPotenzialRow }) {
         </div>
       )}
       <div className="coaching-box !px-2 !py-1.5 text-xs">
-        🎯 Hohe CTR ({ctrText}%) bei wenigen Pins – Erfolg skalieren.
+        Hohe CTR ({ctrText}%) bei wenigen Pins – Erfolg skalieren.
       </div>
     </li>
   )
@@ -3679,7 +3687,7 @@ function BoardGesundheitDashboardSection({
         </div>
       ) : (
         <>
-          <p className="mt-4 text-xs font-medium uppercase tracking-wide text-gray-500">
+          <p className="mt-4 text-xs font-semibold tracking-wide text-gray-500">
             Das sind deine wichtigsten Hebel gerade.
           </p>
           <div className="mt-2 space-y-3">
@@ -3737,7 +3745,7 @@ function BoardGesundheitDashboardSection({
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-2 text-xs text-gray-500">
           <Link
             href="/dashboard/boards"
-            className="font-medium text-red-600 hover:underline"
+            className="font-medium text-link underline"
           >
             Alle Boards in der Übersicht ansehen ↗
           </Link>
@@ -3752,7 +3760,7 @@ function BoardGesundheitDashboardSection({
                 Analytics-Einträge:{' '}
                 <Link
                   href="/dashboard/analytics?tab=boards"
-                  className="font-medium text-red-600 hover:underline"
+                  className="font-medium text-link underline"
                 >
                   Daten eintragen ↗
                 </Link>
@@ -3777,7 +3785,7 @@ function CoachingButtons({
     <div className="flex shrink-0 items-center gap-2">
       <Link
         href={`/dashboard/pin-produktion?new=1&board=${boardId}`}
-        className="rounded-md bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700"
+        className="rounded-md bg-marke-blaugrau px-3 py-1 text-xs font-medium text-white hover:bg-marke-blaugrau-dunkel"
       >
         Pins planen
       </Link>
@@ -3836,8 +3844,9 @@ function CoachingKarteRow({ karte }: { karte: CoachingKarte }) {
   )
 }
 
-// Grüne Box „vorbereitete Pins" (Entwurf / geplant). Wird nur gezeigt, wenn
-// mindestens einer der beiden Counts > 0 ist.
+// Hinweis-Box „vorbereitete Pins" je Board. Nutzt die gemeinsame
+// PreparedPinsHinweis-Komponente (gleicher ruhiger Stil wie die Saison-Box),
+// nur mit dem board-Filter als Link-Basis.
 function PreparedPinsBox({
   boardId,
   prepared,
@@ -3845,50 +3854,28 @@ function PreparedPinsBox({
   boardId: string
   prepared: { entwurf: number; geplant: number }
 }) {
-  const { entwurf, geplant } = prepared
-  if (entwurf === 0 && geplant === 0) return null
-  const showEntwurf = entwurf > 0
-  const showGeplant = geplant > 0
-  const entwurfHref = `/dashboard/pin-produktion?filter[board]=${boardId}&filter[status]=entwurf`
-  const geplantHref = `/dashboard/pin-produktion?filter[board]=${boardId}&filter[status]=geplant`
-  const linkCls = 'underline underline-offset-2 hover:text-green-800'
   return (
-    <div className="mt-2 text-xs text-green-700">
-      ✅{' '}
-      {showEntwurf && (
-        <>
-          <Link href={entwurfHref} className={linkCls}>
-            {entwurf} {entwurf === 1 ? 'Pin' : 'Pins'} als Entwurf gespeichert
-          </Link>{' '}
-          – einplanen und veröffentlichen.
-        </>
-      )}
-      {showEntwurf && showGeplant && ' '}
-      {showGeplant && (
-        <>
-          <Link href={geplantHref} className={linkCls}>
-            {geplant} {geplant === 1 ? 'Pin' : 'Pins'} bereits eingeplant
-          </Link>{' '}
-          – Veröffentlichung vorziehen möglich.
-        </>
-      )}
-    </div>
+    <PreparedPinsHinweis
+      basis={`/dashboard/pin-produktion?filter[board]=${boardId}`}
+      prepared={prepared}
+    />
   )
 }
 
 type KpiAccent = 'green' | 'yellow' | 'red' | 'gray' | null
 
-const KPI_ACCENT_CLASS: Record<Exclude<KpiAccent, null>, string> = {
-  green: 'border-l-4 border-l-green-500',
-  yellow: 'border-l-4 border-l-yellow-500',
-  red: 'border-l-4 border-l-red-500',
-  gray: 'border-l-4 border-l-gray-400',
+// Board-Status → einheitlicher Status-Ton (flacher StatusDot, status-Tokens).
+const ACCENT_TONE: Record<Exclude<KpiAccent, null>, StatusTone> = {
+  green: 'gut',
+  yellow: 'achtung',
+  red: 'schlecht',
+  gray: 'neutral',
 }
 
 function BoardKpiCell({
   label,
   value,
-  valueClass = 'text-gray-900',
+  valueClass = 'text-haupt',
   tooltip,
   sub,
   highlight = false,
@@ -3902,20 +3889,20 @@ function BoardKpiCell({
   highlight?: boolean
   accent?: KpiAccent
 }) {
-  // Hero (Engagement Rate) hat eigenen 2px-Rahmen — kein zusätzlicher Akzent.
-  // Andernfalls dezenter Linksrand-Akzent gemäß Datenwert.
+  // Neutrale weiße Karte wie die Profil-Performance-Kacheln; der Status liegt
+  // allein im flachen StatusDot neben dem Wert (kein farbiger Balken, keine
+  // Hintergrund-Tönung).
   const borderCls = highlight
     ? 'border-2 border-green-200'
-    : accent
-      ? `border border-gray-200 ${KPI_ACCENT_CLASS[accent]}`
-      : 'border border-gray-200'
+    : 'border border-karte-rand'
   return (
     <div className={`rounded-lg ${borderCls} bg-white p-4 shadow-sm`}>
       <div className="text-[11px] uppercase tracking-wide text-gray-500">
         <LabelWithTooltip label={label} tooltip={tooltip} />
       </div>
-      <div className={`mt-1 text-2xl font-semibold ${valueClass}`}>
-        {value}
+      <div className="mt-1 flex items-center gap-2">
+        {accent && <StatusDot tone={ACCENT_TONE[accent]} />}
+        <span className={`text-2xl font-semibold ${valueClass}`}>{value}</span>
       </div>
       {sub && <div className="mt-1 text-xs text-gray-500">{sub}</div>}
     </div>
@@ -3977,148 +3964,122 @@ function PerformanceVerlaufSection({ points }: { points: ChartPoint[] }) {
 }
 
 // ===========================================================
-// Briefing-Block: weiße Sektion mit „Deine Prioritäten" +
-// „Deine nächsten Schritte" + Aktualitäts-Hinweis am Ende.
+// Briefing-Block: weiße Sektion mit „Deine nächsten Schritte".
+// Der Aktualitäts-/Rhythmus-Hinweis steht jetzt in der Dashboard-
+// Einleitung oben, daher hier keine Fußnote mehr.
 // ===========================================================
 function BriefingBlock({
-  briefingItems,
   nextStepsItems,
 }: {
-  briefingItems: BriefingItem[]
   nextStepsItems: BriefingItem[]
 }) {
   return (
-    <section className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-      <BriefingSection items={briefingItems} nextSteps={nextStepsItems} />
-      <p className="mt-4 border-t border-gray-100 pt-3 text-xs text-gray-500">
-        <InfoIcon className="mb-0.5 inline text-gray-400" /> Das Dashboard ist nur so aktuell wie deine
-        zuletzt eingepflegten Daten. Pflege einmal monatlich deine
-        Pinterest-Analytics ein.
-      </p>
+    // Karte weiß (Core-bg-white, robust) + Rand karte-rand (Marke Blaugrau-
+    // hell), hebt sich vom Creme-Hintergrund ab.
+    <section className="rounded-lg border border-karte-rand bg-white p-4 shadow-sm">
+      <BriefingSection items={nextStepsItems} />
     </section>
   )
 }
 
 // ===========================================================
-// Hero-Section: schmaler Analytics-Status-Banner (grün/gelb/rot/grau)
-// + optionales Warn-Banner bei rotem Status. Profil-Gesundheit und
-// Briefing sind eigenständige weiße Sektionen darunter.
+// Hero-Section: Analytics-Status-Banner auf neutraler Fläche (bg-karte +
+// karte-rand). Statusfarbe nur als flacher Punkt-Akzent, Status-Wort groß in
+// Blaugrau. Drei Zustände: aktuell / fällig / leer (Willkommen).
 // ===========================================================
 function HeroSection({
   status,
   analyticsUpdateDatum,
-  pinsCount,
-  boardsCount,
 }: {
   status: UpdateStatusMonat
   analyticsUpdateDatum: string | null
-  pinsCount: number
-  boardsCount: number
 }) {
-  // Onboarding-Modus: noch nie Analytics gepflegt — blauer Info-Banner
-  // statt Status/Profil-Gesundheit.
+  const letztesUpdate = analyticsUpdateDatum
+    ? formatDateDe(analyticsUpdateDatum)
+    : 'noch nie'
+
+  // Leer-Zustand: noch nie Analytics gepflegt — ruhiger Willkommens-Hinweis,
+  // gleiche neutrale Fläche wie die Status-Zustände (kein farbiger Vollgrund).
   if (status.state === 'leer') {
     return (
-      <section className="rounded-lg bg-slate-800 px-4 py-4 text-white shadow-md">
-        <div className="flex flex-wrap items-start gap-3 text-sm">
-          <div className="min-w-0 flex-1">
-            <p className="font-semibold">Willkommen!</p>
-            <p className="mt-0.5 text-slate-300">
-              Bevor das Dashboard aussagekräftig wird, pflege einmal monatlich
-              deine Pinterest-Analytics ein. Erst dann zeigen KPIs,
-              Strategie-Check und Coaching-Empfehlungen verlässliche Werte.
-            </p>
-            <Link
-              href="/dashboard/analytics"
-              className="mt-3 inline-flex items-center rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700"
-            >
-              → Analytics jetzt einpflegen
-            </Link>
-          </div>
-          <span className="ml-auto flex shrink-0 items-center gap-3 border-l border-slate-600 pl-3 text-xs text-slate-300">
-            <span>📌 {formatZahl(pinsCount)} Pins</span>
-            <span className="text-slate-500" aria-hidden>
-              ·
-            </span>
-            <span>📋 {formatZahl(boardsCount)} Boards</span>
-          </span>
+      <section className="flex flex-wrap items-start gap-4 rounded-lg border border-karte-rand bg-karte px-4 py-3 shadow-sm">
+        <div className="min-w-0 flex-1">
+          <p className="text-base font-semibold text-haupt">Willkommen!</p>
+          <p className="mt-1 text-sm text-sekundaer">
+            Bevor das Dashboard aussagekräftig wird, pflege einmal monatlich
+            deine Pinterest-Analytics ein. Erst dann zeigen KPIs,
+            Strategie-Check und Coaching-Empfehlungen verlässliche Werte.
+          </p>
         </div>
+        <Link
+          href="/dashboard/analytics"
+          className="ml-auto shrink-0 rounded-md bg-marke-blaugrau px-3 py-1.5 text-xs font-medium text-white hover:bg-marke-blaugrau-dunkel"
+        >
+          Analytics einpflegen
+        </Link>
       </section>
     )
   }
-  const tone =
-    status.state === 'rot'
-      ? {
-          border: 'border-red-200',
-          bg: 'bg-red-50',
-          title: 'text-red-900',
-          body: 'text-red-800',
-        }
-      : {
-          border: 'border-green-200',
-          bg: 'bg-green-50',
-          title: 'text-green-900',
-          body: 'text-green-800',
-        }
 
-  const statusLabel =
-    status.state === 'rot'
-      ? '🔴 Analytics-Status: Update fällig'
-      : '🟢 Analytics-Status: Aktuell'
+  const istRot = status.state === 'rot'
 
   return (
-    <section
-      className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-4 py-2.5 text-sm shadow-sm ${tone.border} ${tone.bg} ${tone.body}`}
-    >
-      <span className={`font-semibold ${tone.title}`}>{statusLabel}</span>
-      <span className="text-gray-400" aria-hidden>
-        ·
-      </span>
-      <span>
-        Letztes Update:{' '}
-        <strong>
-          {analyticsUpdateDatum ? formatDateDe(analyticsUpdateDatum) : 'noch nie'}
-        </strong>
-      </span>
-      {status.state === 'gruen' && (
-        <>
-          <span className="text-gray-400" aria-hidden>
-            ·
-          </span>
-          <span>
-            Nächstes Update ab:{' '}
-            <strong>{formatDateDe(status.eintragbarAb)}</strong>
-          </span>
-        </>
-      )}
-      {status.state === 'rot' && (
-        <>
-          <span className="text-gray-400" aria-hidden>
-            ·
-          </span>
-          <span>
-            Zeitraum{' '}
-            <strong>
-              {formatDateDe(status.faelligerMonatVon)} bis{' '}
-              {formatDateDe(status.faelligerMonatBis)}
-            </strong>{' '}
-            fällig
-          </span>
-        </>
-      )}
+    <section className="grid grid-cols-1 gap-y-2 rounded-lg border border-karte-rand bg-karte px-4 py-3 shadow-sm md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] md:items-center md:gap-x-4 md:gap-y-0">
+      {/* Links (kräftig): Status-Punkt + Status-Wort, darunter die zwei
+          Datumszeilen — die dominante Gruppe. Sitzt in der linken 1fr-Spalte. */}
+      <div className="flex items-start gap-3">
+        <StatusDot tone={istRot ? 'schlecht' : 'gut'} size="lg" />
+        <div>
+          <p className="text-base font-semibold text-haupt">
+            {istRot ? 'Update fällig' : 'Aktuell'}
+          </p>
+          <p className="mt-0.5 text-sm text-sekundaer">
+            {istRot ? (
+              <>
+                Zeitraum{' '}
+                <span className="font-medium text-haupt">
+                  {formatDateDe(status.faelligerMonatVon)} bis{' '}
+                  {formatDateDe(status.faelligerMonatBis)}
+                </span>{' '}
+                fällig
+              </>
+            ) : (
+              <>
+                Nächstes Update ab{' '}
+                <span className="font-medium text-haupt">
+                  {formatDateDe(status.eintragbarAb)}
+                </span>
+              </>
+            )}
+          </p>
+          <p className="mt-0.5 text-xs text-sekundaer">
+            Letztes Update: {letztesUpdate}
+          </p>
+        </div>
+      </div>
+
+      {/* Mitte (leise, klar untergeordnet): kompakter Erklär-Zweizeiler in der
+          zentrierten Auto-Spalte zwischen zwei gleich breiten 1fr-Spalten →
+          exakt über dem „Wo stehst du?"-Trenner darunter. max-w-md hält ihn auf
+          zwei Zeilen. Neutrales Grau, kein Icon, kein Link-Look. */}
+      <p className="mx-auto max-w-md text-center text-xs text-gray-500">
+        Der Stand deines Dashboards beruht auf deinem letzten Monats-Update.
+        Pflege deine Pinterest-Zahlen einmal im Monat ein, dann ist er wieder
+        aktuell.
+      </p>
+
+      {/* Rechts: leise Aktion in Blaugrau (nicht Camel). Grün = dezenter
+          Outline-Button; Rot = gefüllt und damit etwas präsenter. */}
       <Link
         href="/dashboard/analytics"
-        className="rounded-md border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+        className={
+          istRot
+            ? 'shrink-0 justify-self-start rounded-md bg-marke-blaugrau px-3 py-1.5 text-xs font-medium text-white hover:bg-marke-blaugrau-dunkel md:justify-self-end'
+            : 'shrink-0 justify-self-start rounded-md border border-marke-blaugrau px-3 py-1.5 text-xs font-medium text-marke-blaugrau hover:bg-marke-blaugrau hover:text-white md:justify-self-end'
+        }
       >
-        📊 Jetzt aktualisieren
+        Jetzt aktualisieren
       </Link>
-      <span className="ml-auto flex items-center gap-3 border-l border-gray-300 pl-3 text-gray-700">
-        <span>📌 {formatZahl(pinsCount)} Pins</span>
-        <span className="text-gray-400" aria-hidden>
-          ·
-        </span>
-        <span>📋 {formatZahl(boardsCount)} Boards</span>
-      </span>
     </section>
   )
 }
@@ -4129,7 +4090,7 @@ function HeroSection({
 function PhasenTrenner({ title }: { title: string }) {
   return (
     <div className="mb-6 mt-12 flex items-center gap-6">
-      <span aria-hidden className="h-px flex-1 bg-gray-200" />
+      <span aria-hidden className="h-px flex-1 bg-marke-blaugrau-mittel" />
       <span
         className="text-[18px] font-semibold text-gray-900 sm:text-[20px]"
         style={{
@@ -4139,8 +4100,28 @@ function PhasenTrenner({ title }: { title: string }) {
       >
         {title}
       </span>
-      <span aria-hidden className="h-px flex-1 bg-gray-200" />
+      <span aria-hidden className="h-px flex-1 bg-marke-blaugrau-mittel" />
     </div>
+  )
+}
+
+// Zwischenüberschrift (zweite Ebene unter dem Phasentrenner): eine Aussage,
+// die mehrere Sektionen zu einem Strang bündelt. Bewusst abgesetzt vom großen
+// Trenner — linksbündig statt zentriert, ohne flankierende Linien, eine Spur
+// kleiner; dieselbe Space-Grotesk-Familie hält sie strukturell verwandt, aber
+// klar untergeordnet. Über ihr steht die Frage (Phasentrenner), unter ihr die
+// einzelnen Sektionsüberschriften.
+function Zwischentitel({ title }: { title: string }) {
+  return (
+    <h3
+      className="mb-3 mt-8 text-[19px] font-semibold text-haupt"
+      style={{
+        fontFamily: 'var(--font-space-grotesk)',
+        letterSpacing: '-0.3px',
+      }}
+    >
+      {title}
+    </h3>
   )
 }
 
@@ -4155,24 +4136,14 @@ function ProfilPerformanceSection({
   latest,
   previous,
   chartPoints,
-  audienceSnapshots,
-  nicheProfile,
 }: {
   latest: ProfilAnalyticsWithGrowth | null
   previous: ProfilAnalyticsWithGrowth | null
   chartPoints: ChartPoint[]
-  audienceSnapshots: AudienceSnapshot[]
-  nicheProfile: AccountNicheProfile
 }) {
   const prevCtr =
     previous && previous.impressionen > 0
       ? (previous.ausgehende_klicks / previous.impressionen) * 100
-      : null
-  const prevEngagement =
-    previous && previous.impressionen > 0
-      ? ((previous.saves + previous.ausgehende_klicks) /
-          previous.impressionen) *
-        100
       : null
   const headingTooltip =
     'Pinterest zeigt rollierende Daten der letzten 31 Tage. Wachstum % basiert auf Vergleich zum vorherigen eingetragenen Monat.'
@@ -4186,7 +4157,7 @@ function ProfilPerformanceSection({
       <section id="gesamt-profil-performance" className="scroll-mt-4">
         <h2 className="text-lg font-semibold text-gray-900">
           <LabelWithTooltip
-            label="Gesamt-Profil-Performance"
+            label="Profil-Performance"
             tooltip={headingTooltip}
           />
         </h2>
@@ -4194,15 +4165,13 @@ function ProfilPerformanceSection({
           Wie sich deine Pinterest-Zahlen im Vergleich zum vorherigen
           Analytics-Update entwickelt haben.
         </p>
-        <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
+        <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-5">
           {[
             'Ausgehende Klicks',
-            'Engagement Rate',
+            'Save-Rate',
             'Saves',
             'CTR',
             'Impressionen',
-            'Gesamte Zielgruppe',
-            'Interagierende Zielgruppe',
           ].map((label) => (
             <KpiCardEmpty key={label} label={label} />
           ))}
@@ -4211,7 +4180,7 @@ function ProfilPerformanceSection({
           Noch kein Analytics-Update:{' '}
           <Link
             href="/dashboard/analytics"
-            className="font-medium text-red-600 hover:underline"
+            className="font-medium text-link underline"
           >
             jetzt starten
           </Link>
@@ -4221,37 +4190,69 @@ function ProfilPerformanceSection({
     )
   }
 
+  // Save-Rate (saves / impressionen) + Wachstum gegen die Vorperiode — gleiche
+  // Konvention wie CTR (calcSaveRate/calcGrowth aus utils).
+  const saveRate = calcSaveRate(latest.saves, latest.impressionen)
+  const prevSaveRate = previous
+    ? calcSaveRate(previous.saves, previous.impressionen)
+    : null
+  const saveRateGrowth =
+    saveRate !== null && prevSaveRate !== null
+      ? calcGrowth(saveRate, prevSaveRate)
+      : null
+
+  // Richtungs-Ampel (Trend der Kernsignale ggü. Vormonat). Ohne Vormonat 'leer'.
+  const ampel = computeRichtungsAmpel({
+    hasPrevious: previous !== null,
+    klicksGrowth: latest.klicks_growth,
+    savesGrowth: latest.saves_growth,
+    saveRateGrowth,
+  })
+
   return (
     <section id="gesamt-profil-performance" className="scroll-mt-4">
-      <h2 className="text-lg font-semibold text-gray-900">
+      <h2 className="text-lg font-semibold text-haupt">
         <LabelWithTooltip
-          label="Gesamt-Profil-Performance"
+          label="Profil-Performance"
           tooltip={headingTooltip}
         />
-        {previous && (
-          <span className="ml-2 text-sm font-normal text-gray-500">
-            (Vergleich zur Vorperiode)
-          </span>
-        )}
       </h2>
       <p className="mt-1 text-sm text-gray-600">
-        Wie sich deine Pinterest-Zahlen im Vergleich zum vorherigen
-        Analytics-Update entwickelt haben.
+        Wie sich deine wichtigsten Pinterest-Zahlen im Vergleich zum letzten
+        Monat entwickeln: ausgehende Klicks, Saves und deine Save-Rate. Die
+        Ampel fasst die Richtung zusammen, die Zahlen und der Verlauf zeigen die
+        Details.
       </p>
 
-      {/* 3-Spalten-Grid: Ergebnis (schmal) | Treiber (schmal) | Chart (flex-1) */}
+      {/* Leerzustand (kein Vormonat): keine Ampel, nur der Hinweis. */}
+      {ampel.status === 'leer' && (
+        <p className="mt-3 text-sm text-gray-600">{ampel.begleitsatz}</p>
+      )}
+
+      {/* 3-Spalten-Grid: Ergebnis (oben Richtungs-Ampel-Kachel) | Treiber | Chart */}
       <div className="mt-3 grid items-stretch gap-4 lg:grid-cols-[170px_170px_minmax(0,1fr)]">
-        {/* Spalte 1 — Ergebnis */}
+        {/* Spalte 1 — Ergebnis: oben die Richtungs-Ampel als Kachel, darunter
+            die beiden Ergebnis-KPIs. */}
         <div className="flex flex-col">
-          <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+          <h3 className="text-[11px] font-semibold tracking-wide text-slate-600">
             <LabelWithTooltip
               label="Ergebnis"
               tooltip="Was ist am Ende rausgekommen – die Erfolgs-Metriken deines Profils."
             />
           </h3>
           <div className="mt-2 flex flex-1 flex-col gap-2">
+            {ampel.status !== 'leer' && (
+              <div className="flex flex-1 flex-col rounded-lg border border-gray-200 bg-white p-2.5 shadow-sm">
+                <p className="text-[10px] font-medium uppercase tracking-wide text-gray-500">
+                  Richtung
+                </p>
+                <div className="flex flex-1 items-center justify-center">
+                  <RichtungsAmpelVertikal status={ampel.status} />
+                </div>
+              </div>
+            )}
             <KpiCard
-              variant="hero"
+              className="flex-1"
               label="Ausgehende Klicks"
               value={formatZahl(latest.ausgehende_klicks)}
               fullValue={latest.ausgehende_klicks}
@@ -4262,13 +4263,13 @@ function ProfilPerformanceSection({
               )}
             />
             <KpiCard
-              variant="hero"
-              label="Engagement Rate"
-              value={formatPercent(latest.engagement)}
-              growth={latest.engagement_growth}
-              tooltip="(Saves + Ausgehende Klicks) ÷ Impressionen. Ein Überblickswert: Auf Pinterest sind diese Werte oft klein, das ist normal. Statt auf eine feste Zahl zu schauen, achte darauf, ob er über die Zeit steigt, das siehst du im Tab Profil-Entwicklung."
+              className="flex-1"
+              label="Save-Rate"
+              value={formatPercent(saveRate)}
+              growth={saveRateGrowth}
+              tooltip="Saves ÷ Impressionen. Wie oft Menschen deine Pins speichern, das stärkste Signal, das Pinterest für die Ausspielung nutzt."
               previousValue={prevText(
-                prevEngagement !== null ? formatPercent(prevEngagement) : null
+                prevSaveRate !== null ? formatPercent(prevSaveRate) : null
               )}
             />
           </div>
@@ -4276,7 +4277,7 @@ function ProfilPerformanceSection({
 
         {/* Spalte 2 — Treiber */}
         <div className="flex flex-col">
-          <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+          <h3 className="text-[11px] font-semibold tracking-wide text-slate-600">
             <LabelWithTooltip
               label="Treiber"
               tooltip="Was hat das Ergebnis erzeugt – die Hebel, an denen du drehen kannst."
@@ -4297,7 +4298,7 @@ function ProfilPerformanceSection({
               label="CTR"
               value={formatPercent(latest.ctr)}
               growth={latest.ctr_growth}
-              tooltip="Ausgehende Klicks ÷ Impressionen. Zeigt ob dein Pin-Hook funktioniert. Pinterest organisch: 1,54%."
+              tooltip="Ausgehende Klicks ÷ Impressionen. Zeigt ob dein Pin-Hook funktioniert."
               previousValue={prevText(
                 prevCtr !== null ? formatPercent(prevCtr) : null
               )}
@@ -4317,7 +4318,7 @@ function ProfilPerformanceSection({
 
         {/* Spalte 3 — Performance-Verlauf, volle Höhe der Treiber-Spalte */}
         <div className="flex flex-col">
-          <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+          <h3 className="text-[11px] font-semibold tracking-wide text-slate-600">
             <LabelWithTooltip
               label="Performance-Verlauf"
               tooltip="Hier siehst du die Entwicklung deiner wichtigsten Metriken über die letzten 12 Monate (rollierend). Sobald ein neuer Monat hinzukommt, fällt der älteste raus."
@@ -4328,16 +4329,6 @@ function ProfilPerformanceSection({
           </div>
         </div>
       </div>
-
-      {/* Kontext-Zeile in voller Breite unter den 3 Spalten */}
-      <KontextZeile latest={latest} previous={previous} prevDateLabel={prevDateLabel} />
-
-      {/* V3.0.8 — Zielgruppe-Coaching-Block direkt unter dem Kontext-Streifen.
-          Der Kontext-Streifen selbst bleibt unverändert. */}
-      <ZielgruppeCoachingBlock
-        snapshots={audienceSnapshots}
-        nicheProfile={nicheProfile}
-      />
     </section>
   )
 }
@@ -4367,102 +4358,5 @@ function PerformanceChartArea({ points }: { points: ChartPoint[] }) {
   )
 }
 
-// Kontext-Zeile: kompakt, eine Zeile, beide Zielgruppen-KPIs mit Pfeil.
-// Format: 'KONTEXT  Gesamte Zielgruppe: [Wert] [Pfeil]   ·   Interagierende ZG: [Wert] [Pfeil]'
-function KontextZeile({
-  latest,
-  previous,
-  prevDateLabel,
-}: {
-  latest: ProfilAnalyticsWithGrowth
-  previous: ProfilAnalyticsWithGrowth | null
-  prevDateLabel: string
-}) {
-  return (
-    <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 shadow-sm">
-      <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">
-        <LabelWithTooltip
-          label="Kontext"
-          tooltip="In welchem Umfeld passiert das – wen du erreichst."
-        />
-      </span>
-      <KontextKpi
-        label="Gesamte Zielgruppe"
-        value={formatZahl(latest.gesamte_zielgruppe)}
-        growth={latest.zielgruppe_growth}
-        tooltip="Alle Menschen die deinen Content gesehen haben, auf Pinterest und außerhalb."
-        previousValue={
-          previous
-            ? `Vorperiode: ${formatZahl(previous.gesamte_zielgruppe)}${prevDateLabel}`
-            : undefined
-        }
-      />
-      <span className="text-gray-300" aria-hidden>
-        ·
-      </span>
-      <KontextKpi
-        label="Interagierende Zielgruppe"
-        value={formatZahl(latest.interagierende_zielgruppe)}
-        growth={latest.interagierend_growth}
-        tooltip="Menschen die aktiv reagiert haben: geklickt, gespeichert oder kommentiert. Qualitativ wertvoller als Gesamtzielgruppe."
-        previousValue={
-          previous
-            ? `Vorperiode: ${formatZahl(previous.interagierende_zielgruppe)}${prevDateLabel}`
-            : undefined
-        }
-      />
-    </div>
-  )
-}
-
-function KontextKpi({
-  label,
-  value,
-  growth,
-  tooltip,
-  previousValue,
-}: {
-  label: string
-  value: string
-  growth: number | null | undefined
-  tooltip?: string
-  previousValue?: string
-}) {
-  const arrow =
-    growth === null || growth === undefined
-      ? null
-      : !Number.isFinite(growth)
-        ? '↑ neu'
-        : growth > 0
-          ? `↑ ${formatGrowth(growth)}`
-          : growth < 0
-            ? `↓ ${formatGrowth(growth)}`
-            : '→'
-  const arrowCls =
-    growth === null || growth === undefined
-      ? 'text-gray-400'
-      : !Number.isFinite(growth) || growth > 0
-        ? 'text-green-700'
-        : growth < 0
-          ? 'text-red-700'
-          : 'text-gray-500'
-  // Alle Elemente in EINER Zeile: Label · Wert · Veränderung · Vorperiode
-  return (
-    <span className="inline-flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-      <span className="text-[10px] font-medium uppercase tracking-wide text-gray-500">
-        <LabelWithTooltip label={label} tooltip={tooltip} />
-      </span>
-      <span className="text-base font-semibold leading-tight text-gray-900">
-        {value}
-      </span>
-      {arrow && (
-        <span className={`text-xs font-medium ${arrowCls}`}>{arrow}</span>
-      )}
-      {previousValue && (
-        <span className="whitespace-nowrap text-[10px] text-gray-400">
-          {previousValue}
-        </span>
-      )}
-    </span>
-  )
-}
+// (entfernt: KontextZeile + KontextKpi — Gesamte/Interagierende Zielgruppe vom
+// Dashboard genommen; Audience-Größen stehen weiter im Zielgruppe-Analytics-Tab.)

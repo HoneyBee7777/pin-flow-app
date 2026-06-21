@@ -4,10 +4,13 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState } from 'react'
 import { logout } from '@/app/actions/auth'
+import { PinKategorieIcon } from '@/components/PinKategorieIcon'
 
 type NavItem = {
   name: string
   href: string
+  // Name eines Linien-Icons aus PinKategorieIcon (links vor dem Text).
+  icon: string
 }
 
 type NavGroup = {
@@ -19,55 +22,60 @@ type NavGroup = {
 }
 
 const NAV_GROUPS: NavGroup[] = [
+  // Dashboard solo ganz oben: leeres Label → keine Gruppenüberschrift,
+  // collapsible: false → Eintrag immer sichtbar (gruppenloser erster Eintrag).
   {
-    key: 'uebersicht',
-    label: 'Übersicht',
+    key: 'dashboard',
+    label: '',
     collapsible: false,
     defaultOpen: true,
-    items: [{ name: 'Dashboard', href: '/dashboard' }],
+    items: [{ name: 'Dashboard', href: '/dashboard', icon: 'gauge' }],
   },
+  // Workflow-Gruppen: dauerhaft offen (collapsible: false), Label sichtbar,
+  // kein Toggle — der rote Faden Einrichten → Produzieren → Auswerten.
   {
-    key: 'setup',
-    label: 'Setup',
-    collapsible: true,
+    key: 'einrichten',
+    label: 'Einrichten',
+    collapsible: false,
     defaultOpen: true,
     items: [
-      { name: 'Dein Content', href: '/dashboard/content-inhalte' },
-      { name: 'Ziel-URLs', href: '/dashboard/ziel-urls' },
-      { name: 'Keywords', href: '/dashboard/keywords' },
-      { name: 'Boards', href: '/dashboard/boards' },
-      { name: 'Saison-Kalender', href: '/dashboard/saison-kalender' },
-      { name: 'Einstellungen', href: '/dashboard/einstellungen' },
+      { name: 'Dein Content', href: '/dashboard/content-inhalte', icon: 'inhalt' },
+      { name: 'Ziel-URLs', href: '/dashboard/ziel-urls', icon: 'url' },
+      { name: 'Keywords', href: '/dashboard/keywords', icon: 'tag' },
+      { name: 'Boards', href: '/dashboard/boards', icon: 'boards' },
+      { name: 'Saison-Kalender', href: '/dashboard/saison-kalender', icon: 'kalender' },
+      { name: 'Einstellungen', href: '/dashboard/einstellungen', icon: 'settings' },
     ],
   },
   {
-    key: 'produktion',
-    label: 'Produktion',
-    collapsible: true,
+    key: 'produzieren',
+    label: 'Produzieren',
+    collapsible: false,
     defaultOpen: true,
     items: [
-      { name: 'Pins', href: '/dashboard/pin-produktion' },
-      { name: 'Canva-Vorlagen', href: '/dashboard/canva-vorlagen' },
+      { name: 'Pins', href: '/dashboard/pin-produktion', icon: 'pin' },
+      { name: 'Canva-Vorlagen', href: '/dashboard/canva-vorlagen', icon: 'vorlage' },
     ],
   },
   {
-    key: 'auswertung',
-    label: 'Auswertung',
-    collapsible: true,
+    key: 'auswerten',
+    label: 'Auswerten',
+    collapsible: false,
     defaultOpen: true,
-    items: [{ name: 'Analytics', href: '/dashboard/analytics' }],
+    items: [{ name: 'Analytics', href: '/dashboard/analytics', icon: 'chart' }],
   },
+  // Ressourcen: einzige einklappbare Gruppe, standardmäßig zugeklappt.
   {
     key: 'ressourcen',
     label: 'Ressourcen',
     collapsible: true,
-    defaultOpen: true,
+    defaultOpen: false,
     items: [
-      { name: 'Onboarding', href: '/dashboard/onboarding' },
-      { name: 'Checkliste', href: '/dashboard/checkliste' },
-      { name: 'Prompts & Vorlagen', href: '/dashboard/ressourcen' },
-      { name: 'Pinterest-Wissen', href: '/dashboard/strategie' },
-      { name: 'FAQ', href: '/dashboard/faq' },
+      { name: 'Onboarding', href: '/dashboard/onboarding', icon: 'flag' },
+      { name: 'Checkliste', href: '/dashboard/checkliste', icon: 'checkliste' },
+      { name: 'Prompts & Vorlagen', href: '/dashboard/ressourcen', icon: 'prompt' },
+      { name: 'Pinterest-Wissen', href: '/dashboard/strategie', icon: 'buch' },
+      { name: 'FAQ', href: '/dashboard/faq', icon: 'faq' },
     ],
   },
 ]
@@ -87,9 +95,19 @@ export default function Sidebar({
 }) {
   const pathname = usePathname()
 
+  const isItemActive = (href: string) =>
+    href === '/dashboard'
+      ? pathname === '/dashboard'
+      : pathname?.startsWith(href) ?? false
+
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {}
-    for (const g of NAV_GROUPS) initial[g.key] = g.defaultOpen
+    // Standard aus defaultOpen; liegt der aktive Punkt in einer Gruppe, wird sie
+    // zusätzlich automatisch aufgeklappt (z. B. eine aktive Ressource).
+    for (const g of NAV_GROUPS) {
+      initial[g.key] =
+        g.defaultOpen || g.items.some((it) => isItemActive(it.href))
+    }
     return initial
   })
 
@@ -97,10 +115,8 @@ export default function Sidebar({
     setOpenGroups((prev) => ({ ...prev, [key]: !prev[key] }))
   }
 
-  const isItemActive = (href: string) =>
-    href === '/dashboard'
-      ? pathname === '/dashboard'
-      : pathname?.startsWith(href) ?? false
+  // Profil-Popover (zeigt die E-Mail erst auf Klick auf den Avatar).
+  const [profilOpen, setProfilOpen] = useState(false)
 
   const linkItems: Array<{ label: string; url: string }> = [
     { label: 'Pinterest Trends', url: 'https://trends.pinterest.com' },
@@ -123,12 +139,12 @@ export default function Sidebar({
 
   return (
     <aside className="flex h-screen w-64 shrink-0 flex-col border-r border-gray-200 bg-white">
-      <div className="border-b border-gray-200 p-6">
+      <div className="flex h-[120px] items-center border-b border-gray-200 px-6">
         <Link href="/dashboard" className="block">
-          <h1 className="text-xl font-bold text-red-600 hover:text-red-700">
+          <h1 className="text-3xl font-bold text-marke-blaugrau hover:text-marke-blaugrau-dunkel">
             Pin-Flow
           </h1>
-          <p className="mt-1 text-xs text-gray-500">Pinterest-Strategie</p>
+          <p className="mt-1 text-sm text-marke-ocker">Dein Pinterest-Cockpit</p>
         </Link>
       </div>
 
@@ -136,24 +152,28 @@ export default function Sidebar({
         {NAV_GROUPS.map((group) => {
           const open = openGroups[group.key] ?? group.defaultOpen
           return (
-            <div key={group.key} className="mb-2">
-              {group.collapsible ? (
-                <button
-                  type="button"
-                  onClick={() => toggle(group.key)}
-                  className="flex w-full items-center gap-1 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-gray-400 hover:text-gray-600"
-                  aria-expanded={open}
-                >
-                  <span className="w-3 text-[10px]" aria-hidden>
-                    {open ? '▼' : '▶'}
-                  </span>
-                  {group.label}
-                </button>
-              ) : (
-                <p className="px-3 py-1 text-xs font-semibold uppercase tracking-wide text-gray-400">
-                  {group.label}
-                </p>
-              )}
+            <div
+              key={group.key}
+              className={`mb-2 ${group.label ? 'mt-3' : ''}`}
+            >
+              {group.label &&
+                (group.collapsible ? (
+                  <button
+                    type="button"
+                    onClick={() => toggle(group.key)}
+                    className="flex w-full items-center gap-1 px-3 py-1 text-xs font-medium uppercase tracking-wide text-gray-400 hover:text-gray-600"
+                    aria-expanded={open}
+                  >
+                    <span className="w-3 text-[10px]" aria-hidden>
+                      {open ? '▼' : '▶'}
+                    </span>
+                    {group.label}
+                  </button>
+                ) : (
+                  <p className="px-3 py-1 text-xs font-medium uppercase tracking-wide text-gray-400">
+                    {group.label}
+                  </p>
+                ))}
 
               {(open || !group.collapsible) && (
                 <ul className="mt-0.5">
@@ -163,13 +183,17 @@ export default function Sidebar({
                       <li key={item.href}>
                         <Link
                           href={item.href}
-                          className={`block rounded-md px-3 py-1 text-sm font-medium transition-colors ${
+                          className={`flex items-center gap-2 rounded-md border-l-[3px] px-3 py-1 text-sm font-medium transition-colors ${
                             active
-                              ? 'bg-red-50 text-red-700'
-                              : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
+                              ? 'border-l-marke-ocker bg-marke-blaugrau-xhell text-marke-blaugrau'
+                              : 'border-l-transparent text-gray-700 hover:bg-marke-blaugrau-xhell hover:text-marke-blaugrau'
                           }`}
                         >
-                          {item.name}
+                          <PinKategorieIcon
+                            name={item.icon}
+                            className="h-4 w-4 shrink-0"
+                          />
+                          <span>{item.name}</span>
                         </Link>
                       </li>
                     )
@@ -217,27 +241,47 @@ export default function Sidebar({
       </nav>
 
       <div className="p-3">
-        <div className="flex items-center gap-2">
-          <Link
-            href="/dashboard/profil"
-            className="flex flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-xs text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-900"
-            title="Mein Profil"
+        {/* Kompakte Gruppe: Avatar (zeigt die E-Mail erst auf Klick) + Logout,
+            eng beieinander statt über die ganze Breite. */}
+        <div className="relative flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setProfilOpen((v) => !v)}
+            aria-label="Profil"
+            aria-expanded={profilOpen}
+            title="Profil"
+            className="rounded-full p-1.5 text-gray-500 transition-colors hover:bg-marke-blaugrau-xhell hover:text-marke-blaugrau"
           >
             <PersonIcon />
-            <span className="truncate" title={userEmail ?? undefined}>
-              {userEmail ?? 'Profil'}
-            </span>
-          </Link>
+          </button>
           <form action={logout}>
             <button
               type="submit"
               aria-label="Abmelden"
               title="Abmelden"
-              className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-50 hover:text-gray-700"
+              className="rounded-full p-1.5 text-gray-500 transition-colors hover:bg-marke-blaugrau-xhell hover:text-marke-blaugrau"
             >
               <LogOutIcon />
             </button>
           </form>
+
+          {/* Popover über dem Avatar: E-Mail + Profil-Link, nur auf Klick. */}
+          {profilOpen && (
+            <div className="absolute bottom-full left-0 mb-2 w-56 rounded-md border border-gray-200 bg-white p-3 shadow-md">
+              <p className="text-[11px] uppercase tracking-wide text-gray-400">
+                Angemeldet als
+              </p>
+              <p className="mt-0.5 break-all text-xs text-gray-700">
+                {userEmail ?? 'Unbekannt'}
+              </p>
+              <Link
+                href="/dashboard/profil"
+                className="mt-2 inline-block text-xs font-medium text-link underline underline-offset-2 hover:opacity-80"
+              >
+                Mein Profil
+              </Link>
+            </div>
+          )}
         </div>
       </div>
     </aside>

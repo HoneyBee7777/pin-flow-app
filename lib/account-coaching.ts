@@ -20,7 +20,6 @@ export type CoachingSeverity = 'kritisch' | 'wichtig' | 'hinweis'
 
 export const COACHING_DIAGNOSIS_IDS = [
   'save-rate-unter-schnitt',
-  'ctr-niedrig-trotz-reichweite',
   'reichweite-zu-niedrig',
   'account-gemischt',
   'boards-nicht-kategorisiert',
@@ -104,9 +103,11 @@ export type CoachingInput = {
   boardsOhneKategorie: number
 }
 
-// 5 % Toleranz für die Nischen-Vergleichs-Triggers — vermeidet, dass
-// Accounts knapp unter der Schwelle eine "kritische" Diagnose bekommen.
-const NICHE_TOLERANCE = 0.95
+// Fester, niche-agnostischer Save-Rate-Floor in Prozent (medianSaveRate =
+// saves/impressionen × 100). Ersetzt den nicht validen Branchen-Benchmark;
+// entspricht etwa dem früheren „schwach"-Niveau der Nischen (~0,4–0,5 %) und
+// ist bei Bedarf justierbar.
+const SAVE_RATE_FLOOR_PCT = 0.5
 
 // Schwellen für „> 20 % Drift" und „> 30 Tage seit Dismiss" beim
 // Re-Triggern dismissed Diagnosen.
@@ -119,17 +120,11 @@ const DIAGNOSIS_PRIORITY: Record<CoachingDiagnosisId, number> = {
   'boards-nicht-kategorisiert': 0,
   'reichweite-zu-niedrig': 1,
   'save-rate-unter-schnitt': 2,
-  'ctr-niedrig-trotz-reichweite': 3,
-  'alte-pins-ohne-strategie': 4,
-  'account-gemischt': 5,
+  'alte-pins-ohne-strategie': 3,
+  'account-gemischt': 4,
 }
 
 const MAX_DIAGNOSES = 3
-
-// Kürzen auf 1 Nachkomma + Komma-Format für die Anzeige in den Texten.
-function fmtPct(v: number, digits = 2): string {
-  return v.toFixed(digits).replace('.', ',')
-}
 
 // Wenn true, schreibt der Solver für jede Diagnose einen Trigger-Trace nach
 // stdout — sichtbar im Next.js-Dev-Terminal. Hilft beim Debuggen, warum eine
@@ -190,24 +185,12 @@ export function calculateCoachingDiagnoses(
   {
     const id: CoachingDiagnosisId = 'save-rate-unter-schnitt'
     const sr = benchmark?.medianSaveRate ?? null
-    const schwachThresholdRaw = niche?.save_rate.schwach ?? null
-    const schwachThreshold =
-      schwachThresholdRaw === null
-        ? null
-        : schwachThresholdRaw * NICHE_TOLERANCE
     const values = {
-      hatNische: niche !== null,
-      isMixed: nicheProfile.isMixed,
       medianSaveRate: sr,
       qualifiziertePins,
-      schwachRaw: schwachThresholdRaw,
-      schwachMitToleranz: schwachThreshold,
+      floor: SAVE_RATE_FLOOR_PCT,
     }
-    if (!niche) {
-      trace.push({ id, triggered: false, reason: 'keine Hauptnische', values })
-    } else if (nicheProfile.isMixed) {
-      trace.push({ id, triggered: false, reason: 'isMixed = true', values })
-    } else if (sr === null) {
+    if (sr === null) {
       trace.push({
         id,
         triggered: false,
@@ -221,53 +204,26 @@ export function calculateCoachingDiagnoses(
         reason: `nur ${qualifiziertePins} qualifizierte Pins (< 10)`,
         values,
       })
-    } else if (schwachThreshold !== null && sr >= schwachThreshold) {
+    } else if (sr >= SAVE_RATE_FLOOR_PCT) {
       trace.push({
         id,
         triggered: false,
-        reason: `Save-Rate ${sr} >= Schwelle (${schwachThreshold})`,
+        reason: `Save-Rate ${sr} >= Floor (${SAVE_RATE_FLOOR_PCT})`,
         values,
       })
     } else {
       diagnoses.push({
         id,
         severity: 'wichtig',
-        titel: 'Pinterest-Algorithmus traut deinen Pins nicht',
-        problem: `Deine durchschnittliche Save-Rate von ${fmtPct(sr!)}% liegt deutlich unter dem Branchenschnitt für die Save-Rate (${fmtPct(niche.save_rate.schwach, 1)}–${fmtPct(niche.save_rate.durchschnitt, 1)}%). Pinterest bekommt zu wenig Bestätigung, dass deine Inhalte wertvoll sind, und spielt sie deshalb sparsam aus.`,
+        titel: 'Deine Pins werden zu selten gespeichert',
+        problem:
+          'Deine durchschnittliche Save-Rate ist niedrig. Pinterest bekommt dadurch wenig Bestätigung, dass deine Inhalte wertvoll sind, und spielt sie sparsamer aus.',
         ursache:
-          'In den meisten Fällen drei mögliche Ursachen: (1) Themen treffen die Zielgruppe nicht, (2) Pin-Cover sind nicht emotional genug aufgeladen, oder (3) Keywords passen nicht zum Bild. Pinterest spielt den Pin falschen Nutzern aus.',
+          'In den meisten Fällen drei mögliche Ursachen, durch die der Pin nicht die passenden Nutzer erreicht:\n• Themen treffen die Zielgruppe nicht\n• Pin-Cover sind nicht emotional genug aufgeladen\n• Keywords passen nicht zum Bild',
         handlung:
           'Identifiziere deine 3 Pins mit der höchsten Save-Rate (in der Pin-Tabelle nach Save-Rate sortieren). Was haben sie gemeinsam? Mehr von diesen Themen produzieren und für die anderen Themen bewusst andere Bildkonzepte testen.',
         weiterführend: null,
-        snapshot: { saveRate: sr!, primaryNicheId: niche.id },
-      })
-      trace.push({ id, triggered: true, reason: 'OK', values })
-    }
-  }
-
-  // ---- DIAGNOSE 2 — ctr-niedrig-trotz-reichweite ----
-  {
-    const id: CoachingDiagnosisId = 'ctr-niedrig-trotz-reichweite'
-    const values = { reichweiteOhneWirkungCount }
-    if (reichweiteOhneWirkungCount < 2) {
-      trace.push({
-        id,
-        triggered: false,
-        reason: `nur ${reichweiteOhneWirkungCount} Pins (< 2)`,
-        values,
-      })
-    } else {
-      diagnoses.push({
-        id,
-        severity: 'wichtig',
-        titel: 'Pinterest spielt aus, aber niemand klickt durch',
-        problem: `${reichweiteOhneWirkungCount} deiner Pins haben gute Reichweite und werden gespeichert, aber kaum jemand klickt zur Website. Das ist ein Cover-/Hook-Problem, kein SEO-Problem.`,
-        ursache:
-          'Pinterest spielt den richtigen Nutzern den Pin aus, sie finden das Thema interessant, aber das Cover macht nicht genug Lust auf den Klick. Häufig: zu kleine Schrift, zu vager Hook, oder der Pin verspricht etwas anderes als die Landingpage.',
-        handlung:
-          'Diese Pins sind dein größter aktueller Hebel. Erstelle für jeden einen neuen Pin mit anderem Cover: stärkerer Hook (eine konkrete Zahl, ein klares Versprechen), größere Schrift, andere Bildkomposition. Link bleibt gleich.',
-        weiterführend: null,
-        snapshot: { reichweiteOhneWirkungCount },
+        snapshot: { saveRate: sr },
       })
       trace.push({ id, triggered: true, reason: 'OK', values })
     }
@@ -307,14 +263,10 @@ export function calculateCoachingDiagnoses(
         problem:
           'Mehr als 70 % deiner Pins haben weniger als 200 Impressionen. Pinterest gibt deinem Profil aktuell wenig Reichweite, das ist meist ein SEO- oder Board-Strukturproblem.',
         ursache:
-          'Häufige Gründe: (1) Pins ohne klare Keywords in Titel und Beschreibung, (2) Boards mit schlechten Namen oder leerer Beschreibung, (3) zu breit gestreute Themen ohne klare Nischen-Konsistenz.',
+          'Häufige Gründe:\n• Pins ohne klare Keywords in Titel und Beschreibung\n• Boards mit schlechten Namen oder leerer Beschreibung\n• zu breit gestreute Themen ohne klare Nischen-Konsistenz',
         handlung:
-          'Erste Schritte: Prüfe deine 5 wichtigsten Boards. Haben sie aussagekräftige Namen mit Keywords ganz vorn? Beschreibungen mit 2-3 Sätzen? Wenn nicht: erst Boards optimieren, dann mit der Pin-Produktion fortfahren.',
-        weiterführend: {
-          label: 'Erfolg messen',
-          parent: 'Pinterest-Wissen',
-          href: '/dashboard/strategie?tab=analytics',
-        },
+          'Der häufigste Grund ist eine schwache Board-Struktur oder fehlende Keywords. Schau dir die konkreten Hebel in der Board-Gesundheit weiter unten an, dort siehst du pro Board, was fehlt.',
+        weiterführend: null,
         snapshot: { pinsAeltAls60Tage, medianImpressionen: medianImp },
       })
       trace.push({ id, triggered: true, reason: 'OK', values })

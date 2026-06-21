@@ -4,7 +4,7 @@
 // seitig aus den bereits geladenen Performance-Daten berechnet, das
 // Ergebnis (serialisierbar) geht an die Komponente WinsBlock.
 //
-// Zweck: Erfolge der letzten 30 Tage sichtbar machen und strategisch
+// Zweck: Erfolge im Vergleich zum letzten Monat sichtbar machen und strategisch
 // einordnen — das erste Dashboard-Element, das den Käufer für Fortschritt
 // belohnt statt nur Probleme zu zeigen. Die Sektion erscheint NUR, wenn
 // echte Erfolge vorliegen (siehe hasShowableWins) — kein Leer-State.
@@ -18,16 +18,14 @@ import { getBenchmark } from './industry-benchmarks'
 // Eingabe für die Heuristik. Wird aus ProfilAnalyticsWithGrowth +
 // nicheProfile zusammengestellt (siehe WinsBlock.tsx). Wachstumswerte
 // sind Prozent-Zahlen zur Vorperiode (z. B. 272.7 = +272,7 %) oder null
-// (kein Vergleich möglich). engagementPct/ctrPct sind absolute Werte in
-// Prozent (z. B. 0.8 = 0,8 %).
+// (kein Vergleich möglich). ctrPct ist ein absoluter Wert in Prozent
+// (z. B. 0.8 = 0,8 %).
 export type WinsInput = {
   klicksGrowth: number | null
   savesGrowth: number | null
-  engagementGrowth: number | null
   ctrGrowth: number | null
   impressionenGrowth: number | null
   interagierendGrowth: number | null
-  engagementPct: number | null
   ctrPct: number | null
   // false → nur 1 Snapshot, kein Vorperioden-Vergleich. Dann wird die
   // Sektion komplett ausgeblendet (Test-Vorgabe V3.3).
@@ -49,7 +47,6 @@ export type WinsBlock = {
 const GROWTH_THRESHOLD = {
   klicks: 30,
   saves: 30,
-  engagement: 30,
   ctr: 20,
   impressionen: 25,
   interagierend: 30,
@@ -60,7 +57,6 @@ type DriverKey = keyof typeof GROWTH_THRESHOLD
 const DRIVER_LABEL: Record<DriverKey, string> = {
   klicks: 'Klicks',
   saves: 'Saves',
-  engagement: 'Engagement-Rate',
   ctr: 'CTR',
   impressionen: 'Impressionen',
   interagierend: 'interagierende Zielgruppe',
@@ -69,17 +65,13 @@ const DRIVER_LABEL: Record<DriverKey, string> = {
 // Reihenfolge, in der KPIs im Beobachtungs-Satz GENANNT werden — bewusst
 // NICHT nach Wachstums-Höhe, sondern nach kommunikativer Kernrelevanz:
 // Saves (stärkstes Qualitäts-Signal), Klicks (echter Traffic), CTR (Hook),
-// dann Reichweite/Zielgruppe. Engagement-Rate steht zuletzt, weil sie ein
-// Komposit aus Saves + Klicks ist — sie neben Saves UND Klicks zu nennen
-// wäre redundant (vgl. Spec-Beispiel Jana: Saves/Klicks/CTR, nicht die
-// rechnerisch höchsten Engagement/Zielgruppe).
+// dann Reichweite/Zielgruppe.
 const NAMING_PRIORITY: DriverKey[] = [
   'saves',
   'klicks',
   'ctr',
   'impressionen',
   'interagierend',
-  'engagement',
 ]
 
 type Driver = { key: DriverKey; label: string; growth: number }
@@ -90,7 +82,6 @@ function collectFiniteGrowth(input: WinsInput): Driver[] {
   const raw: Array<[DriverKey, number | null]> = [
     ['klicks', input.klicksGrowth],
     ['saves', input.savesGrowth],
-    ['engagement', input.engagementGrowth],
     ['ctr', input.ctrGrowth],
     ['impressionen', input.impressionenGrowth],
     ['interagierend', input.interagierendGrowth],
@@ -111,30 +102,45 @@ function qualifyingDrivers(input: WinsInput): Driver[] {
     .sort((a, b) => b.growth - a.growth)
 }
 
-// Kriterium B — absolute Stärke. engagementPct/ctrPct sind in %, die
-// Benchmark-Grenzen in industry-benchmarks.ts als Anteil 0..1.
+// Kriterium B — absolute Stärke. ctrPct ist in %, die Benchmark-Grenze in
+// industry-benchmarks.ts als Anteil 0..1.
 function absoluteStrength(input: WinsInput): {
-  engagementOverBench: boolean
   ctrOverBench: boolean
   strongPin: boolean
 } {
   const bench = getBenchmark(input.nicheLabel)
   return {
-    engagementOverBench:
-      input.engagementPct !== null &&
-      input.engagementPct >= bench.engagementRate.max * 100,
     ctrOverBench:
       input.ctrPct !== null && input.ctrPct >= bench.ctr.max * 100,
     strongPin: input.maxPinImpressionen > 1000,
   }
 }
 
+// Ab wie vielen fallenden Kern-Mengen-KPIs der Block komplett schweigt.
+// Leicht justierbar.
+const NEGATIVE_KERN_KPIS_SCHWELLE = 2
+
+// Zentrale MENGEN-KPIs (keine Quoten). Fallen genügend von ihnen, ist der
+// Gesamtmonat klar rückläufig und ein einzelner gestiegener Quotenwert
+// (z. B. CTR) darf nicht als Erfolg gefeiert werden.
+function fallingKernKpis(input: WinsInput): number {
+  const mengen: Array<number | null> = [
+    input.klicksGrowth,
+    input.savesGrowth,
+    input.impressionenGrowth,
+    input.interagierendGrowth,
+  ]
+  return mengen.filter((v) => v !== null && v < 0).length
+}
+
 export function hasShowableWins(input: WinsInput): boolean {
   // Ohne Vorperiode kein belastbarer Erfolgs-Vergleich → ausblenden.
   if (!input.hasPrevious) return false
+  // Klar negativer Gesamtmonat → schweigen, auch wenn ein Einzelwert steigt.
+  if (fallingKernKpis(input) >= NEGATIVE_KERN_KPIS_SCHWELLE) return false
   if (qualifyingDrivers(input).length > 0) return true
   const b = absoluteStrength(input)
-  return b.engagementOverBench || b.ctrOverBench || b.strongPin
+  return b.ctrOverBench || b.strongPin
 }
 
 // Ganzzahliges Prozent für den Fließtext (z. B. 272.7 → „273 %").
@@ -142,7 +148,7 @@ function pct(v: number): string {
   return `${Math.round(v)} %`
 }
 
-// Absolute Rate (Engagement/CTR) mit Komma-Dezimaltrennung, z. B. „0,9 %".
+// Absolute Rate (CTR) mit Komma-Dezimaltrennung, z. B. „0,9 %".
 function ratePct(v: number): string {
   return `${v.toFixed(1).replace('.', ',')} %`
 }
@@ -153,22 +159,6 @@ const COUNT_WORD: Record<number, string> = { 2: 'Zwei', 3: 'Drei' }
 // Label neutral „für deine Inhalte".
 function nicheClause(nicheLabel: string | null): string {
   return nicheLabel ? `deine Nische ${nicheLabel}` : 'deine Inhalte'
-}
-
-// „Nachhinkende" KPIs für Variante B: die zwei stärksten verbleibenden
-// KPIs mit endlichem Wachstum (auch unterhalb der Schwelle).
-function laggingClause(input: WinsInput, dominant: DriverKey): string {
-  const others = collectFiniteGrowth(input)
-    .filter((d) => d.key !== dominant)
-    .sort((a, b) => b.growth - a.growth)
-    .slice(0, 2)
-  if (others.length === 2) {
-    return ` ${others[0].label} und ${others[1].label} sind etwas hinterher.`
-  }
-  if (others.length === 1) {
-    return ` ${others[0].label} ist etwas hinterher.`
-  }
-  return ''
 }
 
 function buildVariantA(input: WinsInput, drivers: Driver[]): WinsBlock {
@@ -201,7 +191,7 @@ function buildVariantA(input: WinsInput, drivers: Driver[]): WinsBlock {
     `für ${nicheClause(input.nicheLabel)}.`
 
   const reflection =
-    `Welche deiner Pins der letzten 30 Tage haben gemeinsam, was sich von ` +
+    `Welche deiner Pins im letzten Monat haben gemeinsam, was sich von ` +
     `deinen früheren Pins unterscheidet? Diese Muster sind **der Schlüssel, ` +
     `um den Erfolg zu wiederholen**.`
 
@@ -209,11 +199,9 @@ function buildVariantA(input: WinsInput, drivers: Driver[]): WinsBlock {
 }
 
 function buildVariantB(input: WinsInput, dominant: Driver): WinsBlock {
-  const lagging = laggingClause(input, dominant.key)
   const observation =
     `Deine ${dominant.label} sind um ${pct(dominant.growth)} gestiegen — ` +
-    `der mit Abstand größte Wachstumssprung deiner aktuellen Phase.` +
-    lagging
+    `der mit Abstand größte Wachstumssprung deiner aktuellen Phase.`
 
   let hypothesis: string
   let reflection: string
@@ -268,21 +256,7 @@ function buildVariantC(input: WinsInput): WinsBlock {
   let hypothesis: string
   let reflection: string
 
-  if (b.engagementOverBench && input.engagementPct !== null) {
-    observation =
-      `Deine Engagement-Rate liegt mit ${ratePct(input.engagementPct)} ` +
-      `deutlich über ${benchPhrase} (${bench.engagementRate.label}). Das ` +
-      `heißt: die Menschen, die deine Pins sehen, reagieren ` +
-      `überdurchschnittlich stark darauf.`
-    hypothesis =
-      `Eine starke Engagement-Rate zeigt: deine Inhalte kommen bei den ` +
-      `Menschen an, die sie sehen. Für mehr Reichweite zählt vor allem, ` +
-      `wie oft deine Pins gespeichert werden, und das wächst mit Konstanz ` +
-      `und Volumen.`
-    reflection =
-      `Wenn deine Pins schon jetzt überdurchschnittlich engagieren, was ` +
-      `passiert, wenn du die Pin-Frequenz verdoppelst?`
-  } else if (b.ctrOverBench && input.ctrPct !== null) {
+  if (b.ctrOverBench && input.ctrPct !== null) {
     observation =
       `Deine CTR liegt mit ${ratePct(input.ctrPct)} deutlich über ` +
       `${benchPhrase} (${bench.ctr.label}). Die Menschen, die deine Pins ` +

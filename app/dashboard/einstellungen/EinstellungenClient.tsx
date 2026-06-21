@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useMemo, useState, useTransition, type FormEvent } from 'react'
 import { saveEinstellungen } from './actions'
+import { PinKategorieIcon } from '@/components/PinKategorieIcon'
 import {
   SIGNALWOERTER,
   parseSignalwoerterListe,
@@ -17,21 +18,12 @@ export type InitialPersoenlicheLinks = {
   tailwindUrl: string
 }
 
-export type InitialContentPipelineSchwellwerte = {
-  minPinsGesamt: number | null
-  minPinsOhneAktuell: number | null
-  tageOhnePin: number | null
-  minCtrGoldnugget: number | null
-  maxPinsGoldnugget: number | null
-}
-
 export default function EinstellungenClient({
   initialProfilName,
   initialEigeneSignalwoerter,
   initialSignalwoerterDeaktiviert,
   initialPinterestAnalyticsUrl,
   initialPersoenlicheLinks,
-  initialContentPipelineSchwellwerte,
 }: {
   initialProfilName: string
   initialEigeneSignalwoerter: string
@@ -40,7 +32,6 @@ export default function EinstellungenClient({
   initialPersoenlicheLinks: InitialPersoenlicheLinks
   initialBenchmark: UserPinBenchmark | null
   initialNicheProfile: AccountNicheProfile
-  initialContentPipelineSchwellwerte: InitialContentPipelineSchwellwerte
 }) {
   return (
     <div className="space-y-6">
@@ -52,27 +43,6 @@ export default function EinstellungenClient({
         initialDeaktiviert={initialSignalwoerterDeaktiviert}
       />
       <StrategieSection />
-
-      <ErweiterteEinstellungenTrenner />
-      <ContentPipelineSchwellwerteSection
-        initial={initialContentPipelineSchwellwerte}
-      />
-    </div>
-  )
-}
-
-// Dezenter Abschnitts-Trenner: bündelt die technischen Schwellwert-Sektionen
-// unten als „Erweiterte Einstellungen".
-function ErweiterteEinstellungenTrenner() {
-  return (
-    <div className="pt-4">
-      <h2 className="text-lg font-semibold text-gray-900">
-        Erweiterte Einstellungen
-      </h2>
-      <p className="mt-1 text-sm text-gray-600">
-        Diese Werte sind bereits sinnvoll voreingestellt. Du musst sie nur
-        anpassen, wenn du die Auswertung fein justieren willst.
-      </p>
     </div>
   )
 }
@@ -182,21 +152,24 @@ function PersoenlicheLinksSection({
 
       <form onSubmit={onSubmit} className="mt-4 space-y-4">
         <UrlField
-          label="🔗 Pinterest Account"
+          label="Pinterest Account"
+          icon="pin"
           name="pinterest_account_url"
           value={pinterestAccount}
           onChange={setPinterestAccount}
           placeholder="https://www.pinterest.de/dein_account/"
         />
         <UrlField
-          label="🌐 Meine Website"
+          label="Meine Website"
+          icon="url"
           name="website_url"
           value={website}
           onChange={setWebsite}
           placeholder="https://deine-website.de"
         />
         <UrlField
-          label="📅 Tailwind"
+          label="Tailwind"
+          icon="kalender"
           name="tailwind_url"
           value={tailwind}
           onChange={setTailwind}
@@ -229,16 +202,30 @@ function UrlField({
   value,
   onChange,
   placeholder,
+  icon,
 }: {
   label: string
   name: string
   value: string
   onChange: (v: string) => void
   placeholder?: string
+  // Optionales Linien-Icon links vom Label (Blaugrau, bekannter Stil).
+  icon?: string
 }) {
   return (
     <div>
-      <label htmlFor={name} className="block text-sm font-medium text-gray-700">
+      <label
+        htmlFor={name}
+        className={`text-sm font-medium text-gray-700 ${
+          icon ? 'flex items-center gap-2' : 'block'
+        }`}
+      >
+        {icon && (
+          <PinKategorieIcon
+            name={icon}
+            className="h-4 w-4 shrink-0 text-marke-blaugrau"
+          />
+        )}
         {label}
       </label>
       <input
@@ -515,59 +502,6 @@ function SignalwoerterSection({
   )
 }
 
-function SchwellwertField({
-  label,
-  name,
-  value,
-  onChange,
-  step,
-  help,
-  orientation,
-  whenToAdjust,
-}: {
-  label: string
-  name: string
-  value: string
-  onChange: (v: string) => void
-  step: number
-  help: string
-  orientation?: string
-  // Optionaler "Wann anpassen?"-Hinweis (Pin-Schwellwerte). Whitespace
-  // wird respektiert, damit mehrzeilige Empfehlungen sauber umbrechen.
-  whenToAdjust?: string
-}) {
-  return (
-    <div>
-      <label
-        htmlFor={name}
-        className="block text-sm font-medium text-gray-700"
-      >
-        {label}
-      </label>
-      <input
-        id={name}
-        name={name}
-        type="number"
-        min={0}
-        step={step}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500 md:max-w-xs"
-      />
-      <p className="mt-1 whitespace-pre-line text-xs text-gray-500">{help}</p>
-      {whenToAdjust && (
-        <p className="mt-1 whitespace-pre-line text-xs text-gray-500">
-          <span className="font-medium text-gray-600">Wann anpassen?</span>{' '}
-          {whenToAdjust}
-        </p>
-      )}
-      {orientation && (
-        <p className="mt-0.5 text-xs italic text-gray-400">{orientation}</p>
-      )}
-    </div>
-  )
-}
-
 function AnalyticsLinkSection({ initial }: { initial: string }) {
   const [url, setUrl] = useState(initial)
   const [isPending, startTransition] = useTransition()
@@ -629,147 +563,6 @@ function AnalyticsLinkSection({ initial }: { initial: string }) {
             </a>
           </div>
         )}
-
-        <div className="flex items-center gap-3">
-          <button
-            type="submit"
-            disabled={isPending}
-            className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
-          >
-            {isPending ? 'Speichert…' : 'Speichern'}
-          </button>
-          {feedback.saved && (
-            <span className="text-sm text-green-700">✓ Gespeichert</span>
-          )}
-          {feedback.error && (
-            <span className="text-sm text-red-700">{feedback.error}</span>
-          )}
-        </div>
-      </form>
-    </section>
-  )
-}
-
-function ContentPipelineSchwellwerteSection({
-  initial,
-}: {
-  initial: InitialContentPipelineSchwellwerte
-}) {
-  const [minPinsGesamt, setMinPinsGesamt] = useState(
-    initial.minPinsGesamt !== null ? String(initial.minPinsGesamt) : '3'
-  )
-  const [minPinsOhneAktuell, setMinPinsOhneAktuell] = useState(
-    initial.minPinsOhneAktuell !== null
-      ? String(initial.minPinsOhneAktuell)
-      : '3'
-  )
-  const [tageOhnePin, setTageOhnePin] = useState(
-    initial.tageOhnePin !== null ? String(initial.tageOhnePin) : '30'
-  )
-  const [minCtrGoldnugget, setMinCtrGoldnugget] = useState(
-    initial.minCtrGoldnugget !== null
-      ? String(initial.minCtrGoldnugget)
-      : '1.5'
-  )
-  const [maxPinsGoldnugget, setMaxPinsGoldnugget] = useState(
-    initial.maxPinsGoldnugget !== null
-      ? String(initial.maxPinsGoldnugget)
-      : '5'
-  )
-  const [isPending, startTransition] = useTransition()
-  const [feedback, setFeedback] = useState<{
-    saved?: boolean
-    error?: string
-  }>({})
-
-  function onSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const formData = new FormData(e.currentTarget)
-    setFeedback({})
-    startTransition(async () => {
-      const result = await saveEinstellungen(formData)
-      if (result.error) setFeedback({ error: result.error })
-      else setFeedback({ saved: true })
-    })
-  }
-
-  return (
-    <section
-      id="content-pipeline-schwellwerte"
-      className="scroll-mt-24 rounded-lg border border-gray-200 bg-white p-6 shadow-sm"
-    >
-      <h2 className="text-lg font-semibold text-gray-900">
-        Content-Pipeline-Schwellwerte
-      </h2>
-      <p className="mt-1 text-sm text-gray-600">
-        Diese Werte steuern, welche Inhalte und URLs in der Content-Pipeline auf
-        dem Dashboard als handlungsbedürftig markiert werden.
-      </p>
-
-      <form onSubmit={onSubmit} className="mt-4 space-y-4">
-        <div>
-          <p className="text-sm font-medium text-gray-900">
-            Inhalte mit zu wenigen Pins
-          </p>
-          <div className="mt-2">
-            <SchwellwertField
-              label="Mindest-Pin-Anzahl pro Inhalt"
-              name="cp_min_pins_gesamt"
-              value={minPinsGesamt}
-              onChange={setMinPinsGesamt}
-              step={1}
-              help={'Inhalte mit weniger Pins werden in „Neue Pins produzieren" als „zu wenig bepinnt" markiert.'}
-            />
-          </div>
-        </div>
-
-        <div>
-          <p className="text-sm font-medium text-gray-900">
-            Inhalte ohne aktuellen Pin
-          </p>
-          <div className="mt-2 space-y-4">
-            <SchwellwertField
-              label={'Mindest-Pin-Anzahl für Sub-Liste „Ohne aktuellen Pin"'}
-              name="cp_min_pins_ohne_aktuell"
-              value={minPinsOhneAktuell}
-              onChange={setMinPinsOhneAktuell}
-              step={1}
-              help="Inhalte mit weniger Pins erscheinen in der ersten Sub-Liste, nicht hier."
-            />
-            <SchwellwertField
-              label="Tage seit letztem Pin"
-              name="cp_tage_ohne_pin"
-              value={tageOhnePin}
-              onChange={setTageOhnePin}
-              step={1}
-              help={'Inhalte ohne neuen Pin in dieser Anzahl Tagen werden als „kontinuierliche Pin-Produktion fehlt" markiert.'}
-            />
-          </div>
-        </div>
-
-        <div>
-          <p className="text-sm font-medium text-gray-900">
-            URLs mit Potenzial (Goldnuggets)
-          </p>
-          <div className="mt-2 space-y-4">
-            <SchwellwertField
-              label="Mindest-CTR für Goldnugget-URLs (%)"
-              name="cp_min_ctr_goldnugget"
-              value={minCtrGoldnugget}
-              onChange={setMinCtrGoldnugget}
-              step={0.1}
-              help="URLs mit überdurchschnittlicher CTR werden als Goldnuggets markiert. Pinterest-Durchschnitt liegt bei 0,3-0,8%."
-            />
-            <SchwellwertField
-              label="Maximale Pin-Anzahl für Goldnugget-URLs"
-              name="cp_max_pins_goldnugget"
-              value={maxPinsGoldnugget}
-              onChange={setMaxPinsGoldnugget}
-              step={1}
-              help="Goldnugget-URLs sind solche mit hoher CTR aber noch wenig Pins."
-            />
-          </div>
-        </div>
 
         <div className="flex items-center gap-3">
           <button

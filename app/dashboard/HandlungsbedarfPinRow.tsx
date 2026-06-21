@@ -159,14 +159,14 @@ export default function HandlungsbedarfPinRow({
             type="button"
             onClick={onPrimary}
             disabled={isPending}
-            className="rounded-md bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
+            className="rounded-md bg-marke-blaugrau px-3 py-1 text-xs font-medium text-white hover:bg-marke-blaugrau-dunkel disabled:opacity-50"
           >
             {isPending ? 'Lädt…' : primaryAction.label}
           </button>
         ) : (
           <Link
             href={`/dashboard/pin-produktion?edit=${pin.pin_id}`}
-            className="rounded-md bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700"
+            className="rounded-md bg-marke-blaugrau px-3 py-1 text-xs font-medium text-white hover:bg-marke-blaugrau-dunkel"
           >
             {primaryAction.label}
           </Link>
@@ -195,20 +195,16 @@ export default function HandlungsbedarfPinRow({
 }
 
 // Aktivitäts-Badges pro Board-Status. Farben kommen direkt aus
-// BOARD_STATUS_BADGE (utils.ts), damit Pin-Badge und Boards-Tab konsistent sind;
-// Emojis gespiegelt zu BOARD_STATUS_LABEL (✅/⚠️/❌).
-const BOARD_BADGE: Record<
-  BoardStatus,
-  { emoji: string; text: string; cls: string }
-> = {
-  aktiv: { emoji: '✅', text: 'Aktives Board', cls: BOARD_STATUS_BADGE.aktiv },
+// BOARD_STATUS_BADGE (utils.ts), damit Pin-Badge und Boards-Tab konsistent sind.
+// Kein Emoji und kein Symbol mehr: die ruhige Status-Tönung (Fläche + Text)
+// trägt den Status; ein StatusDot wäre in der text-xs-Pille zu groß.
+const BOARD_BADGE: Record<BoardStatus, { text: string; cls: string }> = {
+  aktiv: { text: 'Aktives Board', cls: BOARD_STATUS_BADGE.aktiv },
   wenig_aktiv: {
-    emoji: '⚠️',
     text: 'Wenig aktives Board',
     cls: BOARD_STATUS_BADGE.wenig_aktiv,
   },
   inaktiv: {
-    emoji: '❌',
     text: 'Eingeschlafenes Board',
     cls: BOARD_STATUS_BADGE.inaktiv,
   },
@@ -222,7 +218,7 @@ function BoardLine({ pin }: { pin: HandlungsbedarfPin }) {
   if (!pin.boardName || !aktivitaet) {
     return (
       <div className="mt-0.5 truncate text-xs text-gray-400">
-        📋 Kein Board zugeordnet
+        Kein Board zugeordnet
       </div>
     )
   }
@@ -234,7 +230,7 @@ function BoardLine({ pin }: { pin: HandlungsbedarfPin }) {
       <span
         className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${badge.cls}`}
       >
-        {badge.emoji} {badge.text}
+        {badge.text}
       </span>
     </div>
   )

@@ -10,6 +10,9 @@ export type SaisonEvent = {
   id: string
   event_name: string
   event_datum: string | null
+  // Zeitraum-Enddatum (date, nullable). Nur das Feld — Logik/Anzeige folgen
+  // in späteren Häppchen. Bei Stichtag-Events null.
+  event_datum_ende: string | null
   saison_typ: SaisonTyp
   suchbeginn_tage: number | null
   notizen: string | null
@@ -117,6 +120,9 @@ function tageText(n: number): string {
 
 export function computeStatus(
   eventDatum: string | null,
+  // Zeitraum-Enddatum: null = Stichtag (Verhalten wie bisher), gesetzt =
+  // Zeitraum (sichtbar/Hochphase bis zum Ende, abgeschlossen erst danach).
+  eventDatumEnde: string | null,
   saisonTyp: SaisonTyp,
   suchbeginnTage: number | null,
   today: string
@@ -141,10 +147,16 @@ export function computeStatus(
   const prodStart = shiftDays(pinStart, -31)
   const pinFenster = `${formatDateShort(pinStart)} - ${formatDateShort(pinEnd)}`
 
+  // Abschluss-Stichtag: Stichtag-Events am event_datum (wie bisher),
+  // Zeitraum-Events erst am event_datum_ende. Dadurch bleiben Zeitraum-Events
+  // während [event_datum, event_datum_ende) in der Hochphase (Pin-Fenster ist
+  // zu, die Saison läuft) und sind erst nach dem Ende abgeschlossen.
+  const abschluss = eventDatumEnde ?? eventDatum
+
   let status: EventStatus
   let countdown: string
 
-  if (today >= eventDatum) {
+  if (today >= abschluss) {
     status = 'abgeschlossen'
     const days = diffDays(eventDatum, today)
     countdown = days === 0 ? 'heute' : `vor ${tageText(days)}`
