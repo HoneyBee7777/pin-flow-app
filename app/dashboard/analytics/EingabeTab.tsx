@@ -84,7 +84,7 @@ function CheckIcon() {
       viewBox="0 0 20 20"
       fill="currentColor"
       aria-hidden
-      className="h-4 w-4 shrink-0 text-green-600"
+      className="h-4 w-4 shrink-0 text-status-gut-text"
     >
       <path
         fillRule="evenodd"
@@ -166,7 +166,6 @@ function MonatsCheckliste({
       targetId: 'analytics-zielgruppe-import',
     },
   ]
-  const allDone = items.every((it) => it.done)
 
   function scrollTo(id: string) {
     document
@@ -175,7 +174,7 @@ function MonatsCheckliste({
   }
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+    <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
       <h2 className="text-sm font-semibold text-gray-900">
         Dein Stand für {monatLabel}
       </h2>
@@ -204,12 +203,6 @@ function MonatsCheckliste({
           )
         )}
       </ul>
-      {allDone && (
-        <p className="mt-3 flex items-center gap-2 text-sm font-medium text-green-700">
-          <CheckIcon />
-          Für {monatLabel} ist alles erfasst.
-        </p>
-      )}
     </div>
   )
 }
@@ -367,7 +360,7 @@ export default function EingabeTab({
           href={pinterestAnalyticsUrl ?? 'https://analytics.pinterest.com'}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700"
+          className="inline-flex items-center gap-1 rounded-md bg-marke-blaugrau px-3 py-1.5 text-xs font-medium text-white hover:bg-marke-blaugrau-dunkel"
         >
           Pinterest Analytics öffnen ↗
         </a>
@@ -516,17 +509,17 @@ function CombinedHowToToggle({
   return (
     <details
       id="so-findest-du-die-zahlen"
-      className="group max-w-3xl rounded-lg border border-gray-200 bg-white shadow-sm"
+      className="group overflow-hidden max-w-3xl rounded-lg border border-gray-200 bg-white shadow-sm"
     >
-      <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-4 text-base font-semibold text-gray-900 hover:bg-red-50 [&::-webkit-details-marker]:hidden">
+      <summary className="group/sum flex cursor-pointer list-none items-center gap-3 px-5 py-4 text-base font-semibold text-gray-900 hover:bg-marke-blaugrau [&::-webkit-details-marker]:hidden">
         <span
-          className="text-lg leading-none text-gray-400 transition-transform"
+          className="text-lg leading-none text-gray-400 transition-transform group-hover/sum:text-white"
           aria-hidden
         >
           <span className="inline group-open:hidden">▸</span>
           <span className="hidden group-open:inline">▾</span>
         </span>
-        <span className="flex-1">So findest du alle Zahlen</span>
+        <span className="flex-1 group-hover/sum:text-white">So findest du alle Zahlen</span>
       </summary>
       <div className="space-y-4 border-t border-gray-100 px-5 py-5 text-sm leading-relaxed text-gray-700">
         <div>
@@ -817,7 +810,7 @@ function Schritt1ProfilForm({
           <button
             type="submit"
             disabled={isPending}
-            className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+            className="rounded-md bg-marke-blaugrau px-4 py-2 text-sm font-medium text-white hover:bg-marke-blaugrau-dunkel disabled:opacity-50"
           >
             {isPending ? 'Speichert…' : 'Profil-Daten speichern'}
           </button>
@@ -1149,7 +1142,7 @@ function Schritt2CsvUpload({
             <button
               type="submit"
               disabled={!canSubmit || isPending}
-              className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+              className="rounded-md bg-marke-blaugrau px-4 py-2 text-sm font-medium text-white hover:bg-marke-blaugrau-dunkel disabled:opacity-50"
             >
               {isPending ? 'Importiert…' : 'Import starten'}
             </button>
@@ -1543,7 +1536,7 @@ function PinManualForm({
             <button
               type="submit"
               disabled={isPending || !pinId}
-              className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+              className="rounded-md bg-marke-blaugrau px-4 py-2 text-sm font-medium text-white hover:bg-marke-blaugrau-dunkel disabled:opacity-50"
               title={!pinId ? 'Bitte zuerst einen Pin auswählen' : ''}
             >
               {isPending ? 'Speichert…' : 'Pin speichern'}
@@ -1808,7 +1801,7 @@ function BoardManualForm({ boards }: { boards: BoardOption[] }) {
             <button
               type="submit"
               disabled={isPending || !boardId}
-              className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+              className="rounded-md bg-marke-blaugrau px-4 py-2 text-sm font-medium text-white hover:bg-marke-blaugrau-dunkel disabled:opacity-50"
             >
               {isPending ? 'Speichert…' : 'Board speichern'}
             </button>

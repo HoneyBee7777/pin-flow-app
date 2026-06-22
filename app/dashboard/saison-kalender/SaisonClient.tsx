@@ -191,7 +191,7 @@ export default function SaisonClient({
         <button
           type="button"
           onClick={() => (showAddForm ? closeForm() : openAdd())}
-          className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+          className="rounded-md bg-marke-blaugrau px-4 py-2 text-sm font-medium text-white hover:bg-marke-blaugrau-dunkel"
         >
           {showAddForm ? 'Abbrechen' : 'Event hinzufügen'}
         </button>
@@ -387,7 +387,7 @@ export default function SaisonClient({
           <div className="flex gap-2">
             <button
               type="submit"
-              className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+              className="rounded-md bg-marke-blaugrau px-4 py-2 text-sm font-medium text-white hover:bg-marke-blaugrau-dunkel"
             >
               Speichern
             </button>
@@ -667,7 +667,7 @@ function NischePromptModal({ onClose }: { onClose: () => void }) {
             type="button"
             onClick={generate}
             disabled={!canGenerate}
-            className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-md bg-marke-blaugrau px-4 py-2 text-sm font-medium text-white hover:bg-marke-blaugrau-dunkel disabled:cursor-not-allowed disabled:opacity-50"
           >
             Prompt generieren
           </button>

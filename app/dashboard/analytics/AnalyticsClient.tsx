@@ -216,7 +216,7 @@ export default function AnalyticsClient({
     <div className="space-y-6">
       <ClassificationExplainerBanner />
       <div className="border-b border-gray-200">
-        <nav className="flex gap-6" aria-label="Tabs">
+        <nav className="-mb-px flex gap-6" aria-label="Tabs">
           {TABS.map((t) => {
             const active = tab === t.id
             // Badge nur noch am Eingabe-Tab (dort findet die Zuordnung statt).
@@ -231,8 +231,8 @@ export default function AnalyticsClient({
                 onClick={() => setTab(t.id)}
                 className={`relative whitespace-nowrap rounded-t-md border-b-2 px-3 py-2.5 text-sm transition-colors ${
                   active
-                    ? 'border-red-600 bg-red-50 font-semibold text-red-700'
-                    : 'border-transparent font-semibold text-gray-500 hover:bg-gray-50 hover:text-gray-700'
+                    ? 'border-marke-ocker bg-marke-blaugrau font-semibold text-white'
+                    : 'border-transparent font-semibold text-gray-500 hover:text-marke-blaugrau'
                 }`}
                 aria-current={active ? 'page' : undefined}
               >

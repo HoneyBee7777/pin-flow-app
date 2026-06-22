@@ -208,7 +208,7 @@ export default function PinsTab({
         Die ausführliche Analyse mit Coaching zu jedem Pin findest du im{' '}
         <Link
           href="/dashboard#pin-handlungsbedarf"
-          className="font-medium text-red-600 hover:underline"
+          className="font-medium text-link underline underline-offset-2"
         >
           Dashboard unter Pins
         </Link>
@@ -218,7 +218,7 @@ export default function PinsTab({
         den{' '}
         <Link
           href="/dashboard/strategie?tab=analytics"
-          className="font-medium text-red-600 hover:underline"
+          className="font-medium text-link underline underline-offset-2"
         >
           Wissensseiten
         </Link>
@@ -584,7 +584,7 @@ function PinAnalyticsTable({
                     {agg.diagnose === 'kein_datum' ? (
                       <Link
                         href={`/dashboard/pin-produktion?edit=${row.pin_id}`}
-                        className="font-medium text-red-600 hover:underline"
+                        className="font-medium text-link underline underline-offset-2"
                       >
                         → Pin bearbeiten
                       </Link>
@@ -851,16 +851,16 @@ function ThresholdInfo({
     .toFixed(2)
     .replace('.', ',')
   return (
-    <details className="group max-w-3xl rounded-lg border border-gray-200 bg-white shadow-sm">
-      <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-4 text-base font-semibold text-gray-900 hover:bg-red-50 [&::-webkit-details-marker]:hidden">
+    <details className="group overflow-hidden max-w-3xl rounded-lg border border-gray-200 bg-white shadow-sm">
+      <summary className="group/sum flex cursor-pointer list-none items-center gap-3 px-5 py-4 text-base font-semibold text-gray-900 hover:bg-marke-blaugrau [&::-webkit-details-marker]:hidden">
         <span
-          className="text-lg leading-none text-gray-400 transition-transform"
+          className="text-lg leading-none text-gray-400 transition-transform group-hover/sum:text-white"
           aria-hidden
         >
           <span className="inline group-open:hidden">▸</span>
           <span className="hidden group-open:inline">▾</span>
         </span>
-        <span className="flex-1">So funktioniert die Diagnose</span>
+        <span className="flex-1 group-hover/sum:text-white">So funktioniert die Diagnose</span>
       </summary>
 
       <div className="space-y-4 border-t border-gray-100 px-5 py-5 text-sm leading-relaxed text-gray-700">

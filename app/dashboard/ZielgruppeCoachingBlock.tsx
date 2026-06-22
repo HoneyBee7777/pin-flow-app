@@ -71,12 +71,16 @@ export default function ZielgruppeCoachingBlock({
 
   return (
     <section>
-      <h2 className="text-lg font-semibold text-haupt">Deine Zielgruppe</h2>
-      <p className="mt-1 text-sm text-gray-600">
-        Wer für alle pinnt, erreicht niemanden. Hier siehst du, wie groß deine
-        Zielgruppe ist, wer wirklich mit dir interagiert, und wie du daraus
-        konkrete Themen machst.
-      </p>
+      <div className="mb-4">
+        <h2 className="text-xl font-semibold text-marke-blaugrau">
+          Deine Zielgruppe
+        </h2>
+        <p className="mt-1 text-sm text-gray-600">
+          Wer für alle pinnt, erreicht niemanden. Hier siehst du, wie groß deine
+          Zielgruppe ist, wer wirklich mit dir interagiert, und wie du daraus
+          konkrete Themen machst.
+        </p>
+      </div>
 
       {latest && (
         <div className="mt-3 grid grid-cols-2 gap-3">
@@ -135,9 +139,9 @@ export default function ZielgruppeCoachingBlock({
         </p>
       )}
 
-      {/* Links rot und ausserhalb der Box. Pfeil → bleibt außerhalb des
-          verlinkten Bereichs — nur das Wort ist klickbar. „·" als Trenner. */}
-      <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+      {/* Links untereinander, außerhalb der Box. Pfeil → bleibt außerhalb des
+          verlinkten Bereichs — nur das Wort ist klickbar. */}
+      <p className="mt-2 flex flex-col gap-1 text-sm">
         <span>
           →{' '}
           <Link
@@ -146,9 +150,6 @@ export default function ZielgruppeCoachingBlock({
           >
             Zu deinen Zielgruppen-Zahlen
           </Link>
-        </span>
-        <span aria-hidden className="text-gray-300">
-          ·
         </span>
         <span>
           →{' '}

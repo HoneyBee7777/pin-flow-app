@@ -161,22 +161,24 @@ export default async function KeywordsPage() {
           findest, zeigt dir die{' '}
           <Link
             href="/dashboard/strategie?tab=keywords&accordion=keywords-recherchieren"
-            className="font-medium text-red-600 hover:underline"
+            className="font-medium text-link underline underline-offset-2"
           >
             Anleitung zur Keyword-Recherche
           </Link>
           .
         </p>
-        <details className="group max-w-3xl rounded-lg border border-gray-200 bg-white shadow-sm">
-          <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-4 text-base font-semibold text-gray-900 hover:bg-red-50 [&::-webkit-details-marker]:hidden">
+        <details className="group overflow-hidden max-w-3xl rounded-lg border border-gray-200 bg-white shadow-sm">
+          <summary className="group/sum flex cursor-pointer list-none items-center gap-3 px-5 py-4 text-base font-semibold text-gray-900 hover:bg-marke-blaugrau [&::-webkit-details-marker]:hidden">
             <span
-              className="text-lg leading-none text-gray-400 transition-transform"
+              className="text-lg leading-none text-gray-400 transition-transform group-hover/sum:text-white"
               aria-hidden
             >
               <span className="inline group-open:hidden">▸</span>
               <span className="hidden group-open:inline">▾</span>
             </span>
-            <span className="flex-1">So funktioniert diese Seite</span>
+            <span className="flex-1 group-hover/sum:text-white">
+              So funktioniert diese Seite
+            </span>
           </summary>
           <div className="space-y-4 border-t border-gray-100 px-5 py-5 text-sm leading-relaxed text-gray-700">
             <div>
@@ -200,7 +202,7 @@ export default async function KeywordsPage() {
                 den{' '}
                 <Link
                   href="/dashboard/strategie?tab=keywords&accordion=keyword-typen"
-                  className="text-red-600 hover:underline"
+                  className="text-link underline underline-offset-2"
                 >
                   drei Keyword-Typen
                 </Link>

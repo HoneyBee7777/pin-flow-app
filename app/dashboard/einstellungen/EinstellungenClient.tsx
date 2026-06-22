@@ -97,7 +97,7 @@ function ProfilNameSection({ initial }: { initial: string }) {
           <button
             type="submit"
             disabled={isPending}
-            className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+            className="rounded-md bg-marke-blaugrau px-4 py-2 text-sm font-medium text-white hover:bg-marke-blaugrau-dunkel disabled:opacity-50"
           >
             {isPending ? 'Speichert…' : 'Speichern'}
           </button>
@@ -180,7 +180,7 @@ function PersoenlicheLinksSection({
           <button
             type="submit"
             disabled={isPending}
-            className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+            className="rounded-md bg-marke-blaugrau px-4 py-2 text-sm font-medium text-white hover:bg-marke-blaugrau-dunkel disabled:opacity-50"
           >
             {isPending ? 'Speichert…' : 'Speichern'}
           </button>
@@ -393,7 +393,7 @@ function SignalwoerterSection({
       <p className="mt-2 text-sm">
         <Link
           href="/dashboard/strategie?tab=design&accordion=signalwoerter"
-          className="font-medium text-red-600 hover:underline"
+          className="font-medium text-link underline underline-offset-2"
         >
           Mehr dazu, wie Signalwörter wirken, im Pinterest-Wissen.
         </Link>
@@ -487,7 +487,7 @@ function SignalwoerterSection({
           type="button"
           onClick={onSave}
           disabled={isPending}
-          className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+          className="rounded-md bg-marke-blaugrau px-4 py-2 text-sm font-medium text-white hover:bg-marke-blaugrau-dunkel disabled:opacity-50"
         >
           {isPending ? 'Speichert…' : 'Speichern'}
         </button>
@@ -557,9 +557,9 @@ function AnalyticsLinkSection({ initial }: { initial: string }) {
               href={url}
               target="_blank"
               rel="noopener noreferrer"
-              className="font-medium text-red-600 hover:underline"
+              className="font-medium text-link underline underline-offset-2"
             >
-              ↗ Gespeicherten Link öffnen
+              Gespeicherten Link öffnen <span aria-hidden>↗</span>
             </a>
           </div>
         )}
@@ -568,7 +568,7 @@ function AnalyticsLinkSection({ initial }: { initial: string }) {
           <button
             type="submit"
             disabled={isPending}
-            className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+            className="rounded-md bg-marke-blaugrau px-4 py-2 text-sm font-medium text-white hover:bg-marke-blaugrau-dunkel disabled:opacity-50"
           >
             {isPending ? 'Speichert…' : 'Speichern'}
           </button>
@@ -601,7 +601,7 @@ function StrategieSection() {
       <div className="mt-4">
         <Link
           href="/dashboard/strategie?tab=meine"
-          className="inline-flex items-center rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+          className="inline-flex items-center rounded-md bg-marke-blaugrau px-4 py-2 text-sm font-medium text-white hover:bg-marke-blaugrau-dunkel"
         >
           Zur Strategie
         </Link>

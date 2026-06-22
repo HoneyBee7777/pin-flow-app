@@ -74,12 +74,14 @@ export default function WinsBlock({
       {/* Freier Block-Kopf am Seitenrand — gleiches Muster wie „Was dein
           Profil dir zeigt" (h2 text-lg + gedämpfte Subheadline, keine äußere
           Karte). */}
-      <h2 className="text-lg font-semibold text-haupt">
-        Was hat funktioniert?
-      </h2>
-      <p className="mt-1 text-sm text-gray-600">
-        Deine Erfolge im Vergleich zum letzten Monat.
-      </p>
+      <div className="mb-4">
+        <h2 className="text-xl font-semibold text-marke-blaugrau">
+          Was hat funktioniert?
+        </h2>
+        <p className="mt-1 text-sm text-gray-600">
+          Deine Erfolge im Vergleich zum letzten Monat.
+        </p>
+      </div>
 
       {/* Lila Coaching-Block — eigener Wins-Stil (.coaching-box in
           globals.css): linker 3-px-Akzentbalken, lila Flächen-/Textfarbe. */}

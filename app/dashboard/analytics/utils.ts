@@ -492,6 +492,47 @@ export const BOARD_STATUS_BADGE: Record<BoardStatus, string> = {
   inaktiv: 'bg-status-schlecht-flaeche text-status-schlecht-text',
 }
 
+// Aktivitäts-Zustands-Badge (Pille neben dem Board-Namen). Vier Zustände: der
+// Status 'inaktiv' wird in „eingeschlafen" (hatte mal Reichweite) und „noch
+// nicht gestartet" (nie veröffentlicht) aufgeteilt. Zentral, damit „Pins
+// recyceln" und „Board-Gesundheit" dieselbe Quelle nutzen.
+export type BoardBadgeKey =
+  | 'aktiv'
+  | 'wenig_aktiv'
+  | 'eingeschlafen'
+  | 'nie_gestartet'
+
+export const BOARD_AKTIVITAET_BADGE: Record<
+  BoardBadgeKey,
+  { text: string; cls: string }
+> = {
+  aktiv: { text: 'Aktives Board', cls: BOARD_STATUS_BADGE.aktiv },
+  wenig_aktiv: {
+    text: 'Wenig aktives Board',
+    cls: BOARD_STATUS_BADGE.wenig_aktiv,
+  },
+  eingeschlafen: {
+    text: 'Eingeschlafenes Board',
+    cls: BOARD_STATUS_BADGE.inaktiv,
+  },
+  // „Noch nicht gestartet" ist kein Problem, nur ein Zustand → neutrale
+  // Blaugrau-Tönung statt Rot.
+  nie_gestartet: {
+    text: 'Noch nicht gestartet',
+    cls: 'bg-marke-blaugrau-xhell text-marke-blaugrau',
+  },
+}
+
+// Leitet aus Aktivitätsstatus + „hatte früher Reichweite" den Badge-Zustand ab.
+export function boardBadgeKey(
+  aktivitaet: BoardStatus,
+  hatteFruehereReichweite: boolean
+): BoardBadgeKey {
+  if (aktivitaet === 'aktiv') return 'aktiv'
+  if (aktivitaet === 'wenig_aktiv') return 'wenig_aktiv'
+  return hatteFruehereReichweite ? 'eingeschlafen' : 'nie_gestartet'
+}
+
 export type BoardThresholds = {
   // Aktivitäts-Schwellwerte (basierend auf letztem Pin-Datum). Fest verdrahtet.
   wenigAktiv: number
@@ -795,11 +836,13 @@ export function matchingKeywords(
 
 export type BoardHebelTyp =
   | 'eingeschlafen' // inaktiv (> 90 Tage) UND hatte früher Reichweite
+  | 'nie_gestartet' // inaktiv UND nie veröffentlicht (keine frühere Reichweite)
   | 'beschreibung_fehlt' // keine Beschreibung
   | 'name_ohne_keyword' // kein Nutzer-Keyword im Board-Namen
   | 'beschreibung_zu_duenn' // Beschreibung vorhanden, aber < 200 Zeichen
   | 'beschreibung_ohne_keyword' // Beschreibung vorhanden, aber kein Keyword drin
   | 'wirkung_schwach' // boardWirkung === 'schwach' (Gate liegt außerhalb)
+  | 'wenig_aktiv' // 30-90 Tage kein neuer Pin (frühe Warnstufe)
   | 'name_zu_lang' // Board-Name > 50 Zeichen
 
 export type BoardHebel = {
@@ -812,11 +855,13 @@ export type BoardHebel = {
 // Feste Dringlichkeits-Gewichte (freigegeben; höher = weiter oben).
 export const BOARD_HEBEL_DRINGLICHKEIT: Record<BoardHebelTyp, number> = {
   eingeschlafen: 100,
+  nie_gestartet: 95,
   beschreibung_fehlt: 90,
   name_ohne_keyword: 80,
   beschreibung_zu_duenn: 60,
   beschreibung_ohne_keyword: 55,
   wirkung_schwach: 50,
+  wenig_aktiv: 40,
   name_zu_lang: 30,
 }
 
@@ -847,6 +892,13 @@ export function boardHebelFuerBoard(args: {
   if (args.aktivitaet === 'inaktiv' && args.hatteFruehereReichweite) {
     typen.push('eingeschlafen')
   }
+  // Inaktiv, aber nie veröffentlicht (keine frühere Reichweite): „aufwecken"
+  // wäre falsch — hier geht es ums erste Starten.
+  if (args.aktivitaet === 'inaktiv' && !args.hatteFruehereReichweite) {
+    typen.push('nie_gestartet')
+  }
+  // Frühe Warnstufe, bevor das Board ganz einschläft.
+  if (args.aktivitaet === 'wenig_aktiv') typen.push('wenig_aktiv')
   if (args.wirkung === 'schwach') typen.push('wirkung_schwach')
 
   // Name

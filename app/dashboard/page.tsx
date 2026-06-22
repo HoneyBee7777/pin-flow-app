@@ -13,6 +13,9 @@ import {
   boardThresholdsFromSettings,
   boardAccountHinweise,
   boardHebelFuerBoard,
+  boardBadgeKey,
+  BOARD_AKTIVITAET_BADGE,
+  type BoardBadgeKey,
   boardWirkung,
   boardWirkungMediane,
   BOARD_WIRKUNG_DEFAULTS,
@@ -88,7 +91,6 @@ type PipelineThresholds = {
   minPinsOhneAktuell: number
   tageOhnePin: number
   minCtrGoldnugget: number
-  maxPinsGoldnugget: number
 }
 
 // Content-Pipeline-Schwellwerte — fachlich gesetzte Pinterest-Methodik der
@@ -98,15 +100,19 @@ type PipelineThresholds = {
 //   minPinsGesamt      — unter so vielen Pins gilt ein Inhalt als unterversorgt
 //   minPinsOhneAktuell — ab so vielen Pins zählt ein Inhalt als „stale"-fähig
 //   tageOhnePin        — so viele Tage ohne neuen Pin = „ohne aktuellen Pin"
-//   minCtrGoldnugget   — Ø-CTR darüber macht eine URL zum Goldnugget (in %)
-//   maxPinsGoldnugget  — nur URLs mit weniger Pins gelten als Goldnugget
+//   minCtrGoldnugget   — fester CTR-Richtwert (Fallback, in %), greift nur
+//                        ohne valide Eigen-Benchmark (< 10 qualifizierte Pins)
 const PIPELINE_THRESHOLDS: PipelineThresholds = {
   minPinsGesamt: 3,
   minPinsOhneAktuell: 3,
   tageOhnePin: 30,
   minCtrGoldnugget: 1.5,
-  maxPinsGoldnugget: 5,
 }
+
+// Goldnugget-CTR primär gegen den eigenen Median: eine URL zählt, wenn ihre
+// Ø-CTR mehr als 20 % über dem persönlichen Median liegt — konsistent zur
+// „klickstark"-Definition (ctrBoostFaktor) in diagnosePinAggregated.
+const GOLDNUGGET_CTR_BOOST = 1.2
 
 type PinPipelineInhalt = {
   id: string
@@ -118,12 +124,22 @@ type PinPipelineInhalt = {
   primaryUrl: string | null
 }
 
+// Inhalt mit Pin-Bedarf inkl. Grund-Kennzeichnung für die zusammengelegte
+// Liste: few_pins = zu wenige (und nicht frische) Pins, stale = genug Pins,
+// aber lange Pause. Steuert Ampel-Ton und Grund-Text pro Zeile.
+type PinPipelineInhaltMitGrund = PinPipelineInhalt & {
+  kind: 'few_pins' | 'stale'
+}
+
 type UrlPotenzialRow = {
   basisUrl: string
   displayTitle: string
   pinCount: number
   ctr: number
   boardNames: string[]
+  // Prozentuale Abweichung der URL-CTR über dem eigenen Median; null, wenn
+  // keine valide Benchmark vorliegt (dann griff der feste Richtwert).
+  ctrUeberMedianPct: number | null
 }
 
 type KanbanEvent = {
@@ -205,7 +221,11 @@ type BoardDashHealth = {
 // ===========================================================
 const BOARD_HEBEL_TEXT: Record<BoardHebelTyp, string> = {
   eingeschlafen:
-    'Dieses Board lief schon mal richtig gut, schläft aber gerade. Weck es mit 3 bis 5 frischen Pins pro Woche wieder auf, dann kommt die Sichtbarkeit zurück.',
+    'Dieses Board lief schon mal gut. Bring mit drei bis fünf frischen Pins pro Woche wieder Bewegung rein, dann kommt die Sichtbarkeit zurück.',
+  nie_gestartet:
+    'Veröffentliche regelmäßig Pins auf diesem Board, drei bis fünf pro Woche, damit Pinterest es überhaupt kennenlernt und ausspielt.',
+  wenig_aktiv:
+    'Hier wird es ruhig. Pinne wieder regelmäßig, ein bis zwei Pins pro Woche halten das Board sichtbar, bevor es einschläft.',
   beschreibung_fehlt:
     'Diesem Board fehlt noch die Beschreibung. Schreib 200 bis 300 Zeichen, die dein Thema erklären, und pack dein Haupt-Keyword gleich in den ersten Satz.',
   name_ohne_keyword:
@@ -215,15 +235,18 @@ const BOARD_HEBEL_TEXT: Record<BoardHebelTyp, string> = {
   beschreibung_ohne_keyword:
     'Deine Beschreibung steht, aber ohne eines deiner Keywords. Bring dein Haupt-Keyword gleich in den ersten Satz, dann ordnet Pinterest das Board besser ein.',
   wirkung_schwach:
-    'Dieses Board bekommt Impressionen, aber die Klicks bleiben aus. Schau dir die Pins hier an, oft fehlt der Anreiz zum Klicken im Titel oder Bild.',
+    'Dieses Board bekommt Impressionen, aber die Klicks bleiben aus. Erstelle eine neue Pin-Variante mit stärkerem Hook im Titel und einem anderen Bild, das zum Klicken einlädt.',
   name_zu_lang:
-    'Der Board-Name ist etwas lang. Kürz ihn auf maximal 50 Zeichen und stell das Wichtigste nach vorn, so bleibt er klar und gut auffindbar.',
+    'Der Board-Name ist zu lang. Kürz ihn auf zwei bis drei klare Wörter und stell dein wichtigstes Keyword nach vorn, so versteht Pinterest sofort, worum es geht.',
 }
 
 // Verständlicher Satz je Hebel-Typ für die Liste der Bündelkarte (Board mit
 // >= 3 offenen Hebeln). Bewusst ganze Sätze statt Kürzel.
 const BOARD_HEBEL_BUENDEL_PUNKT: Record<BoardHebelTyp, string> = {
   eingeschlafen: 'Das Board ist eingeschlafen, pinne wieder regelmäßig.',
+  nie_gestartet:
+    'Dieses Board ist noch nicht gestartet, veröffentliche regelmäßig Pins.',
+  wenig_aktiv: 'Das Board wird ruhig, pinne wieder regelmäßig.',
   beschreibung_fehlt: 'Es fehlt die Beschreibung.',
   beschreibung_zu_duenn: 'Die Beschreibung ist noch zu knapp.',
   name_ohne_keyword: 'Im Namen steckt keines deiner Keywords.',
@@ -236,22 +259,75 @@ const BOARD_HEBEL_BUENDEL_PUNKT: Record<BoardHebelTyp, string> = {
 // Einzel: `text` ist der Coaching-Satz. Bündel: `buendelPunkte` ist die Liste
 // der offenen Punkte (absteigend nach Dringlichkeit), `text` bleibt leer.
 type CoachingKarte = {
+  // 'einzel' = unter der Bündel-Schwelle (1-2 Hebel): volle Hebel-Sätze ohne
+  // große Einleitung. 'buendel' = ab COACHING_BUENDEL_AB Hebeln: Einleitung +
+  // kurze Punkte + Abschluss.
   kind: 'einzel' | 'buendel'
   boardId: string
   boardName: string
   pinterestUrl: string | null
-  text: string
+  // Volle Hebel-Sätze (ein Satz je Hebel) — bei 'einzel' angezeigt.
+  hebelTexte: string[]
+  // Kurze Punkte je Hebel — nur bei 'buendel' gesetzt.
   buendelPunkte?: string[]
   prepared: { entwurf: number; geplant: number }
+  // Dringendster Hebel-Typ (höchste Dringlichkeit) — steuert Pin-Box-Anzeige.
+  primaryHebelTyp: BoardHebelTyp
+  // ALLE Hebel-Typen des Boards — für die Button-Hervorhebung (gemischt?).
+  hebelTypen: BoardHebelTyp[]
+  // Aktivitäts-Zustand für die Badge-Pille neben dem Namen.
+  badgeKey: BoardBadgeKey
 }
 
-// Ein Board im einklappbaren Bereich: restliche Hebel-Texte + vorbereitete Pins.
+// Ein Board im einklappbaren Bereich: alle seine Hebel-Texte + vorbereitete Pins.
 type CoachingRestBoard = {
   boardId: string
   boardName: string
   pinterestUrl: string | null
   hebelTexte: string[]
   prepared: { entwurf: number; geplant: number }
+  // Dringendster Hebel-Typ; null bei reinen „nur vorbereitete Pins"-Boards.
+  primaryHebelTyp: BoardHebelTyp | null
+  hebelTypen: BoardHebelTyp[]
+  // Aktivitäts-Zustand für die Badge-Pille neben dem Namen.
+  badgeKey: BoardBadgeKey
+}
+
+// Primäre Handlung je Hebel-Typ: Metadaten-Hebel (Name/Beschreibung/Keywords)
+// → „Board bearbeiten"; Aktivitäts- und Wirkungs-Hebel (eingeschlafen,
+// wirkung_schwach) sowie reine Pin-Vorrat-Boards (null) → „Pins planen", da die
+// Handlung eine neue Pin-Variante mit besserem Hook/Keyword ist.
+function boardPrimaryAction(
+  typ: BoardHebelTyp | null
+): 'pins' | 'bearbeiten' {
+  switch (typ) {
+    case 'beschreibung_fehlt':
+    case 'beschreibung_zu_duenn':
+    case 'beschreibung_ohne_keyword':
+    case 'name_ohne_keyword':
+    case 'name_zu_lang':
+      return 'bearbeiten'
+    default:
+      return 'pins'
+  }
+}
+
+// Welche internen Buttons werden hervorgehoben? Enthält ein Board SOWOHL einen
+// Aktivitäts-/Wirkungs-Hebel (→ Pins) ALS AUCH einen Bearbeitungs-Hebel, werden
+// beide hervorgehoben ('beide'). Sonst nur der passende. Leere Liste (reine
+// Pin-Vorrat-Boards) → 'pins'.
+function boardHighlight(
+  typen: BoardHebelTyp[]
+): 'pins' | 'bearbeiten' | 'beide' {
+  let hatPins = false
+  let hatBearbeiten = false
+  for (const t of typen) {
+    if (boardPrimaryAction(t) === 'bearbeiten') hatBearbeiten = true
+    else hatPins = true
+  }
+  if (hatPins && hatBearbeiten) return 'beide'
+  if (hatBearbeiten) return 'bearbeiten'
+  return 'pins'
 }
 
 
@@ -984,7 +1060,7 @@ export default async function DashboardPage() {
   // pipelineThresholds oben):
   //   - Sub A: pinCount < minPinsGesamt
   //   - Sub B: pinCount ≥ minPinsOhneAktuell UND letzter Pin > tageOhnePin
-  //   - Cat 2: avg CTR > minCtrGoldnugget % UND Pin-Count < maxPinsGoldnugget
+  //   - Cat 2: avg CTR über eigenem Median (×1,2) bzw. Fallback minCtrGoldnugget
   type RawContentInhalt = {
     id: string
     titel: string
@@ -1042,21 +1118,34 @@ export default async function DashboardPage() {
     }
   })
 
-  const inhaltePinBedarfA = pipelineInhalte
-    .filter((c) => c.pinCount < pipelineThresholds.minPinsGesamt)
-    .sort(
-      (a, b) =>
-        a.pinCount - b.pinCount || a.titel.localeCompare(b.titel, 'de')
-    )
-
-  const inhaltePinBedarfB = pipelineInhalte
-    .filter(
-      (c) =>
-        c.pinCount >= pipelineThresholds.minPinsOhneAktuell &&
-        c.letzterPinTage !== null &&
-        c.letzterPinTage > pipelineThresholds.tageOhnePin
-    )
-    .sort((a, b) => (b.letzterPinTage ?? 0) - (a.letzterPinTage ?? 0))
+  // „Wenig Pins" zählt nur als Handlungsbedarf, wenn der Inhalt noch GAR keinen
+  // Pin hat (letzterPinTage === null) ODER der letzte Pin älter als die
+  // Stale-Grenze ist. Gesund wachsende Inhalte (wenige, aber frische Pins)
+  // fallen heraus.
+  const fewPinsInhalte = pipelineInhalte.filter(
+    (c) =>
+      c.pinCount < pipelineThresholds.minPinsGesamt &&
+      (c.letzterPinTage === null ||
+        c.letzterPinTage > pipelineThresholds.tageOhnePin)
+  )
+  // „Ohne aktuellen Pin": genug Pins, aber lange Pause.
+  const staleInhalte = pipelineInhalte.filter(
+    (c) =>
+      c.pinCount >= pipelineThresholds.minPinsOhneAktuell &&
+      c.letzterPinTage !== null &&
+      c.letzterPinTage > pipelineThresholds.tageOhnePin
+  )
+  // Eine Liste, kind je Inhalt erhalten. Dringlichkeits-Sortierung:
+  // 1. Inhalte ganz ohne Pin (größter Hebel), 2. längste Pause zuerst.
+  const inhaltePinBedarf: PinPipelineInhaltMitGrund[] = [
+    ...fewPinsInhalte.map((c) => ({ ...c, kind: 'few_pins' as const })),
+    ...staleInhalte.map((c) => ({ ...c, kind: 'stale' as const })),
+  ].sort((a, b) => {
+    const aOhnePin = a.letzterPinTage === null
+    const bOhnePin = b.letzterPinTage === null
+    if (aOhnePin !== bOhnePin) return aOhnePin ? -1 : 1
+    return (b.letzterPinTage ?? 0) - (a.letzterPinTage ?? 0)
+  })
 
   // ===== Cat 2: URLs mit Potenzial =====
   type RawUrlRowWithUrl = {
@@ -1115,13 +1204,21 @@ export default async function DashboardPage() {
   const boardNameById = new Map<string, string>(
     boardsRows.map((b) => [b.id, b.name])
   )
+  // Goldnugget-CTR-Schwelle: primär 20 % über dem eigenen Median (sobald eine
+  // valide Benchmark vorliegt, d.h. >= 10 qualifizierte Pins → medianCtr nicht
+  // null). Sonst der feste Richtwert, damit die Card auch für kleine Konten
+  // funktioniert.
+  const goldnuggetCtrSchwelle =
+    benchmark?.medianCtr != null
+      ? benchmark.medianCtr * GOLDNUGGET_CTR_BOOST
+      : pipelineThresholds.minCtrGoldnugget
   const urlPotenzial: UrlPotenzialRow[] = []
   byBasis.forEach((g, basisUrl) => {
     const ctr = g.impressionen > 0 ? (g.klicks / g.impressionen) * 100 : 0
-    if (
-      ctr <= pipelineThresholds.minCtrGoldnugget ||
-      g.pinIds.size >= pipelineThresholds.maxPinsGoldnugget
-    ) {
+    // Allein die CTR entscheidet: keine feste Pins-pro-URL-Grenze mehr. Eine
+    // erfolgreiche URL verdient weitere Pins, unabhängig von der Anzahl; fällt
+    // ihre CTR auf den Schnitt zurück, verschwindet sie von selbst.
+    if (ctr <= goldnuggetCtrSchwelle) {
       return
     }
     const boardNamesArr: string[] = []
@@ -1135,6 +1232,12 @@ export default async function DashboardPage() {
       pinCount: g.pinIds.size,
       ctr,
       boardNames: boardNamesArr,
+      // Relativer Bezug zum eigenen Median, nur wenn dieser vorliegt; sonst
+      // wurde gegen den festen Richtwert gemessen → kein „über deinem Schnitt".
+      ctrUeberMedianPct:
+        benchmark?.medianCtr != null
+          ? Math.round((ctr / benchmark.medianCtr - 1) * 100)
+          : null,
     })
   })
   urlPotenzial.sort((a, b) => b.ctr - a.ctr)
@@ -1435,7 +1538,9 @@ export default async function DashboardPage() {
     anzahlQualifiziert >= BOARD_WIRKUNG_DEFAULTS.mindestQualifizierteBoards
 
   const hebelByBoard = new Map<string, BoardHebel[]>()
-  const alleHebel: BoardHebel[] = []
+  // Aktivitäts-Zustand je Board für die Badge-Pille (unterscheidet eingeschlafen
+  // vs. nie_gestartet über hatteFruehereReichweite).
+  const boardBadgeKeyById = new Map<string, BoardBadgeKey>()
   for (const b of boardsRows) {
     const health = boardHealthById.get(b.id)
     const aktivitaet: BoardStatus = health?.status ?? 'inaktiv'
@@ -1465,7 +1570,7 @@ export default async function DashboardPage() {
       wirkung,
     })
     if (hebel.length > 0) hebelByBoard.set(b.id, hebel)
-    alleHebel.push(...hebel)
+    boardBadgeKeyById.set(b.id, boardBadgeKey(aktivitaet, hatteFruehereReichweite))
   }
 
   // Account-weite Hinweise (Anzahl Boards + Reichweiten-Verteilung).
@@ -1476,22 +1581,23 @@ export default async function DashboardPage() {
     ),
   })
 
-  // Priorisierung der 3 dringendsten Hebel:
-  //   - Bündel-Boards (>= 3 Hebel) zuerst als gebündelte „Grundsanierung"-Karte.
-  //   - Danach mit Einzel-Hebeln auffüllen, je Board nur der dringendste.
-  //   - Max. 1 Eintrag pro Board (die Bündelkarte zählt als dieser Eintrag).
+  // Priorisierung board-basiert: EIN Eintrag je Board mit ALLEN seinen Hebeln
+  // (nach Dringlichkeit sortiert), Boards nach höchster Dringlichkeit. Die drei
+  // dringendsten Boards werden Top-Karten, der Rest landet im Toggle. So kann
+  // kein Board doppelt erscheinen. Die Bündel-Schwelle entscheidet nur noch über
+  // die ausführliche Einleitung (ab COACHING_BUENDEL_AB Hebeln).
   const COACHING_BUENDEL_AB = 3
   const pinterestUrlByBoard = new Map<string, string | null>()
   for (const b of boardsRows) {
     pinterestUrlByBoard.set(b.id, b.pinterest_url ?? null)
   }
+  const leerePrepared = { entwurf: 0, geplant: 0 }
   const maxDringlichkeit = (hs: BoardHebel[]) =>
     hs.reduce((m, h) => Math.max(m, h.dringlichkeit), 0)
   const nachDringlichkeit = (a: BoardHebel, b: BoardHebel) =>
     b.dringlichkeit - a.dringlichkeit || a.boardName.localeCompare(b.boardName)
 
-  const buendelBoards = Array.from(hebelByBoard.entries())
-    .filter(([, hs]) => hs.length >= COACHING_BUENDEL_AB)
+  const boardEintraege = Array.from(hebelByBoard.entries())
     .map(([boardId, hs]) => ({ boardId, hebel: [...hs].sort(nachDringlichkeit) }))
     .sort(
       (a, b) =>
@@ -1500,94 +1606,54 @@ export default async function DashboardPage() {
         a.hebel[0].boardName.localeCompare(b.hebel[0].boardName)
     )
 
-  const topKarten: CoachingKarte[] = []
-  const verwendeteBoards = new Set<string>()
-  for (const eintrag of buendelBoards) {
-    if (topKarten.length >= 3) break
-    topKarten.push({
-      kind: 'buendel',
-      boardId: eintrag.boardId,
-      boardName: eintrag.hebel[0].boardName,
-      pinterestUrl: pinterestUrlByBoard.get(eintrag.boardId) ?? null,
-      text: '',
-      buendelPunkte: eintrag.hebel.map(
-        (h) => BOARD_HEBEL_BUENDEL_PUNKT[h.typ]
-      ),
-      prepared: preparedPinsByBoard.get(eintrag.boardId) ?? {
-        entwurf: 0,
-        geplant: 0,
-      },
-    })
-    verwendeteBoards.add(eintrag.boardId)
-  }
-  for (const hebel of [...alleHebel].sort(nachDringlichkeit)) {
-    if (topKarten.length >= 3) break
-    if (verwendeteBoards.has(hebel.boardId)) continue
-    topKarten.push({
-      kind: 'einzel',
-      boardId: hebel.boardId,
-      boardName: hebel.boardName,
-      pinterestUrl: pinterestUrlByBoard.get(hebel.boardId) ?? null,
-      text: BOARD_HEBEL_TEXT[hebel.typ],
-      prepared: preparedPinsByBoard.get(hebel.boardId) ?? {
-        entwurf: 0,
-        geplant: 0,
-      },
-    })
-    verwendeteBoards.add(hebel.boardId)
-  }
-
-  // Bereits in Top-Karten gezeigte Hebel ausklammern (Einzel: nur der dringendste
-  // dieses Boards; Bündel: alle Hebel des Boards).
-  const hebelKey = (boardId: string, typ: BoardHebelTyp) => `${boardId}:${typ}`
-  const gezeigteHebelKeys = new Set<string>()
-  for (const karte of topKarten) {
-    const hs = hebelByBoard.get(karte.boardId) ?? []
-    if (karte.kind === 'buendel') {
-      for (const h of hs) gezeigteHebelKeys.add(hebelKey(h.boardId, h.typ))
-    } else {
-      const top = [...hs].sort(nachDringlichkeit)[0]
-      if (top) gezeigteHebelKeys.add(hebelKey(top.boardId, top.typ))
+  const topKarten: CoachingKarte[] = boardEintraege.slice(0, 3).map((e) => {
+    const istBuendel = e.hebel.length >= COACHING_BUENDEL_AB
+    return {
+      kind: istBuendel ? 'buendel' : 'einzel',
+      boardId: e.boardId,
+      boardName: e.hebel[0].boardName,
+      pinterestUrl: pinterestUrlByBoard.get(e.boardId) ?? null,
+      hebelTexte: e.hebel.map((h) => BOARD_HEBEL_TEXT[h.typ]),
+      buendelPunkte: istBuendel
+        ? e.hebel.map((h) => BOARD_HEBEL_BUENDEL_PUNKT[h.typ])
+        : undefined,
+      prepared: preparedPinsByBoard.get(e.boardId) ?? leerePrepared,
+      primaryHebelTyp: e.hebel[0].typ,
+      hebelTypen: e.hebel.map((h) => h.typ),
+      badgeKey: boardBadgeKeyById.get(e.boardId) ?? 'nie_gestartet',
     }
-  }
+  })
 
-  // Einklappbarer Bereich „Alle weiteren Hinweise": pro Board die restlichen
-  // Hebel + vorbereitete Pins. Doppelung vermeiden:
-  //   - Boards, die oben schon als Top-Karte stehen, erscheinen hier nur mit
-  //     ihren NOCH NICHT oben gezeigten Hebeln (restHebel) und OHNE Pin-Box
-  //     (die steht jetzt oben bei der Top-Karte).
-  //   - Boards ohne Top-Karte: alle Hebel + Pin-Box wie gehabt; reine
-  //     „nur vorbereitete Pins"-Boards erscheinen ebenfalls (nur die grüne Box).
-  const leerePrepared = { entwurf: 0, geplant: 0 }
-  const restBoards: CoachingRestBoard[] = []
+  // Toggle „Alle weiteren Hinweise": Boards jenseits der Top 3 (mit allen ihren
+  // Hebeln), danach Boards ganz ohne Hebel, die nur vorbereitete Pins haben.
+  const hatPreparedPins = (boardId: string) => {
+    const p = preparedPinsByBoard.get(boardId)
+    return !!p && (p.entwurf > 0 || p.geplant > 0)
+  }
+  const restBoards: CoachingRestBoard[] = boardEintraege.slice(3).map((e) => ({
+    boardId: e.boardId,
+    boardName: e.hebel[0].boardName,
+    pinterestUrl: pinterestUrlByBoard.get(e.boardId) ?? null,
+    hebelTexte: e.hebel.map((h) => BOARD_HEBEL_TEXT[h.typ]),
+    prepared: preparedPinsByBoard.get(e.boardId) ?? leerePrepared,
+    primaryHebelTyp: e.hebel[0].typ,
+    hebelTypen: e.hebel.map((h) => h.typ),
+    badgeKey: boardBadgeKeyById.get(e.boardId) ?? 'nie_gestartet',
+  }))
+  const boardsMitHebel = new Set(boardEintraege.map((e) => e.boardId))
   for (const b of boardsRows) {
-    const istTopBoard = verwendeteBoards.has(b.id)
-    const hs = hebelByBoard.get(b.id) ?? []
-    const restHebel = hs
-      .filter((h) => !gezeigteHebelKeys.has(hebelKey(h.boardId, h.typ)))
-      .sort(nachDringlichkeit)
-    // Pin-Box im Toggle nur für Boards, die NICHT oben stehen.
-    const prepared = istTopBoard
-      ? leerePrepared
-      : preparedPinsByBoard.get(b.id) ?? leerePrepared
-    const hatPrepared = prepared.entwurf > 0 || prepared.geplant > 0
-    if (restHebel.length === 0 && !hatPrepared) continue
+    if (boardsMitHebel.has(b.id) || !hatPreparedPins(b.id)) continue
     restBoards.push({
       boardId: b.id,
       boardName: b.name,
       pinterestUrl: b.pinterest_url ?? null,
-      hebelTexte: restHebel.map((h) => BOARD_HEBEL_TEXT[h.typ]),
-      prepared,
+      hebelTexte: [],
+      prepared: preparedPinsByBoard.get(b.id) ?? leerePrepared,
+      primaryHebelTyp: null,
+      hebelTypen: [],
+      badgeKey: boardBadgeKeyById.get(b.id) ?? 'nie_gestartet',
     })
   }
-  // Sortierung: Boards mit restlichen Hebeln zuerst (nach höchster Dringlichkeit),
-  // reine „nur vorbereitete Pins"-Boards danach, alphabetisch.
-  restBoards.sort((a, b) => {
-    const da = a.hebelTexte.length > 0
-    const db = b.hebelTexte.length > 0
-    if (da !== db) return da ? -1 : 1
-    return a.boardName.localeCompare(b.boardName)
-  })
 
   // KPI: wie viele Boards haben mindestens einen Hebel.
   const boardsMitPotenzial = hebelByBoard.size
@@ -1715,13 +1781,15 @@ export default async function DashboardPage() {
             überschriftslos). Nur mit Analytics sinnvoll. */}
       {hatAnalytics && (
         <section>
-          <h2 className="text-lg font-semibold text-haupt">
-            Was dein Profil dir zeigt
-          </h2>
-          <p className="mt-1 text-sm text-gray-600">
-            Automatisch erkannte Muster in deinen Zahlen, mit dem nächsten
-            konkreten Schritt.
-          </p>
+          <div className="mb-4">
+            <h2 className="text-xl font-semibold text-marke-blaugrau">
+              Was dein Profil dir zeigt
+            </h2>
+            <p className="mt-1 text-sm text-gray-600">
+              Automatisch erkannte Muster in deinen Zahlen, mit dem nächsten
+              konkreten Schritt.
+            </p>
+          </div>
           <div className="mt-3">
             <BefundeListe diagnoses={coachingDiagnoses} />
           </div>
@@ -1773,15 +1841,10 @@ export default async function DashboardPage() {
         pinsBySaisonEvent={pinsBySaisonEvent}
       />
 
-      {/* Strang 1: frisches Material (Neue Pins produzieren + Keyword-Einsatz). */}
-      <Zwischentitel title="Frisches Material schaffen" />
-
       {/* 8. Content Pipeline */}
       <PinPipelineSection
-        inhaltePinBedarfA={inhaltePinBedarfA}
-        inhaltePinBedarfB={inhaltePinBedarfB}
+        inhaltePinBedarf={inhaltePinBedarf}
         urlPotenzial={urlPotenzial}
-        thresholds={pipelineThresholds}
       />
 
       {/* 8b. Keywords & SEO */}
@@ -1789,9 +1852,6 @@ export default async function DashboardPage() {
         buckets={keywordsBuckets}
         hasAnyKeywords={keywordRows.length > 0}
       />
-
-      {/* Strang 2: Bestand neu beleben (Pins recyceln). */}
-      <Zwischentitel title="Was schon da ist neu beleben" />
 
       {/* 9. Pin-Handlungsbedarf.
             Weiche Sektion 8: Ohne Analytics keine Diagnose-Kategorien. */}
@@ -1911,9 +1971,10 @@ function BriefingBlockEmpty({
           </h3>
           <ul className="mt-2 space-y-1.5">
             <li className={itemCls} style={{ borderLeft: '3px solid var(--marke-blaugrau-mittel)' }}>
-              Schließe dein Setup ab und setze dein Profil weiter auf.
+              Schließe dein Setup ab und setze dein Profil weiter auf.{' '}
+              →
               <Link href="/dashboard/onboarding" className={linkCls}>
-                → Zum Onboarding
+                Zum Onboarding
               </Link>
             </li>
             {showContentPrio && (
@@ -1926,9 +1987,10 @@ function BriefingBlockEmpty({
                   {contentCount}
                 </span>{' '}
                 {contentCount === 1 ? 'Inhalt' : 'Inhalte'} angelegt. Produziere
-                jetzt erste Pins dazu.
+                jetzt erste Pins dazu.{' '}
+                →
                 <Link href="/dashboard/pin-produktion" className={linkCls}>
-                  → Neue Pins
+                  Neue Pins
                 </Link>
               </li>
             )}
@@ -1946,9 +2008,10 @@ function BriefingBlockEmpty({
                 <span className="font-semibold text-gray-900">
                   {saisonDaysLabel}
                 </span>{' '}
-                Material – jetzt mit der Produktion starten.
+                Material – jetzt mit der Produktion starten.{' '}
+                →
                 <a href="#saison-kalender" className={linkCls}>
-                  → Saisonkalender
+                  Saisonkalender
                 </a>
               </li>
             )}
@@ -1974,9 +2037,11 @@ function BriefingBlockEmpty({
 function ProfilPerformanceEmpty() {
   return (
     <section id="gesamt-profil-performance" className="scroll-mt-4">
-      <h2 className="text-lg font-semibold text-gray-900">
-        Profil-Performance
-      </h2>
+      <div className="mb-4">
+        <h2 className="text-xl font-semibold text-marke-blaugrau">
+          Profil-Performance
+        </h2>
+      </div>
       <DashEmptyBox>
         Nach deinem ersten Analytics-Update siehst du hier deine
         Performance-Entwicklung: Klicks, Saves, Impressionen und
@@ -1990,16 +2055,21 @@ function ProfilPerformanceEmpty() {
 function StrategieCheckEmptyKeineStrategie() {
   return (
     <section id="strategie-check" className="scroll-mt-4">
-      <h2 className="text-lg font-semibold text-gray-900">Strategie-Check</h2>
+      <div className="mb-4">
+        <h2 className="text-xl font-semibold text-marke-blaugrau">
+          Strategie-Check
+        </h2>
+      </div>
       <DashEmptyBox>
         Du hast deine Strategie noch nicht festgelegt. Der Strategie-Check
         vergleicht deine tatsächliche Pin-Verteilung mit deinen Zielen. Dafür
         braucht er deine Strategie.{' '}
+        →{' '}
         <Link
           href="/dashboard/strategie?tab=meine"
           className="font-medium text-link underline"
         >
-          → Strategie festlegen
+          Strategie festlegen
         </Link>
       </DashEmptyBox>
     </section>
@@ -2009,15 +2079,21 @@ function StrategieCheckEmptyKeineStrategie() {
 // Sektion 8 — „Pins recyceln" ohne Analytics.
 function HandlungsbedarfEmpty() {
   return (
-    <section id="pin-handlungsbedarf" className="scroll-mt-4 rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-      <h2 className="text-lg font-semibold text-gray-900">Pins recyceln</h2>
-      <DashEmptyBox>
-        Diese Auswertung wird aussagekräftig, sobald deine Pins in der Datenbank
-        hinterlegt sind und du dein erstes Analytics-Update gemacht hast. Dann
-        bekommt jeder Pin automatisch eine Diagnose (z.B. Hidden Gem, Top
-        Performer) und eine konkrete Handlungsempfehlung. Ohne Performance-Daten
-        ist keine ehrliche Bewertung möglich.
-      </DashEmptyBox>
+    <section id="pin-handlungsbedarf" className="scroll-mt-4">
+      <div className="mb-4">
+        <h2 className="text-xl font-semibold text-marke-blaugrau">
+          Pins recyceln
+        </h2>
+      </div>
+      <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+        <DashEmptyBox>
+          Diese Auswertung wird aussagekräftig, sobald deine Pins in der
+          Datenbank hinterlegt sind und du dein erstes Analytics-Update gemacht
+          hast. Dann bekommt jeder Pin automatisch eine Diagnose (z.B. Hidden
+          Gem, Top Performer) und eine konkrete Handlungsempfehlung. Ohne
+          Performance-Daten ist keine ehrliche Bewertung möglich.
+        </DashEmptyBox>
+      </div>
     </section>
   )
 }
@@ -2031,11 +2107,12 @@ function BoardGesundheitEmpty() {
         Sobald du Boards angelegt hast, siehst du hier deren Aktivitäts-Status:
         Welche Boards sind aktiv, welche brauchen Aufmerksamkeit, wo liegen
         vorbereitete Pins ohne Veröffentlichung.{' '}
+        →{' '}
         <Link
           href="/dashboard/boards"
           className="font-medium text-link underline"
         >
-          → Boards anlegen
+          Boards anlegen
         </Link>
       </DashEmptyBox>
     </section>
@@ -2095,6 +2172,7 @@ function ProfilPerformanceKpiBar({
         </div>
         <p className="mt-2 text-xs text-gray-500">
           Noch kein Analytics-Update:{' '}
+          →{' '}
           <Link
             href="/dashboard/analytics"
             className="font-medium text-link underline"
@@ -2227,7 +2305,7 @@ function KpiSectionGroup({
   label,
   tooltip,
   children,
-  bgClass = 'bg-gray-50',
+  bgClass = 'bg-marke-kachel',
 }: {
   label: string
   tooltip?: string
@@ -2252,7 +2330,7 @@ function KpiSectionGroup({
 
 function KpiCardEmpty({ label }: { label: string }) {
   return (
-    <article className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+    <article className="rounded-lg border border-gray-200 bg-marke-kachel p-3">
       <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
         {label}
       </p>
@@ -2310,45 +2388,54 @@ function HandlungsbedarfSection({
   thresholds: PinAnalyticsThresholds
 }) {
   const heading = (
-    <>
-      <h2 className="text-lg font-semibold text-gray-900">Pins recyceln</h2>
+    <div className="mb-4">
+      <h2 className="text-xl font-semibold text-marke-blaugrau">
+        Pins recyceln
+      </h2>
       <p className="mt-1 text-sm text-gray-600">
         Basierend auf deinen Analytics: Welche Pins brauchen eine Reaktion?
       </p>
-      <div className="mt-2">
-        <HinweisBox variant="neutral">
-          Erstelle immer einen neuen Pin, bearbeite nie den bei Pinterest
-          veröffentlichten Pin. Hake den Pin ab, sobald die Handlung erfolgt
-          ist.
-        </HinweisBox>
-      </div>
-    </>
+    </div>
+  )
+
+  // Merke-Hinweis bleibt Inhalt der Card (erste Zeile), nicht Teil der
+  // Überschrift auf Creme.
+  const merkHinweis = (
+    <HinweisBox variant="neutral">
+      Erstelle immer einen neuen Pin, bearbeite nie den bei Pinterest
+      veröffentlichten Pin. Hake den Pin ab, sobald die Handlung erfolgt ist.
+    </HinweisBox>
   )
 
   if (!hasAnyAnalytics) {
     return (
-      <section id="pin-handlungsbedarf" className="scroll-mt-4 rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+      <section id="pin-handlungsbedarf" className="scroll-mt-4">
         {heading}
-        <div className="mt-3">
-          <HinweisBox variant="warnung" tone="achtung">
-            Trage deine ersten Pin-Analytics ein, um Handlungsempfehlungen zu
-            sehen.{' '}
-            <Link
-              href="/dashboard/analytics"
-              className="font-medium underline hover:opacity-80"
-            >
-              → Zum Analytics-Tab
-            </Link>
-          </HinweisBox>
+        <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+          {merkHinweis}
+          <div className="mt-3">
+            <HinweisBox variant="warnung" tone="achtung">
+              Trage deine ersten Pin-Analytics ein, um Handlungsempfehlungen zu
+              sehen.{' '}
+              <Link
+                href="/dashboard/analytics"
+                className="font-medium underline hover:opacity-80"
+              >
+                → Zum Analytics-Tab
+              </Link>
+            </HinweisBox>
+          </div>
         </div>
       </section>
     )
   }
 
   return (
-    <section id="pin-handlungsbedarf" className="scroll-mt-4 rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+    <section id="pin-handlungsbedarf" className="scroll-mt-4">
       {heading}
-      <div className="mt-3 space-y-3">
+      <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+        {merkHinweis}
+        <div className="mt-3 space-y-3">
         {HANDLUNGS_CATEGORIES.map((cat) => (
           <HandlungsbedarfKategorieCard
             key={cat.diagnose}
@@ -2362,8 +2449,8 @@ function HandlungsbedarfSection({
           <>
             {/* Dezente Trennlinie + Abstand vor der Abgeschlossen-Kategorie */}
             <div className="mt-5 border-t border-gray-100" />
-            <details className="group rounded-lg border border-gray-200 bg-white shadow-sm">
-              <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
+            <details className="group overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+              <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 hover:bg-marke-kachel-hover [&::-webkit-details-marker]:hidden">
                 <span
                   className="text-2xl leading-none text-gray-400"
                   aria-hidden
@@ -2402,6 +2489,7 @@ function HandlungsbedarfSection({
             </details>
           </>
         )}
+        </div>
       </div>
     </section>
   )
@@ -2458,10 +2546,10 @@ function HandlungsbedarfKategorieCard({
   const tooltip = cat.tooltip
 
   return (
-    <details className="group rounded-lg border border-gray-200 bg-white shadow-sm">
+    <details className="group overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
       {/* Leere Kategorie (0 offene Pins): Zeile gedimmt, betroffene stechen hervor. */}
       <summary
-        className={`flex cursor-pointer list-none items-center gap-3 px-4 py-3 hover:bg-gray-50 [&::-webkit-details-marker]:hidden ${
+        className={`flex cursor-pointer list-none items-center gap-3 px-4 py-3 hover:bg-marke-kachel-hover [&::-webkit-details-marker]:hidden ${
           pins.length === 0 ? 'opacity-60' : ''
         }`}
       >
@@ -2568,8 +2656,8 @@ function SaisonKalenderSection({
 }) {
   return (
     <section id="saison-kalender" className="scroll-mt-4">
-      <div>
-        <h2 className="flex items-center text-lg font-semibold text-gray-900">
+      <div className="mb-4">
+        <h2 className="flex items-center text-xl font-semibold text-marke-blaugrau">
           Saisonkalender
           <InfoTooltip text="Pinterest-Nutzer:innen suchen 6–12 Wochen vor dem Termin. Wer zu spät pinnt, verpasst die Welle. Der Saisonkalender zeigt dir auf einen Blick in welcher Phase jeder Termin gerade ist." />
         </h2>
@@ -2603,7 +2691,6 @@ function SaisonKalenderSection({
           countdownPrefix=""
           emptyText="Gerade nichts in dieser Phase."
           zeigeWeitereNamen
-          kartenRahmenCamel
         />
         <SaisonColumn
           icon="flame"
@@ -2662,7 +2749,6 @@ function SaisonColumn({
   actionButton,
   emptyText,
   zeigeWeitereNamen = false,
-  kartenRahmenCamel = false,
 }: {
   icon: string
   tone: StatusTone
@@ -2676,8 +2762,6 @@ function SaisonColumn({
   // true → Toggle-Auslöser listet die Namen der weiteren Events auf;
   // false (z. B. „Noch Zeit") → nur die nackte Zahl „X weitere".
   zeigeWeitereNamen?: boolean
-  // true → Event-Karten dieser Spalte mit Camel-Rahmen (nur „Jetzt pinnen").
-  kartenRahmenCamel?: boolean
 }) {
   const visible = events.slice(0, 1)
   const hidden = events.slice(1)
@@ -2698,7 +2782,7 @@ function SaisonColumn({
       </div>
       <div className="flex flex-col gap-2 p-3">
         {events.length === 0 ? (
-          <p className="rounded-md border border-dashed border-gray-200 bg-gray-50 px-3 py-4 text-center text-xs text-gray-500">
+          <p className="rounded-md border border-dashed border-gray-200 bg-marke-kachel px-3 py-4 text-center text-xs text-gray-500">
             {emptyText}
           </p>
         ) : (
@@ -2714,15 +2798,14 @@ function SaisonColumn({
                 }
                 countdownClassName="text-sekundaer"
                 actionButton={actionButton}
-                rahmenCamel={kartenRahmenCamel}
                 prepared={pinsBySaisonEvent.get(e.id) ?? null}
               />
             ))}
             {hidden.length > 0 && (
               <details className="group">
                 <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
-                  <span className="inline text-xs font-medium text-marke-ocker group-open:hidden">
-                    {/* Toggle-Beschriftung komplett in Camel (Pfeil + Namen). */}
+                  <span className="inline text-xs font-medium text-link underline underline-offset-2 group-open:hidden">
+                    {/* Toggle-Beschriftung in Link-Blaugrau (Pfeil + Namen). */}
                     ▸{' '}
                     {zeigeWeitereNamen
                       ? hidden.map((e) => e.event_name).join(', ')
@@ -2730,7 +2813,7 @@ function SaisonColumn({
                           hidden.length === 1 ? 'weiteres' : 'weitere'
                         }`}
                   </span>
-                  <span className="hidden text-xs font-medium text-marke-ocker underline group-open:inline">
+                  <span className="hidden text-xs font-medium text-link underline underline-offset-2 group-open:inline">
                     ▾ Weniger anzeigen
                   </span>
                 </summary>
@@ -2746,7 +2829,6 @@ function SaisonColumn({
                       }
                       countdownClassName="text-sekundaer"
                       actionButton={actionButton}
-                      rahmenCamel={kartenRahmenCamel}
                       prepared={pinsBySaisonEvent.get(e.id) ?? null}
                     />
                   ))}
@@ -2766,7 +2848,6 @@ function SaisonCard({
   countdownLabel,
   countdownClassName,
   actionButton,
-  rahmenCamel = false,
   prepared,
 }: {
   event: KanbanEvent
@@ -2774,8 +2855,6 @@ function SaisonCard({
   countdownLabel: string
   countdownClassName: string
   actionButton?: SaisonAction
-  // true → Camel-Rahmen (nur Spalte „Jetzt pinnen"), sonst neutral karte-rand.
-  rahmenCamel?: boolean
   // Entwurf/Geplant-Pin-Bestand zu diesem Event; null = keine getaggten Pins.
   prepared: { entwurf: number; geplant: number } | null
 }) {
@@ -2783,11 +2862,7 @@ function SaisonCard({
   // der „läuft noch bis …"-Text bleiben dezent.
   const istHeute = countdownLabel === 'Heute'
   return (
-    <div
-      className={`flex min-h-[170px] flex-col justify-between rounded-md border ${
-        rahmenCamel ? 'border-marke-ocker' : 'border-karte-rand'
-      } bg-white p-3 shadow-sm`}
-    >
+    <div className="flex min-h-[170px] flex-col justify-between rounded-md border border-karte-rand bg-white p-3 shadow-sm">
       <div>
         <div className="flex items-center text-sm font-semibold text-gray-900">
           <span>{event.event_name}</span>
@@ -2894,37 +2969,37 @@ function PreparedPinsHinweis({
 // Pin-Pipeline (Inhalte mit Pin-Bedarf + URLs mit Potenzial)
 // ===========================================================
 function PinPipelineSection({
-  inhaltePinBedarfA,
-  inhaltePinBedarfB,
+  inhaltePinBedarf,
   urlPotenzial,
-  thresholds,
 }: {
-  inhaltePinBedarfA: PinPipelineInhalt[]
-  inhaltePinBedarfB: PinPipelineInhalt[]
+  inhaltePinBedarf: PinPipelineInhaltMitGrund[]
   urlPotenzial: UrlPotenzialRow[]
-  thresholds: PipelineThresholds
 }) {
-  const cat1Count = inhaltePinBedarfA.length + inhaltePinBedarfB.length
+  const cat1Count = inhaltePinBedarf.length
   return (
-    <section id="content-pipeline" className="scroll-mt-4 rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-      <h2 className="text-lg font-semibold text-gray-900">
-        <LabelWithTooltip
-          label="Wo neue Pins jetzt zählen"
-          tooltip="Diese Sektion zeigt zwei Quellen: bestehende Inhalte, die mehr Pins brauchen oder veraltete Pins haben, plus URLs mit hoher CTR aber wenig Pins (Goldnugget-Logik)."
-        />
-      </h2>
-      <p className="mt-1 text-sm text-gray-600">
-        Basierend auf deinen Inhalten und URLs: Was braucht frisches
-        Pin-Material?
-      </p>
-      <div className="mt-3 space-y-3">
-        <PinPipelineInhalteCard
-          subA={inhaltePinBedarfA}
-          subB={inhaltePinBedarfB}
-          totalCount={cat1Count}
-          thresholds={thresholds}
-        />
-        <PinPipelineUrlsCard urls={urlPotenzial} thresholds={thresholds} />
+    <section id="content-pipeline" className="scroll-mt-4">
+      <div className="mb-4">
+        <h2 className="text-xl font-semibold text-marke-blaugrau">
+          <LabelWithTooltip
+            label="Wo neue Pins jetzt zählen"
+            tooltip="Diese Sektion zeigt zwei Quellen: bestehende Inhalte, die mehr Pins brauchen oder veraltete Pins haben, plus URLs mit hoher CTR aber wenig Pins (Goldnugget-Logik)."
+          />
+        </h2>
+        <p className="mt-1 text-sm text-gray-600">
+          Basierend auf deinen{' '}
+          <span className="font-semibold">Inhalten</span> und{' '}
+          <span className="font-semibold">URLs</span>: Was braucht frisches
+          Pin-Material?
+        </p>
+      </div>
+      <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="space-y-3">
+          <PinPipelineInhalteCard
+            items={inhaltePinBedarf}
+            totalCount={cat1Count}
+          />
+          <PinPipelineUrlsCard urls={urlPotenzial} />
+        </div>
       </div>
     </section>
   )
@@ -2976,13 +3051,18 @@ function KeywordsSeoSection({
   hasAnyKeywords: boolean
 }) {
   const heading = (
-    <h2 className="text-lg font-semibold text-gray-900">Keyword-Einsatz</h2>
+    <div className="mb-4">
+      <h2 className="text-xl font-semibold text-marke-blaugrau">
+        Keyword-Einsatz
+      </h2>
+    </div>
   )
 
   if (!hasAnyKeywords) {
     return (
-      <section id="keywords-seo" className="scroll-mt-4 rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+      <section id="keywords-seo" className="scroll-mt-4">
         {heading}
+        <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
         <DashEmptyBox>
           →{' '}
           <Link
@@ -2993,36 +3073,43 @@ function KeywordsSeoSection({
           </Link>
           .
         </DashEmptyBox>
+        </div>
       </section>
     )
   }
 
   return (
-    <section id="keywords-seo" className="scroll-mt-4 rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-      {heading}
-      <p className="mt-1 text-sm text-gray-600">
-        Hol mehr aus deiner Keyword-Datenbank heraus.
-      </p>
-      <div className="mt-3 space-y-3">
-        <KeywordsSeoCard
-          title="Ungenutzte Keywords"
-          subtitle="Diese Keywords stecken noch in keinem Pin."
-          entries={buckets.unused}
-          emptyText="Alle Keywords sind bereits in Pins eingesetzt."
-          renderEntry={(kw) => (
-            <KeywordRowUnused key={kw.id} kw={kw} />
-          )}
-        />
+    <section id="keywords-seo" className="scroll-mt-4">
+      <div className="mb-4">
+        <h2 className="text-xl font-semibold text-marke-blaugrau">
+          Keyword-Einsatz
+        </h2>
+        <p className="mt-1 text-sm text-gray-600">
+          Hol mehr aus deiner Keyword-Datenbank heraus.
+        </p>
       </div>
-      <p className="pt-2 text-xs text-gray-500">
-        →{' '}
-        <Link
-          href="/dashboard/keywords"
-          className="font-medium text-link underline"
-        >
-          Zur Keyword-Datenbank
-        </Link>
-      </p>
+      <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="space-y-3">
+          <KeywordsSeoCard
+            title="Ungenutzte Keywords"
+            subtitle="Diese Keywords stecken noch in keinem Pin."
+            entries={buckets.unused}
+            emptyText="Alle Keywords sind bereits in Pins eingesetzt."
+            renderEntry={(kw) => (
+              <KeywordRowUnused key={kw.id} kw={kw} />
+            )}
+          />
+        </div>
+        <p className="pt-2 text-xs text-gray-500">
+          →{' '}
+          <Link
+            href="/dashboard/keywords"
+            className="font-medium text-link underline"
+          >
+            Zur Keyword-Datenbank
+          </Link>
+        </p>
+      </div>
     </section>
   )
 }
@@ -3043,10 +3130,10 @@ function KeywordsSeoCard({
   const visible = entries.slice(0, 3)
   const hidden = entries.slice(3)
   return (
-    <details className="group rounded-lg border border-gray-200 bg-white shadow-sm">
+    <details className="group overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
       {/* Leere Kategorie (0 ungenutzte Keywords): Zeile gedimmt. */}
       <summary
-        className={`flex cursor-pointer list-none items-center gap-3 px-4 py-3 hover:bg-gray-50 [&::-webkit-details-marker]:hidden ${
+        className={`flex cursor-pointer list-none items-center gap-3 px-4 py-3 hover:bg-marke-kachel-hover [&::-webkit-details-marker]:hidden ${
           entries.length === 0 ? 'opacity-60' : ''
         }`}
       >
@@ -3080,10 +3167,10 @@ function KeywordsSeoCard({
               // group/more-Scope, damit er nicht mit dem äußeren Card-group kollidiert.
               <details className="group/more">
                 <summary className="cursor-pointer list-none px-1 py-2 [&::-webkit-details-marker]:hidden">
-                  <span className="text-xs font-medium text-marke-ocker group-open/more:hidden">
+                  <span className="text-xs font-medium text-link underline underline-offset-2 group-open/more:hidden">
                     ▸ {hidden.length} weitere anzeigen
                   </span>
-                  <span className="hidden text-xs font-medium text-marke-ocker underline group-open/more:inline">
+                  <span className="hidden text-xs font-medium text-link underline underline-offset-2 group-open/more:inline">
                     ▾ Weniger anzeigen
                   </span>
                 </summary>
@@ -3130,22 +3217,21 @@ function KeywordRowUnused({ kw }: { kw: KeywordSeoEntry }) {
 }
 
 function PinPipelineInhalteCard({
-  subA,
-  subB,
+  items,
   totalCount,
-  thresholds,
 }: {
-  subA: PinPipelineInhalt[]
-  subB: PinPipelineInhalt[]
+  items: PinPipelineInhaltMitGrund[]
   totalCount: number
-  thresholds: PipelineThresholds
 }) {
+  const visibleLimit = 3
+  const visible = items.slice(0, visibleLimit)
+  const remaining = items.length - visible.length
   return (
-    <details className="group rounded-lg border border-gray-200 bg-white shadow-sm">
+    <details className="group overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
       {/* Leere Kategorie (totalCount 0): Zeile gedimmt, damit betroffene
           Kategorien hervorstechen. */}
       <summary
-        className={`flex cursor-pointer list-none items-center gap-3 px-4 py-3 hover:bg-gray-50 [&::-webkit-details-marker]:hidden ${
+        className={`flex cursor-pointer list-none items-center gap-3 px-4 py-3 hover:bg-marke-kachel-hover [&::-webkit-details-marker]:hidden ${
           totalCount === 0 ? 'opacity-60' : ''
         }`}
       >
@@ -3166,135 +3252,60 @@ function PinPipelineInhalteCard({
             />
           </div>
           <p className="mt-0.5 text-xs text-gray-600">
-            Inhalte aus deiner Content-Datenbank, die mehr Pin-Material brauchen
-            – größter Hebel für Reichweite.
+            Jedes Thema aus deiner{' '}
+            <span className="font-semibold">Content-Datenbank</span> lebt von
+            mehreren Pin-Varianten. Wo zu wenige oder zu alte Pins liegen, lohnt
+            sich frisches Material zuerst.
           </p>
         </div>
         <AnzahlBadge count={totalCount} />
       </summary>
 
       <div className="border-t border-gray-200">
-        <div className="coaching-box mx-4 my-3 space-y-1 text-xs font-medium">
-          <div>
-            <strong>Der Hebel:</strong> Pinterest belohnt frische
-            Pin-Varianten pro Inhalt. Wer pro Inhalt regelmäßig neue Pins mit
-            anderen Hooks produziert, maximiert die Reichweite jedes
-            einzelnen Themas.
+        {items.length === 0 ? (
+          <div className="border-t border-gray-100 px-4 py-4 text-center text-sm text-gray-500">
+            Aktuell kein Inhalt mit Pin-Bedarf.
           </div>
-          <div>
-            <strong>So gehst du vor:</strong> Pro Inhalt mindestens alle 3-4
-            Wochen eine neue Pin-Variante produzieren. Verschiedene Hooks und
-            Designs für denselben Inhalt ausspielen.
+        ) : (
+          <div className="border-t border-gray-100">
+            <ul className="space-y-2 p-3">
+              {visible.map((c) => (
+                <PinPipelineInhaltRow key={c.id} item={c} kind={c.kind} />
+              ))}
+            </ul>
+            {remaining > 0 && (
+              <details className="group/more">
+                <summary className="cursor-pointer list-none px-4 py-2 text-xs font-medium text-link underline [&::-webkit-details-marker]:hidden">
+                  <span className="inline group-open/more:hidden">
+                    ▸ {remaining} weitere anzeigen
+                  </span>
+                  <span className="hidden group-open/more:inline">
+                    ▾ Weniger anzeigen
+                  </span>
+                </summary>
+                <ul className="space-y-2 p-3">
+                  {items.slice(visibleLimit).map((c) => (
+                    <PinPipelineInhaltRow key={c.id} item={c} kind={c.kind} />
+                  ))}
+                </ul>
+              </details>
+            )}
           </div>
-        </div>
-
-        <div className="divide-y divide-gray-200">
-          <PinPipelineInhalteSubList
-            heading="Inhalte mit zu wenigen Pins"
-            items={subA}
-            kind="few_pins"
-            emptyText="Aktuell keine Inhalte mit zu wenigen Pins – stark, alle Themen haben Material."
-            thresholds={thresholds}
-          />
-          <PinPipelineInhalteSubList
-            heading="Inhalte ohne aktuellen Pin"
-            items={subB}
-            kind="stale"
-            emptyText="Aktuell keine Inhalte mit langer Pin-Pause – alle Themen werden regelmäßig bepinnt."
-            thresholds={thresholds}
-          />
-        </div>
+        )}
+        {/* Dezenter Verweis auf die interne Content-Datenbank (untergeordnet,
+            kein externer Pfeil). */}
+        <p className="px-4 py-2.5 text-xs">
+          <span aria-hidden className="text-gray-400">
+            →
+          </span>{' '}
+          <Link
+            href="/dashboard/content-inhalte"
+            className="font-medium text-link underline underline-offset-2 hover:opacity-80"
+          >
+            Hier geht es zu deiner Content-Datenbank
+          </Link>
+        </p>
       </div>
-    </details>
-  )
-}
-
-function PinPipelineInhalteSubList({
-  heading,
-  items,
-  kind,
-  emptyText,
-  thresholds,
-}: {
-  heading: string
-  items: PinPipelineInhalt[]
-  kind: 'few_pins' | 'stale'
-  emptyText: string
-  thresholds: PipelineThresholds
-}) {
-  const visibleLimit = 3
-  const visible = items.slice(0, visibleLimit)
-  const remaining = items.length - visible.length
-  const tooltip =
-    kind === 'few_pins'
-      ? `Inhalte mit weniger als ${thresholds.minPinsGesamt} Pins insgesamt. ` +
-        'Pinterest belohnt mehrere Pin-Varianten pro Inhalt – idealerweise ' +
-        '3+ Hooks und Designs für denselben Inhalt. Hinweis: Jeder Inhalt ' +
-        'erscheint nur in einer Sub-Liste.'
-      : `Inhalte mit ausreichend Pins (${thresholds.minPinsOhneAktuell}+ insgesamt), bei denen ` +
-        `aber seit über ${thresholds.tageOhnePin} Tagen kein neuer Pin mehr ` +
-        'veröffentlicht wurde. Pinterest belohnt kontinuierliche Aktivität ' +
-        'pro Inhalt. Hinweis: Inhalte mit zu wenigen Pins erscheinen in ' +
-        'Sub-Liste A, auch wenn der letzte Pin lange zurückliegt.'
-
-  return (
-    <details className="group/sub">
-      <summary
-        className={`flex cursor-pointer list-none items-center gap-2 bg-gray-50 py-2 pl-8 pr-4 hover:bg-gray-100 [&::-webkit-details-marker]:hidden ${
-          items.length === 0 ? 'opacity-60' : ''
-        }`}
-      >
-        <span className="text-base leading-none text-gray-400" aria-hidden>
-          <span className="inline group-open/sub:hidden">▸</span>
-          <span className="hidden group-open/sub:inline">▾</span>
-        </span>
-        <span className="flex flex-1 items-center text-[13px] font-semibold tracking-wide text-gray-700">
-          {heading}
-          <InfoTooltip text={tooltip} />
-        </span>
-        <AnzahlBadge count={items.length} />
-      </summary>
-
-      {items.length === 0 ? (
-        <div className="border-t border-gray-100 px-4 py-4 text-center text-sm text-green-700">
-          {emptyText}
-        </div>
-      ) : (
-        <div className="border-t border-gray-100">
-          <ul className="divide-y divide-gray-100">
-            {visible.map((c) => (
-              <PinPipelineInhaltRow
-                key={c.id}
-                item={c}
-                kind={kind}
-                thresholds={thresholds}
-              />
-            ))}
-          </ul>
-          {remaining > 0 && (
-            <details className="group/more border-t border-gray-100">
-              <summary className="cursor-pointer list-none px-4 py-2 text-xs font-medium text-link underline [&::-webkit-details-marker]:hidden">
-                <span className="inline group-open/more:hidden">
-                  ▸ {remaining} weitere Inhalte anzeigen
-                </span>
-                <span className="hidden group-open/more:inline">
-                  ▾ Weniger anzeigen
-                </span>
-              </summary>
-              <ul className="divide-y divide-gray-100">
-                {items.slice(visibleLimit).map((c) => (
-                  <PinPipelineInhaltRow
-                    key={c.id}
-                    item={c}
-                    kind={kind}
-                    thresholds={thresholds}
-                  />
-                ))}
-              </ul>
-            </details>
-          )}
-        </div>
-      )}
     </details>
   )
 }
@@ -3302,123 +3313,79 @@ function PinPipelineInhalteSubList({
 function PinPipelineInhaltRow({
   item,
   kind,
-  thresholds,
 }: {
   item: PinPipelineInhalt
   kind: 'few_pins' | 'stale'
-  thresholds: PipelineThresholds
 }) {
-  const meta =
+  // Ampel + knapper Grund: rot = noch gar kein Pin (größter Hebel),
+  // sonst amber (zu wenige bzw. alte Pins). Der StatusDot trägt den Status,
+  // daher kein Warn-Symbol im Text. Trägt auch die Pin-Anzahl, daher keine
+  // separate Meta-Zeile mehr.
+  const tone: StatusTone = item.pinCount === 0 ? 'schlecht' : 'achtung'
+  const grund =
     item.pinCount === 0
-      ? 'Noch kein Pin zu diesem Inhalt vorhanden'
-      : `${item.pinCount} Pin${item.pinCount === 1 ? '' : 's'}` +
-        (item.letzterPinTage !== null
-          ? ` · Letzter Pin: vor ${item.letzterPinTage} Tag${
-              item.letzterPinTage === 1 ? '' : 'en'
-            }`
-          : '')
-  const pinPlural = item.pinCount === 1 ? '' : 's'
-  // Sub A (few_pins) hat zwei Varianten:
-  //   - Letzter Pin > tageOhnePin → orange (zusätzliches Stale-Signal)
-  //   - sonst → gelb (reines Volumen-Signal)
-  // Sub B (stale) ist immer orange.
-  const fewPinsIsStale =
-    kind === 'few_pins' &&
-    item.letzterPinTage !== null &&
-    item.letzterPinTage > thresholds.tageOhnePin
-  const hint =
-    kind === 'stale'
-      ? `Letzter Pin vor ${item.letzterPinTage ?? 0} Tagen – kontinuierliche Pin-Produktion fehlt, neue Variante mit anderem Hook produzieren.`
-      : fewPinsIsStale
-        ? `Nur ${item.pinCount} Pin${pinPlural} und seit ${item.letzterPinTage} Tagen kein neuer – kontinuierliche Pin-Produktion fehlt.`
-        : item.pinCount === 0
-          ? `Noch keinen Pin zu diesem Inhalt erstellt – pro Inhalt sollten ${thresholds.minPinsGesamt}+ Varianten existieren.`
-          : `Nur ${item.pinCount} Pin${pinPlural} – pro Inhalt sollten ${thresholds.minPinsGesamt}+ Varianten existieren.`
-  const visibleBoards = item.boardNames.slice(0, 2)
-  const hiddenBoards = item.boardNames.slice(2)
-  const chipCls =
-    'inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-700'
+      ? 'Noch kein Pin zu diesem Inhalt.'
+      : kind === 'few_pins'
+        ? `Nur ${item.pinCount} Pin${item.pinCount === 1 ? '' : 's'}, letzter vor ${item.letzterPinTage} Tagen.`
+        : `${item.pinCount} Pin${item.pinCount === 1 ? '' : 's'}, letzter vor ${item.letzterPinTage} Tagen.`
   const boardLabel = item.boardNames.length === 1 ? 'Board:' : 'Boards:'
   return (
-    <li className="space-y-1 px-4 py-3">
-      {/* Zeile 1 — Titel links | Buttons rechts */}
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0 text-[15px] font-semibold text-gray-900">
-          {item.titel}
-        </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <Link
-            href={`/dashboard/pin-produktion?content_id=${item.id}&open=new`}
-            className="inline-flex items-center justify-center rounded-md bg-marke-blaugrau px-3 py-1 text-xs font-medium text-white hover:bg-marke-blaugrau-dunkel"
-          >
-            Pin erstellen
-          </Link>
-          {item.primaryUrl && (
-            <a
-              href={item.primaryUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
-            >
-              Zur Ziel-URL ↗
-            </a>
-          )}
-        </div>
+    <li className="space-y-2.5 rounded-lg border border-gray-200 bg-marke-kachel p-3 text-sm hover:bg-marke-kachel-hover">
+      {/* a. Titel */}
+      <div className="text-[15px] font-semibold text-gray-900">
+        {item.titel}
       </div>
-      {/* Zeile 2 — Meta */}
-      <div className="text-xs text-gray-600">{meta}</div>
+      {/* b. Ampel + Grund (trägt auch die Pin-Anzahl) */}
+      <div className="flex items-center gap-1.5 text-xs text-haupt">
+        <StatusDot tone={tone} />
+        <span>{grund}</span>
+      </div>
+      {/* c. Boards als reiner Text (keine Pille) */}
       {item.boardNames.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5 text-xs">
-          <span className="text-gray-500">{boardLabel}</span>
-          {visibleBoards.map((name) => (
-            <span key={`b-${name}`} className={chipCls}>
-              {name}
-            </span>
-          ))}
-          {hiddenBoards.length > 0 && (
-            <details className="contents">
-              <summary className="cursor-pointer list-none text-xs font-medium text-link underline [&::-webkit-details-marker]:hidden">
-                + {hiddenBoards.length} weitere
-              </summary>
-              {hiddenBoards.map((name) => (
-                <span key={`b-${name}`} className={chipCls}>
-                  {name}
-                </span>
-              ))}
-            </details>
-          )}
+        <div className="text-xs text-gray-600">
+          <span className="text-gray-500">{boardLabel}</span>{' '}
+          <span className="font-medium text-gray-700">
+            {item.boardNames.join(', ')}
+          </span>
         </div>
       )}
-      <div className="mt-1">
-        <HinweisBox variant="warnung" tone="achtung" compact>
-          {hint}
-        </HinweisBox>
+      {/* e. Buttons unten in eigener Zeile */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Link
+          href={`/dashboard/pin-produktion?content_id=${item.id}&open=new`}
+          className="inline-flex items-center justify-center rounded-md bg-marke-blaugrau px-3 py-1 text-xs font-medium text-white hover:bg-marke-blaugrau-dunkel"
+        >
+          Pin erstellen
+        </Link>
+        {item.primaryUrl && (
+          <a
+            href={item.primaryUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+          >
+            Zur Ziel-URL ↗
+          </a>
+        )}
       </div>
     </li>
   )
 }
 
-function PinPipelineUrlsCard({
-  urls,
-  thresholds,
-}: {
-  urls: UrlPotenzialRow[]
-  thresholds: PipelineThresholds
-}) {
-  const visible = urls.slice(0, 5)
+function PinPipelineUrlsCard({ urls }: { urls: UrlPotenzialRow[] }) {
+  const visibleLimit = 3
+  const visible = urls.slice(0, visibleLimit)
   const remaining = urls.length - visible.length
-  const ctrText = thresholds.minCtrGoldnugget
-    .toString()
-    .replace('.', ',')
   const urlsTooltip =
-    `URLs deren Pins eine Ø-CTR über ${ctrText}% haben und gleichzeitig ` +
-    `weniger als ${thresholds.maxPinsGoldnugget} Pins haben. Hier zahlt sich ` +
-    'jeder zusätzliche Pin besonders aus, weil das Thema bewiesen funktioniert.'
+    'URLs, deren Pins im Schnitt mehr als 20 Prozent über deiner ' +
+    'durchschnittlichen Klickrate liegen. Solche Themen funktionieren ' +
+    'nachweislich, jeder weitere Pin bringt vorhersehbar Traffic. Solange noch ' +
+    'keine 10 ausgewerteten Pins vorliegen, gilt ein fester Richtwert.'
   return (
-    <details className="group rounded-lg border border-gray-200 bg-white shadow-sm">
+    <details className="group overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
       {/* Leere Kategorie (0 URLs): Zeile gedimmt. */}
       <summary
-        className={`flex cursor-pointer list-none items-center gap-3 px-4 py-3 hover:bg-gray-50 [&::-webkit-details-marker]:hidden ${
+        className={`flex cursor-pointer list-none items-center gap-3 px-4 py-3 hover:bg-marke-kachel-hover [&::-webkit-details-marker]:hidden ${
           urls.length === 0 ? 'opacity-60' : ''
         }`}
       >
@@ -3436,44 +3403,37 @@ function PinPipelineUrlsCard({
             <LabelWithTooltip label="URLs mit Potenzial" tooltip={urlsTooltip} />
           </div>
           <p className="mt-0.5 text-xs text-gray-600">
-            URLs mit hoher CTR aber wenigen Pins – ungenutztes Goldnugget.
+            Diese URLs laufen überdurchschnittlich gut. Jeder weitere Pin bringt
+            vorhersehbar Traffic.
           </p>
         </div>
         <AnzahlBadge count={urls.length} />
       </summary>
 
       {urls.length === 0 ? (
-        <div className="border-t border-gray-200 px-4 py-6 text-center text-sm text-gray-600">
+        <div className="border-t border-gray-200 px-4 py-6 text-center text-sm text-gray-500">
           Aktuell keine URLs mit auffälligem CTR-Potenzial. Bei mehr
           Datenmaterial werden hier Goldnugget-URLs angezeigt.
         </div>
       ) : (
         <div className="border-t border-gray-200">
-          <div className="coaching-box mx-4 my-3 space-y-1 text-xs font-medium">
-            <div>
-              <strong>Der Hebel:</strong> Eine URL mit hoher CTR und
-              wenigen Pins ist ein bewiesenes Erfolgs-Thema mit ungenutztem
-              Volumen. Jeder neue Pin auf dieses Thema bringt vorhersehbar
-              Traffic.
-            </div>
-            <div>
-              <strong>So gehst du vor:</strong> Identifiziere die Hooks und
-              Designs die bei den bestehenden Pins funktioniert haben.
-              Produziere 3-5 weitere Varianten in derselben Erfolgs-Logik.
-            </div>
-          </div>
-          <ul className="divide-y divide-gray-100">
+          <ul className="space-y-2 p-3">
             {visible.map((u) => (
               <PinPipelineUrlRow key={u.basisUrl} url={u} />
             ))}
           </ul>
           {remaining > 0 && (
-            <details className="border-t border-gray-100">
-              <summary className="cursor-pointer list-none px-4 py-2 text-xs font-medium text-link underline">
-                + {remaining} weitere URL{remaining === 1 ? '' : 's'} anzeigen
+            <details className="group/more">
+              <summary className="cursor-pointer list-none px-4 py-2 text-xs font-medium text-link underline [&::-webkit-details-marker]:hidden">
+                <span className="inline group-open/more:hidden">
+                  ▸ {remaining} weitere anzeigen
+                </span>
+                <span className="hidden group-open/more:inline">
+                  ▾ Weniger anzeigen
+                </span>
               </summary>
-              <ul className="divide-y divide-gray-100">
-                {urls.slice(5).map((u) => (
+              <ul className="space-y-2 p-3">
+                {urls.slice(visibleLimit).map((u) => (
                   <PinPipelineUrlRow key={u.basisUrl} url={u} />
                 ))}
               </ul>
@@ -3481,6 +3441,19 @@ function PinPipelineUrlsCard({
           )}
         </div>
       )}
+      {/* Dezenter Verweis auf die interne Ziel-URL-Datenbank (untergeordnet,
+          kein externer Pfeil). */}
+      <p className="px-4 py-2.5 text-xs">
+        <span aria-hidden className="text-gray-400">
+          →
+        </span>{' '}
+        <Link
+          href="/dashboard/ziel-urls"
+          className="font-medium text-link underline underline-offset-2 hover:opacity-80"
+        >
+          Hier geht es zu deinen Ziel-URLs
+        </Link>
+      </p>
     </details>
   )
 }
@@ -3500,65 +3473,48 @@ function PinPipelineUrlRow({ url }: { url: UrlPotenzialRow }) {
       ? url.displayTitle
       : shortenUrl(url.basisUrl)
   const ctrText = url.ctr.toFixed(1).replace('.', ',')
-  const visibleBoards = url.boardNames.slice(0, 2)
-  const hiddenBoards = url.boardNames.slice(2)
-  const chipCls =
-    'inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-700'
+  const boardLabel = url.boardNames.length === 1 ? 'Board:' : 'Boards:'
   return (
-    <li className="space-y-1 px-4 py-3">
-      {/* Zeile 1 — Titel links | Buttons rechts */}
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0 text-[15px] font-semibold text-gray-900">
-          {display}
-        </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <Link
-            href="/dashboard/pin-produktion?open=new"
-            className="inline-flex items-center justify-center rounded-md bg-marke-blaugrau px-3 py-1 text-xs font-medium text-white hover:bg-marke-blaugrau-dunkel"
-          >
-            Pin erstellen
-          </Link>
-          <a
-            href={url.basisUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
-          >
-            URL öffnen ↗
-          </a>
-        </div>
-      </div>
-      {/* Zeile 2 — Meta (Pin-Count + Ø CTR) */}
-      <div className="text-xs text-gray-600">
+    <li className="space-y-2.5 rounded-lg border border-gray-200 bg-marke-kachel p-3 text-sm hover:bg-marke-kachel-hover">
+      {/* a. Titel / gekürzte URL */}
+      <div className="text-[15px] font-semibold text-gray-900">{display}</div>
+      {/* b. Meta (Pin-Anzahl + Ø CTR) — die zeilenspezifische Information.
+          Die allgemeine Chance-Botschaft steht in der Card-Subheadline. */}
+      <div className="text-xs text-gray-500">
         {url.pinCount} Pin{url.pinCount === 1 ? '' : 's'} · Ø CTR:{' '}
-        <strong className="text-gray-900">{ctrText}%</strong>
-      </div>
-      {url.boardNames.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5 text-xs">
-          <span className="text-gray-500">
-            {url.boardNames.length === 1 ? 'Board:' : 'Boards:'}
+        <strong className="text-gray-700">{ctrText}%</strong>
+        {url.ctrUeberMedianPct != null && (
+          <span className="text-status-gut-text">
+            {' '}
+            · {url.ctrUeberMedianPct}% über deinem Schnitt
           </span>
-          {visibleBoards.map((name) => (
-            <span key={`b-${name}`} className={chipCls}>
-              {name}
-            </span>
-          ))}
-          {hiddenBoards.length > 0 && (
-            <details className="contents">
-              <summary className="cursor-pointer list-none text-xs font-medium text-link underline [&::-webkit-details-marker]:hidden">
-                + {hiddenBoards.length} weitere
-              </summary>
-              {hiddenBoards.map((name) => (
-                <span key={`b-${name}`} className={chipCls}>
-                  {name}
-                </span>
-              ))}
-            </details>
-          )}
+        )}
+      </div>
+      {/* d. Boards als reiner Text (keine Pille) */}
+      {url.boardNames.length > 0 && (
+        <div className="text-xs text-gray-600">
+          <span className="text-gray-500">{boardLabel}</span>{' '}
+          <span className="font-medium text-gray-700">
+            {url.boardNames.join(', ')}
+          </span>
         </div>
       )}
-      <div className="coaching-box !px-2 !py-1.5 text-xs">
-        Hohe CTR ({ctrText}%) bei wenigen Pins – Erfolg skalieren.
+      {/* e. Buttons unten in eigener Zeile (externer „URL öffnen" mit ↗) */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Link
+          href="/dashboard/pin-produktion?open=new"
+          className="inline-flex items-center justify-center rounded-md bg-marke-blaugrau px-3 py-1 text-xs font-medium text-white hover:bg-marke-blaugrau-dunkel"
+        >
+          Pin erstellen
+        </Link>
+        <a
+          href={url.basisUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+        >
+          URL öffnen ↗
+        </a>
       </div>
     </li>
   )
@@ -3597,7 +3553,7 @@ function BoardGesundheitDashboardSection({
 
   const heading = (
     <>
-      <h2 className="text-lg font-semibold text-gray-900">
+      <h2 className="text-xl font-semibold text-marke-blaugrau">
         <LabelWithTooltip
           label="Board-Gesundheit"
           tooltip={headingTooltip}
@@ -3612,6 +3568,9 @@ function BoardGesundheitDashboardSection({
   )
 
   const staerkstesProzent = Math.round(accountHinweise.staerkstesBoardAnteil * 100)
+  // Anzahl Boards mit Handlungsbedarf = sichtbare Top-Hebel-Karten + die
+  // restlichen Boards im „weitere"-Toggle. Speist die AnzahlBadge am Card-Kopf.
+  const hebelAnzahl = topKarten.length + restBoards.length
 
   return (
     <section id="board-gesundheit" className="scroll-mt-4">
@@ -3678,7 +3637,7 @@ function BoardGesundheitDashboardSection({
         </div>
       )}
 
-      {topKarten.length === 0 ? (
+      {topKarten.length === 0 && restBoards.length === 0 ? (
         <div className="coaching-box mt-4">
           <p className="font-medium leading-relaxed">
             Deine Boards sind richtig gut aufgestellt, hier ist gerade nichts
@@ -3686,69 +3645,75 @@ function BoardGesundheitDashboardSection({
           </p>
         </div>
       ) : (
-        <>
-          <p className="mt-4 text-xs font-semibold tracking-wide text-gray-500">
-            Das sind deine wichtigsten Hebel gerade.
-          </p>
-          <div className="mt-2 space-y-3">
-            {topKarten.map((karte) => (
-              <CoachingKarteRow key={karte.boardId} karte={karte} />
-            ))}
-          </div>
-        </>
-      )}
-
-      {restBoards.length > 0 && (
-        <details className="group mt-3 rounded-lg border border-gray-200 bg-white shadow-sm">
-          <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
+        // Hebel-Teil im gewohnten Card-Muster: Card mit Kopf (Boards-Icon +
+        // Titel + AnzahlBadge), darunter graue Zeilen-Kacheln; die restlichen
+        // Boards hinter einem „N weitere anzeigen"-Toggle.
+        <details className="group mt-4 rounded-lg border border-gray-200 bg-white shadow-sm">
+          <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
             <span className="text-2xl leading-none text-gray-400" aria-hidden>
               <span className="inline group-open:hidden">▸</span>
               <span className="hidden group-open:inline">▾</span>
             </span>
-            <span>Alle weiteren Hinweise</span>
+            <PinKategorieIcon
+              name="boards"
+              className="h-6 w-6 shrink-0 text-marke-blaugrau"
+            />
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-medium text-gray-900">
+                Deine wichtigsten Hebel
+              </div>
+              <p className="mt-0.5 text-xs text-gray-600">
+                Boards mit dem größten Hebel für mehr Sichtbarkeit.
+              </p>
+              <p className="mt-1 text-xs text-gray-500">
+                Boards darfst du direkt bearbeiten, anders als Pins. Wähle Namen
+                und Beschreibung mit klaren Keywords, kurz und ohne Spielereien,
+                denn daran erkennt Pinterest, worum es geht.
+              </p>
+            </div>
+            <AnzahlBadge count={hebelAnzahl} />
           </summary>
-          <ul className="border-t border-gray-200">
-            {restBoards.map((rb) => (
-              <li
-                key={rb.boardId}
-                className="border-b border-gray-100 px-4 py-3 last:border-b-0"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div className="min-w-0 text-sm font-semibold text-gray-900">
-                    <span className="truncate">{rb.boardName}</span>
-                  </div>
-                  <CoachingButtons
-                    boardId={rb.boardId}
-                    pinterestUrl={rb.pinterestUrl}
-                  />
-                </div>
-                {rb.hebelTexte.length > 0 && (
-                  <ul className="mt-1.5 space-y-1">
-                    {rb.hebelTexte.map((t, i) => (
-                      <li
-                        key={i}
-                        className="text-sm leading-relaxed text-gray-700"
-                      >
-                        {t}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                <PreparedPinsBox boardId={rb.boardId} prepared={rb.prepared} />
-              </li>
-            ))}
-          </ul>
+
+          <div className="border-t border-gray-200">
+            {topKarten.length > 0 && (
+              <ul className="space-y-2 p-3">
+                {topKarten.map((karte) => (
+                  <CoachingKarteRow key={karte.boardId} karte={karte} />
+                ))}
+              </ul>
+            )}
+            {restBoards.length > 0 && (
+              <details className="group/more border-t border-gray-100">
+                <summary className="cursor-pointer list-none px-4 py-2 text-xs font-medium text-link underline [&::-webkit-details-marker]:hidden">
+                  <span className="inline group-open/more:hidden">
+                    ▸ {restBoards.length} weitere anzeigen
+                  </span>
+                  <span className="hidden group-open/more:inline">
+                    ▾ Weniger anzeigen
+                  </span>
+                </summary>
+                <ul className="space-y-2 p-3">
+                  {restBoards.map((rb) => (
+                    <CoachingRestKachel key={rb.boardId} rb={rb} />
+                  ))}
+                </ul>
+              </details>
+            )}
+          </div>
         </details>
       )}
 
       <div className="mt-3 space-y-3">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-2 text-xs text-gray-500">
-          <Link
-            href="/dashboard/boards"
-            className="font-medium text-link underline"
-          >
-            Alle Boards in der Übersicht ansehen ↗
-          </Link>
+          <span>
+            →{' '}
+            <Link
+              href="/dashboard/boards"
+              className="font-medium text-link underline"
+            >
+              Alle Boards in der Übersicht ansehen
+            </Link>
+          </span>
           {boardsOhneAnalyticsCount > 0 && (
             <span className="inline-flex items-center gap-1 text-gray-500">
               <InfoIcon className="shrink-0 text-gray-400" />
@@ -3758,11 +3723,12 @@ function BoardGesundheitDashboardSection({
                   ? 'Board ohne'
                   : 'Boards ohne'}{' '}
                 Analytics-Einträge:{' '}
+                →{' '}
                 <Link
                   href="/dashboard/analytics?tab=boards"
                   className="font-medium text-link underline"
                 >
-                  Daten eintragen ↗
+                  Daten eintragen
                 </Link>
               </span>
             </span>
@@ -3773,21 +3739,39 @@ function BoardGesundheitDashboardSection({
   )
 }
 
-// Buttons „Pins planen" + „Zum Board" für ein Board (Coaching-Karten + Liste).
+// Buttons „Pins planen" + „Board bearbeiten" (intern) + „Zum Board ↗" (extern).
+// `highlight` bestimmt, welche der beiden internen Aktionen gefüllt (primär)
+// erscheint; die andere bleibt zurückhaltend (Outline). „Zum Board" ist nie
+// die Hauptaktion und bleibt immer der reduzierte graue Outline-Button.
 function CoachingButtons({
   boardId,
   pinterestUrl,
+  highlight,
 }: {
   boardId: string
   pinterestUrl: string | null
+  // 'beide' = gemischte Hebel → beide internen Buttons gefüllt.
+  highlight: 'pins' | 'bearbeiten' | 'beide'
 }) {
+  const filled =
+    'rounded-md bg-marke-blaugrau px-3 py-1 text-xs font-medium text-white hover:bg-marke-blaugrau-dunkel'
+  const outline =
+    'rounded-md border border-marke-blaugrau px-3 py-1 text-xs font-medium text-marke-blaugrau hover:bg-marke-blaugrau hover:text-white'
+  const pinsFilled = highlight === 'pins' || highlight === 'beide'
+  const editFilled = highlight === 'bearbeiten' || highlight === 'beide'
   return (
-    <div className="flex shrink-0 items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       <Link
         href={`/dashboard/pin-produktion?new=1&board=${boardId}`}
-        className="rounded-md bg-marke-blaugrau px-3 py-1 text-xs font-medium text-white hover:bg-marke-blaugrau-dunkel"
+        className={pinsFilled ? filled : outline}
       >
         Pins planen
+      </Link>
+      <Link
+        href={`/dashboard/boards?edit=${boardId}`}
+        className={editFilled ? filled : outline}
+      >
+        Board bearbeiten
       </Link>
       {pinterestUrl && (
         <a
@@ -3807,40 +3791,102 @@ function CoachingButtons({
 // Pins, erscheint die grüne Box auch hier (im einklappbaren Bereich wird sie für
 // dieses Board dann ausgelassen, damit jede Info nur einmal steht).
 function CoachingKarteRow({ karte }: { karte: CoachingKarte }) {
+  const hl = boardHighlight(karte.hebelTypen)
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0 text-base font-semibold text-gray-900">
-          <span className="truncate">{karte.boardName}</span>
-        </div>
-        <CoachingButtons
-          boardId={karte.boardId}
-          pinterestUrl={karte.pinterestUrl}
-        />
+    <li className="space-y-2.5 rounded-lg border border-gray-200 bg-marke-kachel p-3 text-sm hover:bg-marke-kachel-hover">
+      {/* a. Board-Name + Aktivitäts-Zustands-Badge */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[15px] font-semibold text-gray-900">
+          {karte.boardName}
+        </span>
+        <span
+          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${BOARD_AKTIVITAET_BADGE[karte.badgeKey].cls}`}
+        >
+          {BOARD_AKTIVITAET_BADGE[karte.badgeKey].text}
+        </span>
       </div>
+      {/* b. Coaching mit Camel-Streifen. Bündel (>= 3 Hebel): Einleitung +
+          kurze Punkte + Abschluss. Sonst: alle Hebel-Sätze untereinander. */}
       {karte.kind === 'buendel' && karte.buendelPunkte ? (
-        <div className="mt-1.5">
-          <p className="text-sm font-semibold leading-relaxed text-gray-900">
+        <div className="border-l-[3px] border-l-marke-ocker pl-3 text-haupt">
+          <p className="text-sm font-semibold leading-relaxed">
             Dieses Board braucht einmal deine volle Aufmerksamkeit.
           </p>
           <ul className="mt-1 list-disc space-y-0.5 pl-5">
             {karte.buendelPunkte.map((punkt, i) => (
-              <li key={i} className="text-sm leading-relaxed text-gray-700">
+              <li key={i} className="text-sm leading-relaxed">
                 {punkt}
               </li>
             ))}
           </ul>
-          <p className="mt-1.5 text-sm leading-relaxed text-gray-700">
+          <p className="mt-1.5 text-sm leading-relaxed">
             Nimm es dir am Stück vor, das bringt auf einen Schlag am meisten.
           </p>
         </div>
       ) : (
-        <p className="mt-1.5 text-sm leading-relaxed text-gray-700">
-          {karte.text}
-        </p>
+        <div className="border-l-[3px] border-l-marke-ocker pl-3 text-haupt">
+          {karte.hebelTexte.map((t, i) => (
+            <p
+              key={i}
+              className={`text-sm leading-relaxed${i > 0 ? ' mt-1.5' : ''}`}
+            >
+              {t}
+            </p>
+          ))}
+        </div>
       )}
-      <PreparedPinsBox boardId={karte.boardId} prepared={karte.prepared} />
-    </div>
+      {/* c. Vorbereitete Pins (Entwurf/geplant) — nur wenn „Pins planen" zur
+          Handlung gehört (also nicht bei reinen Bearbeitungs-Hebeln). */}
+      {hl !== 'bearbeiten' && (
+        <PreparedPinsBox boardId={karte.boardId} prepared={karte.prepared} />
+      )}
+      {/* d. Buttons unten in eigener Zeile */}
+      <CoachingButtons
+        boardId={karte.boardId}
+        pinterestUrl={karte.pinterestUrl}
+        highlight={hl}
+      />
+    </li>
+  )
+}
+
+// Eine Zeilen-Kachel für die restlichen Boards (im „weitere"-Toggle). Gleicher
+// graue-Kachel-Stil wie CoachingKarteRow; die Hebel-Texte als ein Coaching-Block
+// mit Camel-Streifen.
+function CoachingRestKachel({ rb }: { rb: CoachingRestBoard }) {
+  const hl = boardHighlight(rb.hebelTypen)
+  return (
+    <li className="space-y-2.5 rounded-lg border border-gray-200 bg-marke-kachel p-3 text-sm hover:bg-marke-kachel-hover">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[15px] font-semibold text-gray-900">
+          {rb.boardName}
+        </span>
+        <span
+          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${BOARD_AKTIVITAET_BADGE[rb.badgeKey].cls}`}
+        >
+          {BOARD_AKTIVITAET_BADGE[rb.badgeKey].text}
+        </span>
+      </div>
+      {rb.hebelTexte.length > 0 && (
+        <div className="border-l-[3px] border-l-marke-ocker pl-3 text-haupt">
+          <ul className="space-y-1">
+            {rb.hebelTexte.map((t, i) => (
+              <li key={i} className="text-sm leading-relaxed">
+                {t}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {hl !== 'bearbeiten' && (
+        <PreparedPinsBox boardId={rb.boardId} prepared={rb.prepared} />
+      )}
+      <CoachingButtons
+        boardId={rb.boardId}
+        pinterestUrl={rb.pinterestUrl}
+        highlight={hl}
+      />
+    </li>
   )
 }
 
@@ -3932,8 +3978,8 @@ function PerformanceVerlaufSection({ points }: { points: ChartPoint[] }) {
 
   return (
     <section>
-      <details className="group rounded-lg border border-gray-200 bg-white shadow-sm">
-        <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
+      <details className="group overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+        <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 hover:bg-marke-kachel-hover [&::-webkit-details-marker]:hidden">
           <span className="text-2xl leading-none text-gray-400" aria-hidden>
             <span className="inline group-open:hidden">▸</span>
             <span className="hidden group-open:inline">▾</span>
@@ -4105,26 +4151,6 @@ function PhasenTrenner({ title }: { title: string }) {
   )
 }
 
-// Zwischenüberschrift (zweite Ebene unter dem Phasentrenner): eine Aussage,
-// die mehrere Sektionen zu einem Strang bündelt. Bewusst abgesetzt vom großen
-// Trenner — linksbündig statt zentriert, ohne flankierende Linien, eine Spur
-// kleiner; dieselbe Space-Grotesk-Familie hält sie strukturell verwandt, aber
-// klar untergeordnet. Über ihr steht die Frage (Phasentrenner), unter ihr die
-// einzelnen Sektionsüberschriften.
-function Zwischentitel({ title }: { title: string }) {
-  return (
-    <h3
-      className="mb-3 mt-8 text-[19px] font-semibold text-haupt"
-      style={{
-        fontFamily: 'var(--font-space-grotesk)',
-        letterSpacing: '-0.3px',
-      }}
-    >
-      {title}
-    </h3>
-  )
-}
-
 // ===========================================================
 // Gesamt-Profil-Performance — neues 3-Spalten-Layout
 // Spalte 1: Ergebnis (Hero-KPIs untereinander)
@@ -4155,16 +4181,20 @@ function ProfilPerformanceSection({
   if (!latest) {
     return (
       <section id="gesamt-profil-performance" className="scroll-mt-4">
-        <h2 className="text-lg font-semibold text-gray-900">
-          <LabelWithTooltip
-            label="Profil-Performance"
-            tooltip={headingTooltip}
-          />
-        </h2>
-        <p className="mt-1 text-sm text-gray-600">
-          Wie sich deine Pinterest-Zahlen im Vergleich zum vorherigen
-          Analytics-Update entwickelt haben.
-        </p>
+        {/* Sektions-Überschrift (v2): Hierarchie über Schrift + Weißraum, keine
+            Trennlinie. Muster identisch zum Strategie-Check. */}
+        <div className="mb-4">
+          <h2 className="text-xl font-semibold text-marke-blaugrau">
+            <LabelWithTooltip
+              label="Profil-Performance"
+              tooltip={headingTooltip}
+            />
+          </h2>
+          <p className="mt-1 text-sm text-gray-600">
+            Wie sich deine Pinterest-Zahlen im Vergleich zum vorherigen
+            Analytics-Update entwickelt haben.
+          </p>
+        </div>
         <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-5">
           {[
             'Ausgehende Klicks',
@@ -4178,6 +4208,7 @@ function ProfilPerformanceSection({
         </div>
         <p className="mt-2 text-xs text-gray-500">
           Noch kein Analytics-Update:{' '}
+          →{' '}
           <Link
             href="/dashboard/analytics"
             className="font-medium text-link underline"
@@ -4211,18 +4242,22 @@ function ProfilPerformanceSection({
 
   return (
     <section id="gesamt-profil-performance" className="scroll-mt-4">
-      <h2 className="text-lg font-semibold text-haupt">
-        <LabelWithTooltip
-          label="Profil-Performance"
-          tooltip={headingTooltip}
-        />
-      </h2>
-      <p className="mt-1 text-sm text-gray-600">
-        Wie sich deine wichtigsten Pinterest-Zahlen im Vergleich zum letzten
-        Monat entwickeln: ausgehende Klicks, Saves und deine Save-Rate. Die
-        Ampel fasst die Richtung zusammen, die Zahlen und der Verlauf zeigen die
-        Details.
-      </p>
+      {/* Sektions-Überschrift (v2): Hierarchie über Schrift + Weißraum, keine
+          Trennlinie. Muster identisch zum Strategie-Check. */}
+      <div className="mb-4">
+        <h2 className="text-xl font-semibold text-marke-blaugrau">
+          <LabelWithTooltip
+            label="Profil-Performance"
+            tooltip={headingTooltip}
+          />
+        </h2>
+        <p className="mt-1 text-sm text-gray-600">
+          Wie sich deine wichtigsten Pinterest-Zahlen im Vergleich zum letzten
+          Monat entwickeln: ausgehende Klicks, Saves und deine Save-Rate. Die
+          Ampel fasst die Richtung zusammen, die Zahlen und der Verlauf zeigen
+          die Details.
+        </p>
+      </div>
 
       {/* Leerzustand (kein Vormonat): keine Ampel, nur der Hinweis. */}
       {ampel.status === 'leer' && (

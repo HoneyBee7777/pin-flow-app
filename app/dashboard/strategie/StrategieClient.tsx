@@ -106,8 +106,8 @@ export default function StrategieClient({
                 onClick={() => setActive(tab.key)}
                 className={`whitespace-nowrap rounded-t-md border-b-2 px-3 py-2.5 text-sm transition-colors ${
                   isActive
-                    ? 'border-red-600 bg-red-50 font-semibold text-red-700'
-                    : 'border-transparent font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-700'
+                    ? 'border-marke-ocker bg-marke-blaugrau font-semibold text-white'
+                    : 'border-transparent font-semibold text-gray-500 hover:text-marke-blaugrau'
                 }`}
               >
                 {tab.label}
@@ -172,19 +172,19 @@ function Accordion({
     <details
       ref={ref}
       id={anchorId}
-      className="group scroll-mt-4 rounded-lg border border-gray-200 bg-white shadow-sm open:shadow-md"
+      className="group overflow-hidden scroll-mt-4 rounded-lg border border-gray-200 bg-white shadow-sm open:shadow-md"
       open={open}
       onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)}
     >
-      <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-4 text-base font-semibold text-gray-900 hover:bg-red-50 [&::-webkit-details-marker]:hidden">
+      <summary className="group/sum flex cursor-pointer list-none items-center gap-3 px-5 py-4 text-base font-semibold text-gray-900 hover:bg-marke-blaugrau [&::-webkit-details-marker]:hidden">
         <span
-          className="text-lg leading-none text-gray-400 transition-transform"
+          className="text-lg leading-none text-gray-400 transition-transform group-hover/sum:text-white"
           aria-hidden
         >
           <span className="inline group-open:hidden">▸</span>
           <span className="hidden group-open:inline">▾</span>
         </span>
-        <span className="flex-1">{title}</span>
+        <span className="flex-1 group-hover/sum:text-white">{title}</span>
       </summary>
       <div className="space-y-4 border-t border-gray-100 px-5 py-5 text-sm leading-relaxed text-gray-700">
         {children}
@@ -436,7 +436,7 @@ function TabFaktoren() {
           Beim natürlichen Formulieren helfen dir die Vorlagen unter{' '}
           <Link
             href="/dashboard/ressourcen"
-            className="font-medium text-red-600 hover:underline"
+            className="font-medium text-link underline underline-offset-2"
           >
             Prompts &amp; Vorlagen
           </Link>{' '}
@@ -469,7 +469,7 @@ function TabFaktoren() {
             dazu im Abschnitt{' '}
             <Link
               href="/dashboard/strategie?tab=design&accordion=customer-journey"
-              className="font-medium text-red-600 hover:underline"
+              className="font-medium text-link underline underline-offset-2"
             >
               Customer Journey
             </Link>
@@ -1507,7 +1507,7 @@ function TabStrategien() {
           herausarbeitest, zeigt dir der Bereich{' '}
           <Link
             href="/dashboard/strategie?tab=audience"
-            className="font-medium text-red-600 hover:underline"
+            className="font-medium text-link underline underline-offset-2"
           >
             Zielgruppe verstehen
           </Link>
@@ -1616,7 +1616,7 @@ function TabStrategien() {
           Deinen ersten konkreten Schritt legst du im Bereich{' '}
           <Link
             href="/dashboard/strategie?tab=meine"
-            className="font-medium text-red-600 hover:underline"
+            className="font-medium text-link underline underline-offset-2"
           >
             Strategie festlegen
           </Link>{' '}
@@ -1772,9 +1772,9 @@ function TabStrategien() {
                 href="https://policy.pinterest.com/de/commercial-and-branded-content-guidelines"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="font-medium text-red-600 hover:underline"
+                className="font-medium text-link underline underline-offset-2"
               >
-                offiziellen Pinterest-Richtlinie
+                offiziellen Pinterest-Richtlinie <span aria-hidden>↗</span>
               </Link>
               .
             </Para>
@@ -1922,7 +1922,7 @@ function TabStrategien() {
           Bereich{' '}
           <Link
             href="/dashboard/strategie?tab=meine"
-            className="font-medium text-red-600 hover:underline"
+            className="font-medium text-link underline underline-offset-2"
           >
             Strategie festlegen
           </Link>{' '}
@@ -2026,7 +2026,7 @@ function TabStrategien() {
           Im Bereich{' '}
           <Link
             href="/dashboard/strategie?tab=meine"
-            className="font-medium text-red-600 hover:underline"
+            className="font-medium text-link underline underline-offset-2"
           >
             Strategie festlegen
           </Link>{' '}
@@ -2100,7 +2100,7 @@ function TabStrategien() {
           Bereit? Dann leg jetzt im Bereich{' '}
           <Link
             href="/dashboard/strategie?tab=meine"
-            className="font-medium text-red-600 hover:underline"
+            className="font-medium text-link underline underline-offset-2"
           >
             Strategie festlegen
           </Link>{' '}
@@ -2436,14 +2436,14 @@ function TabDesign() {
           der{' '}
           <Link
             href="/dashboard/pin-produktion"
-            className="font-medium text-red-600 hover:underline"
+            className="font-medium text-link underline underline-offset-2"
           >
             Pin-Produktion
           </Link>{' '}
           baut sie automatisch in deine Hooks ein. In den{' '}
           <Link
             href="/dashboard/einstellungen"
-            className="font-medium text-red-600 hover:underline"
+            className="font-medium text-link underline underline-offset-2"
           >
             Einstellungen
           </Link>{' '}
@@ -2659,7 +2659,7 @@ function TabDesign() {
           Abschnitt{' '}
           <Link
             href="/dashboard/strategie?tab=design&accordion=effiziente-pin-produktion"
-            className="font-medium text-red-600 hover:underline"
+            className="font-medium text-link underline underline-offset-2"
           >
             Effiziente Pin-Produktion
           </Link>
@@ -2791,9 +2791,9 @@ function TabDesign() {
               href="https://www.youtube.com/watch?v=8PNxQuUGtgI"
               target="_blank"
               rel="noopener noreferrer"
-              className="font-medium text-red-600 hover:underline"
+              className="font-medium text-link underline underline-offset-2"
             >
-              Video-Anleitung: Bulk Create in Canva
+              Video-Anleitung: Bulk Create in Canva <span aria-hidden>↗</span>
             </Link>
             .
           </Para>
@@ -2882,7 +2882,7 @@ function TabKeywords() {
           Abschnitt{' '}
           <Link
             href="/dashboard/strategie?tab=keywords&accordion=keywords-recherchieren"
-            className="font-medium text-red-600 hover:underline"
+            className="font-medium text-link underline underline-offset-2"
           >
             Keywords recherchieren: die Autocomplete-Methode
           </Link>
@@ -3028,7 +3028,7 @@ function TabKeywords() {
             Trage jedes gefundene Keyword direkt in deine →{' '}
             <Link
               href="/dashboard/keywords"
-              className="text-red-700 underline underline-offset-2 hover:text-red-800"
+              className="text-link underline underline-offset-2"
             >
               Keyword-Datenbank
             </Link>{' '}
@@ -3099,7 +3099,7 @@ function TabKeywords() {
           Die ausführliche Erklärung zu jeder dieser Stellen findest du unter{' '}
           <Link
             href="/dashboard/strategie?tab=faktoren&accordion=9-ranking-faktoren"
-            className="font-medium text-red-600 hover:underline"
+            className="font-medium text-link underline underline-offset-2"
           >
             Erfolgsfaktoren
           </Link>
@@ -3477,7 +3477,7 @@ function TabKeywords() {
           Öffne dazu die →{' '}
           <Link
             href="/dashboard/keywords"
-            className="text-red-700 underline underline-offset-2 hover:text-red-800"
+            className="text-link underline underline-offset-2"
           >
             Keyword-Datenbank
           </Link>{' '}
@@ -3501,7 +3501,7 @@ function TabKeywords() {
           die Erklärungen <em>warum</em> diese Felder wichtig sind: siehe{' '}
           <Link
             href="/dashboard/strategie?tab=faktoren&accordion=9-ranking-faktoren"
-            className="font-medium text-red-600 hover:underline"
+            className="font-medium text-link underline underline-offset-2"
           >
             Die 10 Ranking-Faktoren
           </Link>
@@ -3672,7 +3672,7 @@ function TabAnalytics() {
           findest du im Analyse-Tab unter{' '}
           <Link
             href="/dashboard/analytics?tab=eingabe#so-findest-du-die-zahlen"
-            className="text-red-700 underline underline-offset-2 hover:text-red-800"
+            className="text-link underline underline-offset-2"
           >
             {'„So findest du die Zahlen"'}
           </Link>
@@ -3685,7 +3685,7 @@ function TabAnalytics() {
           Welche das sind, siehst du direkt im{' '}
           <Link
             href="/dashboard/analytics?tab=pins"
-            className="text-red-700 underline underline-offset-2 hover:text-red-800"
+            className="text-link underline underline-offset-2"
           >
             Analyse-Tab
           </Link>
@@ -3705,7 +3705,7 @@ function TabAnalytics() {
           idealen nächsten Zeitraum schlägt dir Pin-Flow im{' '}
           <Link
             href="/dashboard/analytics?tab=eingabe"
-            className="text-red-700 underline underline-offset-2 hover:text-red-800"
+            className="text-link underline underline-offset-2"
           >
             {'Analyse-Tab unter „Eingabe"'}
           </Link>{' '}

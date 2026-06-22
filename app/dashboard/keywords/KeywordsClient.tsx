@@ -263,7 +263,7 @@ export default function KeywordsClient({
         <button
           type="button"
           onClick={() => (showAddForm ? closeForm() : openAdd())}
-          className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+          className="rounded-md bg-marke-blaugrau px-4 py-2 text-sm font-medium text-white hover:bg-marke-blaugrau-dunkel"
         >
           {showAddForm ? 'Abbrechen' : 'Keyword hinzufügen'}
         </button>
@@ -419,7 +419,7 @@ export default function KeywordsClient({
           <div className="flex gap-2">
             <button
               type="submit"
-              className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+              className="rounded-md bg-marke-blaugrau px-4 py-2 text-sm font-medium text-white hover:bg-marke-blaugrau-dunkel"
             >
               Speichern
             </button>
@@ -493,7 +493,7 @@ export default function KeywordsClient({
           <div className="flex gap-2">
             <button
               type="submit"
-              className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+              className="rounded-md bg-marke-blaugrau px-4 py-2 text-sm font-medium text-white hover:bg-marke-blaugrau-dunkel"
             >
               Importieren
             </button>
@@ -588,7 +588,7 @@ export default function KeywordsClient({
                       ) : (
                         <Link
                           href={`/dashboard/pin-produktion?keyword=${encodeURIComponent(kw.keyword)}`}
-                          className="font-medium text-red-600 hover:text-red-700 hover:underline"
+                          className="font-medium text-link underline underline-offset-2"
                           title={`Pins anzeigen, in denen „${kw.keyword}" automatisch gefunden wurde`}
                         >
                           {kw.stats.pinsCount}

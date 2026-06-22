@@ -109,14 +109,14 @@ export default function BoardsTab({
         du im{' '}
         <Link
           href="/dashboard#board-gesundheit"
-          className="font-medium text-red-600 hover:underline"
+          className="font-medium text-link underline underline-offset-2"
         >
           Dashboard unter Board-Gesundheit
         </Link>
         . Tiefergehende Erklärungen stehen in den{' '}
         <Link
           href="/dashboard/strategie?tab=analytics"
-          className="font-medium text-red-600 hover:underline"
+          className="font-medium text-link underline underline-offset-2"
         >
           Wissensseiten
         </Link>
@@ -136,12 +136,15 @@ export default function BoardsTab({
                 className="flex flex-wrap items-center gap-x-3 gap-y-1"
               >
                 <span className="font-medium text-gray-900">{b.name}</span>
-                <Link
-                  href={`/dashboard/boards?edit=${b.id}`}
-                  className="text-xs font-medium text-red-600 hover:underline"
-                >
-                  Board bearbeiten ↗
-                </Link>
+                <span className="text-xs">
+                  →{' '}
+                  <Link
+                    href={`/dashboard/boards?edit=${b.id}`}
+                    className="font-medium text-link underline underline-offset-2"
+                  >
+                    Board bearbeiten
+                  </Link>
+                </span>
               </li>
             ))}
           </ul>
@@ -484,9 +487,9 @@ function BoardAnalyticsTable({
                           href={row.board.pinterest_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-red-600 hover:underline"
+                          className="text-link underline underline-offset-2"
                         >
-                          {row.board.name}
+                          {row.board.name} <span aria-hidden>↗</span>
                         </a>
                       ) : (
                         row.board.name
@@ -767,16 +770,16 @@ function SortableTh({
 // ===========================================================
 function ThresholdInfo() {
   return (
-    <details className="group max-w-3xl rounded-lg border border-gray-200 bg-white shadow-sm">
-      <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-4 text-base font-semibold text-gray-900 hover:bg-red-50 [&::-webkit-details-marker]:hidden">
+    <details className="group overflow-hidden max-w-3xl rounded-lg border border-gray-200 bg-white shadow-sm">
+      <summary className="group/sum flex cursor-pointer list-none items-center gap-3 px-5 py-4 text-base font-semibold text-gray-900 hover:bg-marke-blaugrau [&::-webkit-details-marker]:hidden">
         <span
-          className="text-lg leading-none text-gray-400 transition-transform"
+          className="text-lg leading-none text-gray-400 transition-transform group-hover/sum:text-white"
           aria-hidden
         >
           <span className="inline group-open:hidden">▸</span>
           <span className="hidden group-open:inline">▾</span>
         </span>
-        <span className="flex-1">So funktioniert die Board-Auswertung</span>
+        <span className="flex-1 group-hover/sum:text-white">So funktioniert die Board-Auswertung</span>
       </summary>
       <div className="space-y-4 border-t border-gray-100 px-5 py-5 text-sm leading-relaxed text-gray-700">
         <div>

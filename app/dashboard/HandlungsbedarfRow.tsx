@@ -77,9 +77,9 @@ export default function HandlungsbedarfRow({
       <td className="whitespace-nowrap px-4 py-2 text-right">
         <Link
           href="/dashboard/pin-produktion"
-          className="text-xs font-medium text-red-600 hover:underline"
+          className="text-xs font-medium text-link underline underline-offset-2"
         >
-          Zum Pin →
+          → Zum Pin
         </Link>
       </td>
     </tr>

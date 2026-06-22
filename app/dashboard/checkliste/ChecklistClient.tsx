@@ -239,16 +239,16 @@ function ChecklistLinkView({ link }: { link: ChecklistLink }) {
         href={link.href}
         target="_blank"
         rel="noopener noreferrer"
-        className="text-[13px] font-medium text-red-600 hover:underline"
+        className="text-[13px] font-medium text-link underline underline-offset-2"
       >
-        → {label} ↗
+        {label} ↗
       </a>
     )
   }
   return (
     <Link
       href={link.href}
-      className="text-[13px] font-medium text-red-600 hover:underline"
+      className="text-[13px] font-medium text-link underline underline-offset-2"
     >
       → {label}
     </Link>

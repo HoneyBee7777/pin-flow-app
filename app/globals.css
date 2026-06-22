@@ -23,10 +23,14 @@
 :root {
   /* Marke */
   --marke-blaugrau: #3a4d58; /* Hauptfarbe: Header, primäre Buttons, Links */
+  --marke-blaugrau-rgb: 58 77 88; /* RGB-Kanäle von #3A4D58 für Tailwind-Alpha (bg-marke-blaugrau/xx) */
   --marke-blaugrau-mittel: #6b7a84; /* Sekundärtext */
   --marke-blaugrau-hell: #dce1e4; /* Karten-Rand, helle Coaching-Fläche */
   --marke-blaugrau-xhell: #eef1f3; /* Seitenhintergrund: hellste, kühle Blaugrau-Stufe */
   --marke-blaugrau-dunkel: #2f3f48; /* Hover für Blaugrau-Buttons */
+  --marke-creme: #edeae3; /* warmes Creme: Seitenhintergrund (Shell) */
+  --marke-kachel: #fafaf8; /* helles, fast neutrales Off-White: innere Kacheln auf weißen Cards */
+  --marke-kachel-hover: #f1f1ed; /* ein Tick dunkler: einheitlicher Hover-Ton für Kacheln */
   --marke-ocker: #b89066; /* Akzent/Camel: der eine hervorgehobene CTA */
   --marke-ocker-dunkel: #a87f55; /* Hover für Ocker-CTA */
   --marke-tanne: #132a2e; /* Haupt-Textfarbe statt Schwarz */
@@ -47,16 +51,16 @@
   --status-neutral-flaeche: #f0f2f3;
 
   /* Semantische Rollen -> zeigen auf die obigen Marken-Tokens */
-  --rolle-bg-seite: var(--marke-blaugrau-xhell);
+  --rolle-bg-seite: var(--marke-creme);
   --rolle-bg-karte: #ffffff;
   --rolle-karte-rand: var(--marke-blaugrau-hell);
   --rolle-text-haupt: var(--marke-tanne);
   --rolle-text-sekundaer: var(--marke-blaugrau-mittel);
-  /* Link-Farbe: Camel (marke-ocker), unterstrichen — bewusst gewählter
-     Marken-Akzent für Navigations-/Textlinks (nicht für Buttons/Status).
-     Kontrast-Hinweis: #B89066 ist auf hellem Grund eher weich; bei Bedarf
-     einen tieferen Bronze-Ton als Link-Ton hinterlegen. */
-  --rolle-link: var(--marke-ocker);
+  /* Link-Farbe: mittleres Blaugrau (#6B7A84), unterstrichen — ruhiger
+     Marken-Ton für Navigations-/Textlinks (nicht für Buttons/Status).
+     Camel (marke-ocker) bleibt dem hervorgehobenen CTA und den
+     Coaching-Streifen vorbehalten. */
+  --rolle-link: var(--marke-blaugrau-mittel);
 }
 
 body {

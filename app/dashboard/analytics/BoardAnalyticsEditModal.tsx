@@ -150,7 +150,7 @@ export default function BoardAnalyticsEditModal({
                     href={entry.pinterestUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="break-all font-medium text-red-600 hover:underline"
+                    className="break-all font-medium text-link underline underline-offset-2"
                   >
                     {entry.pinterestUrl} ↗
                   </a>
@@ -386,7 +386,7 @@ export default function BoardAnalyticsEditModal({
             <button
               type="submit"
               disabled={isPending}
-              className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+              className="rounded-md bg-marke-blaugrau px-4 py-2 text-sm font-medium text-white hover:bg-marke-blaugrau-dunkel disabled:opacity-50"
             >
               {isPending ? 'Speichert…' : 'Speichern'}
             </button>

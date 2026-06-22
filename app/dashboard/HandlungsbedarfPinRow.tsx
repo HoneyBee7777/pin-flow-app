@@ -8,7 +8,11 @@ import {
   type VarianteTyp,
 } from './actions/handlungsbedarf'
 import InfoTooltip from '@/components/InfoTooltip'
-import { BOARD_STATUS_BADGE, type BoardStatus } from './analytics/utils'
+import {
+  BOARD_AKTIVITAET_BADGE,
+  type BoardBadgeKey,
+  type BoardStatus,
+} from './analytics/utils'
 
 // Das Pin-Handlungsbedarf-UI zeigt am Board nur noch den AKTIVITÄTS-Status
 // (BoardStatus aus utils: aktiv/wenig_aktiv/inaktiv), nicht mehr die alte
@@ -94,7 +98,7 @@ export default function HandlungsbedarfPinRow({
   const inlineMetrics = metrics.filter((m) => m.label !== 'Algorithmus-Push')
 
   return (
-    <li className="space-y-2.5 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm hover:bg-gray-100">
+    <li className="space-y-2.5 rounded-lg border border-gray-200 bg-marke-kachel p-3 text-sm hover:bg-marke-kachel-hover">
       {/* Titelzeile — Pin-Titel links | Abhaken-Checkbox rechts */}
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0 text-[15px] font-semibold text-gray-900">
@@ -116,9 +120,14 @@ export default function HandlungsbedarfPinRow({
         </div>
       </div>
 
-      {/* Coaching-Hinweis (Matrix Pin-Kategorie × Board-Status) — visueller Anker */}
+      {/* Coaching-Hinweis (Matrix Pin-Kategorie × Board-Status). Camel-Streifen
+          links kennzeichnet ihn als Coaching/Empfehlung — abgesetzt von den
+          nüchternen Sachzeilen (Metriken, Board) darunter. Kein weißer Kasten,
+          da die Zeile schon in einer grauen Box sitzt. */}
       {coachingText && (
-        <p className="text-sm leading-relaxed text-gray-700">{coachingText}</p>
+        <p className="border-l-[3px] border-l-marke-ocker pl-3 text-sm leading-relaxed text-haupt">
+          {coachingText}
+        </p>
       )}
 
       {/* Metriken (Algorithmus-Push ganz vorne, dann · getrennt) */}
@@ -194,22 +203,6 @@ export default function HandlungsbedarfPinRow({
   )
 }
 
-// Aktivitäts-Badges pro Board-Status. Farben kommen direkt aus
-// BOARD_STATUS_BADGE (utils.ts), damit Pin-Badge und Boards-Tab konsistent sind.
-// Kein Emoji und kein Symbol mehr: die ruhige Status-Tönung (Fläche + Text)
-// trägt den Status; ein StatusDot wäre in der text-xs-Pille zu groß.
-const BOARD_BADGE: Record<BoardStatus, { text: string; cls: string }> = {
-  aktiv: { text: 'Aktives Board', cls: BOARD_STATUS_BADGE.aktiv },
-  wenig_aktiv: {
-    text: 'Wenig aktives Board',
-    cls: BOARD_STATUS_BADGE.wenig_aktiv,
-  },
-  inaktiv: {
-    text: 'Eingeschlafenes Board',
-    cls: BOARD_STATUS_BADGE.inaktiv,
-  },
-}
-
 function BoardLine({ pin }: { pin: HandlungsbedarfPin }) {
   // Aktivität braucht keine Analytics — das alte „(keine Analytics)"-Gate
   // entfällt. „Kein Board zugeordnet" bei fehlendem Namen ODER fehlender
@@ -222,7 +215,11 @@ function BoardLine({ pin }: { pin: HandlungsbedarfPin }) {
       </div>
     )
   }
-  const badge = BOARD_BADGE[aktivitaet]
+  // Pin-Row kennt nur den Aktivitätsstatus (keine Reichweite-Daten) → 'inaktiv'
+  // wird hier als „Eingeschlafenes Board" gezeigt. Zentrale Badge-Map (utils.ts).
+  const badgeKey: BoardBadgeKey =
+    aktivitaet === 'inaktiv' ? 'eingeschlafen' : aktivitaet
+  const badge = BOARD_AKTIVITAET_BADGE[badgeKey]
   return (
     <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-gray-600">
       <span>Board:</span>

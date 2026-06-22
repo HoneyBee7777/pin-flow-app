@@ -1,6 +1,7 @@
 'use client'
 
 import { calcUpdateStatusMonat, formatDateDe } from './utils'
+import { StatusDot } from '@/components/StatusDot'
 
 export default function UpdateStatusBanner({
   analyticsUpdateDatum,
@@ -13,42 +14,43 @@ export default function UpdateStatusBanner({
   // und noch nicht erfasst ist. „Letztes Update" bleibt als Speicherdatum-Anzeige.
   const status = calcUpdateStatusMonat(latestZeitraumBis)
 
-  const tone =
+  // Status nur noch über den flachen StatusDot (wie HeroSection), nicht über
+  // eine farbige Fläche oder ein Emoji.
+  const dotTone =
     status.state === 'rot'
-      ? 'border-red-200 bg-red-50 text-red-900'
+      ? 'schlecht'
       : status.state === 'gruen'
-        ? 'border-green-200 bg-green-50 text-green-900'
-        : 'border-gray-200 bg-gray-50 text-gray-700'
+        ? 'gut'
+        : 'neutral'
 
   const statusLabel =
     status.state === 'rot'
-      ? '🔴 Analytics-Status: Update fällig'
+      ? 'Analytics-Status: Update fällig'
       : status.state === 'gruen'
-        ? '🟢 Analytics-Status: Aktuell'
-        : '⚪ Analytics-Status: Noch kein Update'
+        ? 'Analytics-Status: Aktuell'
+        : 'Analytics-Status: Noch kein Update'
 
   return (
-    <div
-      className={`inline-flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded-md border px-3 py-1.5 text-xs ${tone}`}
-    >
-      <span className="font-semibold">{statusLabel}</span>
-      <span aria-hidden className="text-gray-400">
+    <div className="inline-flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded-md border border-karte-rand bg-white px-3 py-1.5 text-xs">
+      <StatusDot tone={dotTone} />
+      <span className="font-semibold text-haupt">{statusLabel}</span>
+      <span aria-hidden className="text-gray-300">
         ·
       </span>
-      <span className="text-gray-700">
+      <span className="text-sekundaer">
         Letztes Update:{' '}
-        <span className="font-medium text-gray-900">
+        <span className="font-medium text-haupt">
           {analyticsUpdateDatum ? formatDateDe(analyticsUpdateDatum) : 'noch nie'}
         </span>
       </span>
       {status.state === 'gruen' && (
         <>
-          <span aria-hidden className="text-gray-400">
+          <span aria-hidden className="text-gray-300">
             ·
           </span>
-          <span className="text-gray-700">
+          <span className="text-sekundaer">
             Nächstes Update ab:{' '}
-            <span className="font-medium text-gray-900">
+            <span className="font-medium text-haupt">
               {formatDateDe(status.eintragbarAb)}
             </span>
           </span>
@@ -56,12 +58,12 @@ export default function UpdateStatusBanner({
       )}
       {status.state === 'rot' && (
         <>
-          <span aria-hidden className="text-gray-400">
+          <span aria-hidden className="text-gray-300">
             ·
           </span>
-          <span className="text-gray-700">
+          <span className="text-sekundaer">
             Zeitraum{' '}
-            <span className="font-medium text-gray-900">
+            <span className="font-medium text-haupt">
               {formatDateDe(status.faelligerMonatVon)} bis{' '}
               {formatDateDe(status.faelligerMonatBis)}
             </span>{' '}

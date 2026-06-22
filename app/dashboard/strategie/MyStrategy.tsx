@@ -62,7 +62,7 @@ function hauptnischeLabel(value: string | null): string {
 }
 
 const primaryBtn =
-  'rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50'
+  'rounded-md bg-marke-blaugrau px-4 py-2 text-sm font-medium text-white hover:bg-marke-blaugrau-dunkel disabled:cursor-not-allowed disabled:opacity-50'
 const secondaryBtn =
   'rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50'
 
@@ -310,7 +310,7 @@ export default function MyStrategy({
               <button
                 type="button"
                 onClick={() => router.push('/dashboard/onboarding?step=10')}
-                className="text-sm font-medium text-red-600 hover:underline"
+                className="text-sm font-medium text-link underline underline-offset-2"
               >
                 Zurück zum Onboarding
               </button>
@@ -527,9 +527,10 @@ export default function MyStrategy({
               <div className="rounded-md border border-gray-200 bg-gray-50 p-4 text-sm leading-relaxed text-gray-600">
                 Du hast noch keine Boards angelegt. Sobald du das tust,
                 erscheinen deine Themen-Schwerpunkte automatisch hier.{' '}
+                →{' '}
                 <Link
                   href="/dashboard/boards"
-                  className="font-medium text-red-600 hover:underline"
+                  className="font-medium text-link underline underline-offset-2"
                 >
                   Boards anlegen
                 </Link>

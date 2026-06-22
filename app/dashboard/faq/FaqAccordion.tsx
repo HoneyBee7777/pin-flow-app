@@ -44,7 +44,7 @@ function renderInline(text: string, keyBase: string): ReactNode[] {
           <Link
             key={`${keyBase}-l${i}`}
             href={href}
-            className="font-medium text-red-600 hover:underline"
+            className="font-medium text-link underline underline-offset-2"
           >
             {label}
           </Link>
@@ -54,9 +54,9 @@ function renderInline(text: string, keyBase: string): ReactNode[] {
             href={href}
             target="_blank"
             rel="noopener noreferrer"
-            className="font-medium text-red-600 hover:underline"
+            className="font-medium text-link underline underline-offset-2"
           >
-            {label}
+            {label} <span aria-hidden>↗</span>
           </a>
         )
       )

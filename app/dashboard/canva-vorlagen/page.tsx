@@ -73,16 +73,16 @@ export default async function CanvaVorlagenPage() {
           wiedererkennbares Design ist auf Pinterest ein echter Vorteil: Wer
           deine Pins im Feed sofort erkennt, klickt eher.
         </p>
-        <details className="group mt-4 max-w-3xl rounded-lg border border-gray-200 bg-white shadow-sm">
-          <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-4 text-base font-semibold text-gray-900 hover:bg-red-50 [&::-webkit-details-marker]:hidden">
+        <details className="group overflow-hidden mt-4 max-w-3xl rounded-lg border border-gray-200 bg-white shadow-sm">
+          <summary className="group/sum flex cursor-pointer list-none items-center gap-3 px-5 py-4 text-base font-semibold text-gray-900 hover:bg-marke-blaugrau [&::-webkit-details-marker]:hidden">
             <span
-              className="text-lg leading-none text-gray-400 transition-transform"
+              className="text-lg leading-none text-gray-400 transition-transform group-hover/sum:text-white"
               aria-hidden
             >
               <span className="inline group-open:hidden">▸</span>
               <span className="hidden group-open:inline">▾</span>
             </span>
-            <span className="flex-1">So funktioniert diese Seite</span>
+            <span className="flex-1 group-hover/sum:text-white">So funktioniert diese Seite</span>
           </summary>
           <div className="space-y-4 border-t border-gray-100 px-5 py-5 text-sm leading-relaxed text-gray-700">
             <div>
@@ -128,7 +128,7 @@ export default async function CanvaVorlagenPage() {
                 die{' '}
                 <Link
                   href="/dashboard/strategie?tab=design&accordion=effiziente-pin-produktion"
-                  className="font-medium text-red-600 hover:underline"
+                  className="font-medium text-link underline underline-offset-2"
                 >
                   Anleitung zur effizienten Pin-Produktion
                 </Link>

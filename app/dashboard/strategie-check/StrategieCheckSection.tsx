@@ -57,15 +57,6 @@ const GESAMT_AMPEL: Record<StrategieGesamtStatus, Ampel> = {
   unbekannt: 'grau',
 }
 
-// Getönte Status-Leiste (ruhig, linker Akzentrand) je Ampel — über
-// status-*-flaeche + status-* Akzentrand, keine grelle Vollfarbe.
-const AMPEL_LEISTE: Record<Ampel, string> = {
-  gruen: 'border-status-gut-flaeche border-l-status-gut bg-status-gut-flaeche',
-  gelb: 'border-status-achtung-flaeche border-l-status-achtung bg-status-achtung-flaeche',
-  rot: 'border-status-schlecht-flaeche border-l-status-schlecht bg-status-schlecht-flaeche',
-  grau: 'border-status-neutral-flaeche border-l-status-neutral bg-status-neutral-flaeche',
-}
-
 // Erklärender Halbsatz hinter dem Status-Klartext in der prominenten Leiste.
 const STATUS_SATZ: Record<StrategieGesamtStatus, string> = {
   auf_kurs: 'deine Pins folgen deiner Strategie.',
@@ -146,20 +137,34 @@ export default function StrategieCheckSection({
 
   return (
     <section id="strategie-check" className="scroll-mt-4">
-      <h2 className="text-lg font-semibold text-gray-900">Strategie-Check</h2>
-      <p className="mb-3 text-sm text-gray-600">
-        Vergleicht deine Pin-Arbeit der letzten {result.fensterTage} Tage mit
-        deiner festgelegten Strategie. Der Status zeigt, wie stark deine
-        tatsächliche Pin-Verteilung von deiner geplanten Strategie abweicht.
-      </p>
+      {/* Sektions-Überschrift (v2): Hierarchie über Schrift + Weißraum, keine
+          Trennlinie. text-xl Blaugrau; der Abstand davor kommt aus dem
+          space-y-8 des Seiten-Wrappers. */}
+      <div className="mb-4">
+        <h2 className="text-xl font-semibold text-marke-blaugrau">
+          Strategie-Check
+        </h2>
+        <p className="mt-1 text-sm text-gray-600">
+          Vergleicht deine Pin-Arbeit der letzten {result.fensterTage} Tage mit
+          deiner festgelegten Strategie. Der Status zeigt, wie stark deine
+          tatsächliche Pin-Verteilung von deiner geplanten Strategie abweicht.
+        </p>
+      </div>
 
-      {/* Prominente, getönte Gesamt-Status-Leiste über den Karten. */}
-      <div
-        className={`mb-3 rounded-md border border-l-[3px] p-3 ${AMPEL_LEISTE[amp]}`}
-      >
-        <p className="text-sm">
-          <span className="font-semibold text-haupt">{status.label}</span>
-          <span className="text-gray-700">, {STATUS_SATZ[result.gesamtStatus]}</span>
+      {/* Zusammenfassende Status-Kachel (weiß, hebt sich vom Creme ab). Den
+          Status trägt der StatusDot, nicht mehr eine blasse Flächen-Tönung. */}
+      <div className="mb-3 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+        <p className="text-base font-semibold text-marke-blaugrau">
+          Strategie-Status
+        </p>
+        <p className="mt-1 flex items-start gap-2 text-sm">
+          <StatusDot tone={AMPEL_TONE[amp]} />
+          <span>
+            <span className="font-semibold text-haupt">{status.label}</span>
+            <span className="text-gray-700">
+              , {STATUS_SATZ[result.gesamtStatus]}
+            </span>
+          </span>
         </p>
       </div>
 
@@ -193,6 +198,7 @@ function ZielflaechenCard({ result }: { result: StrategieCheckV2 }) {
       {!z.hatSoll ? (
         <Hinweis>
           Du hast noch keine Pin-Ziel-Verteilung festgelegt.{' '}
+          →{' '}
           <Link
             href="/dashboard/strategie?tab=meine"
             className="font-medium text-link underline"
@@ -311,6 +317,7 @@ function FrequenzCard({ result }: { result: StrategieCheckV2 }) {
       {f.sollFrequenz === null ? (
         <Hinweis>
           Du hast noch keinen Pinning-Rhythmus festgelegt.{' '}
+          →{' '}
           <Link
             href="/dashboard/strategie?tab=meine"
             className="font-medium text-link underline"
@@ -367,6 +374,7 @@ function SaeulenCard({ result }: { result: StrategieCheckV2 }) {
         <Hinweis>
           Deine Content-Säulen entstehen aus den Kategorien deiner Boards und
           werden im Strategie-Setup bestätigt.{' '}
+          →{' '}
           <Link
             href="/dashboard/strategie?tab=meine"
             className="font-medium text-link underline"

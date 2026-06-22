@@ -276,7 +276,7 @@ export default function ContentClient({
         <button
           type="button"
           onClick={() => (showAddForm ? closeForm() : openAdd())}
-          className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+          className="rounded-md bg-marke-blaugrau px-4 py-2 text-sm font-medium text-white hover:bg-marke-blaugrau-dunkel"
         >
           {showAddForm ? 'Abbrechen' : 'Inhalt hinzufügen'}
         </button>
@@ -470,7 +470,7 @@ export default function ContentClient({
           <div className="flex gap-2">
             <button
               type="submit"
-              className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+              className="rounded-md bg-marke-blaugrau px-4 py-2 text-sm font-medium text-white hover:bg-marke-blaugrau-dunkel"
             >
               Speichern
             </button>
@@ -569,7 +569,7 @@ export default function ContentClient({
                                 href={u.url}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-red-600 hover:text-red-700 hover:underline"
+                                className="text-link underline underline-offset-2"
                                 title={u.url}
                               >
                                 {label}
@@ -578,7 +578,8 @@ export default function ContentClient({
                                     {' '}
                                     · {anker}
                                   </span>
-                                )}
+                                )}{' '}
+                                <span aria-hidden>↗</span>
                               </a>
                             </li>
                           )

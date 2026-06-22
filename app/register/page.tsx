@@ -12,7 +12,7 @@ export default function RegisterPage({
 
   if (!allowSignup) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
+      <div className="flex min-h-screen items-center justify-center bg-seite px-4">
         <div className="w-full max-w-md space-y-6 rounded-xl bg-white p-8 shadow">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">
@@ -29,7 +29,7 @@ export default function RegisterPage({
             Schon ein Konto?{' '}
             <Link
               href="/login"
-              className="font-medium text-red-600 hover:text-red-500"
+              className="font-medium text-link underline underline-offset-2"
             >
               Anmelden
             </Link>
@@ -40,7 +40,7 @@ export default function RegisterPage({
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
+    <div className="flex min-h-screen items-center justify-center bg-seite px-4">
       <div className="w-full max-w-md space-y-6 rounded-xl bg-white p-8 shadow">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">
@@ -96,7 +96,7 @@ export default function RegisterPage({
 
           <button
             type="submit"
-            className="w-full rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+            className="w-full rounded-md bg-marke-blaugrau px-4 py-2 text-sm font-medium text-white hover:bg-marke-blaugrau-dunkel focus:outline-none focus:ring-2 focus:ring-marke-blaugrau focus:ring-offset-2"
           >
             Registrieren
           </button>
@@ -106,7 +106,7 @@ export default function RegisterPage({
           Schon ein Konto?{' '}
           <Link
             href="/login"
-            className="font-medium text-red-600 hover:text-red-500"
+            className="font-medium text-link underline underline-offset-2"
           >
             Anmelden
           </Link>

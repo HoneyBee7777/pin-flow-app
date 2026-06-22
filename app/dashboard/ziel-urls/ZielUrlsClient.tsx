@@ -1,8 +1,17 @@
 'use client'
 
-import { useMemo, useState, useTransition, type FormEvent } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+  type FormEvent,
+} from 'react'
 import { useSearchParams } from 'next/navigation'
 import SortableTh from '@/components/SortableTh'
+import { HinweisBox } from '@/components/HinweisBox'
+import { normalizeUrl } from '@/lib/normalize-url'
 import {
   addZielUrl,
   deleteZielUrl,
@@ -110,6 +119,29 @@ export default function ZielUrlsClient({
     () => searchParams?.get('filter') === 'ohne-zielflaeche'
   )
 
+  // Freitext-Suche mit Autocomplete (lokal adaptiert vom Pins-FilterKeyword).
+  // Reiner Client-Filter — alle URLs sind ohnehin geladen.
+  const [suchbegriff, setSuchbegriff] = useState('')
+  const [suchOpen, setSuchOpen] = useState(false)
+  const suchRef = useRef<HTMLDivElement>(null)
+
+  // Kontrollierter URL-Eingabewert im Formular — Basis für die Duplikat-Warnung
+  // (Live-Vergleich beim Tippen). Wird beim Öffnen/Schließen des Formulars
+  // gesetzt; gespeichert wird weiterhin der rohe Wert (nur .trim) per FormData.
+  const [urlInput, setUrlInput] = useState('')
+
+  // Vorschlags-Dropdown schließen, wenn außerhalb geklickt wird.
+  useEffect(() => {
+    if (!suchOpen) return
+    function onDocClick(e: MouseEvent) {
+      if (suchRef.current && !suchRef.current.contains(e.target as Node)) {
+        setSuchOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [suchOpen])
+
   const formOpen = showAddForm || editing !== null
 
   function toggleSort(key: SortKey) {
@@ -152,14 +184,52 @@ export default function ZielUrlsClient({
     return arr
   }, [urls, sort])
 
-  const displayedUrls = useMemo(
-    () => (nurOhneZiel ? sortedUrls.filter((u) => !u.zielflaeche) : sortedUrls),
-    [nurOhneZiel, sortedUrls]
-  )
+  // Filterkette: Sortierung → „Nur ohne Pin-Ziel" → Freitext-Suche (url + titel).
+  // Alle drei sind kombinierbar.
+  const displayedUrls = useMemo(() => {
+    const q = suchbegriff.trim().toLowerCase()
+    let result = sortedUrls
+    if (nurOhneZiel) result = result.filter((u) => !u.zielflaeche)
+    if (q) {
+      result = result.filter(
+        (u) =>
+          u.url.toLowerCase().includes(q) ||
+          u.titel.toLowerCase().includes(q)
+      )
+    }
+    return result
+  }, [nurOhneZiel, sortedUrls, suchbegriff])
   const ohneZielCount = useMemo(
     () => urls.filter((u) => !u.zielflaeche).length,
     [urls]
   )
+
+  // Duplikat-Warnung: gibt es eine BESTEHENDE Ziel-URL, deren normalisierte
+  // Form der gerade eingegebenen entspricht (nur Schreibweise, siehe
+  // normalizeUrl)? Beim Bearbeiten sich selbst per id ausnehmen. Nur Hinweis,
+  // kein Blocker — der gespeicherte Wert bleibt unverändert.
+  const aehnlicheUrl = useMemo(() => {
+    const q = normalizeUrl(urlInput)
+    if (!q) return null
+    return (
+      urls.find((u) => u.id !== editing?.id && normalizeUrl(u.url) === q) ??
+      null
+    )
+  }, [urlInput, urls, editing])
+
+  // Autocomplete-Vorschläge: leeres Feld → erste 8, sonst nach url/titel
+  // gefiltert, max. 8 (wie das Pins-FilterKeyword-Vorbild).
+  const suchVorschlaege = useMemo(() => {
+    const q = suchbegriff.trim().toLowerCase()
+    if (!q) return urls.slice(0, 8)
+    return urls
+      .filter(
+        (u) =>
+          u.url.toLowerCase().includes(q) ||
+          u.titel.toLowerCase().includes(q)
+      )
+      .slice(0, 8)
+  }, [suchbegriff, urls])
 
   const filteredContents = useMemo(() => {
     const q = contentFilter.trim().toLowerCase()
@@ -183,6 +253,7 @@ export default function ZielUrlsClient({
     setContentFilter('')
     setSelectedBoardIds(new Set())
     setBoardFilter('')
+    setUrlInput('')
     setFormError(null)
   }
 
@@ -194,6 +265,7 @@ export default function ZielUrlsClient({
     setContentFilter('')
     setSelectedBoardIds(new Set(u.boards.map((b) => b.id)))
     setBoardFilter('')
+    setUrlInput(u.url)
     setFormError(null)
   }
 
@@ -202,6 +274,7 @@ export default function ZielUrlsClient({
     setEditing(null)
     setSelectedContentIds(new Set())
     setSelectedBoardIds(new Set())
+    setUrlInput('')
     setFormError(null)
   }
 
@@ -276,7 +349,7 @@ export default function ZielUrlsClient({
         <button
           type="button"
           onClick={() => (showAddForm ? closeForm() : openAdd())}
-          className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+          className="rounded-md bg-marke-blaugrau px-4 py-2 text-sm font-medium text-white hover:bg-marke-blaugrau-dunkel"
         >
           {showAddForm ? 'Abbrechen' : 'URL hinzufügen'}
         </button>
@@ -322,12 +395,22 @@ export default function ZielUrlsClient({
               inputMode="url"
               required
               placeholder="https://www.meinewebsite.de"
-              defaultValue={editing?.url ?? ''}
+              value={urlInput}
+              onChange={(e) => setUrlInput(e.target.value)}
               className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
             />
             <p className="mt-1 text-xs text-gray-500">
               Bitte vollständige URL eingeben, z.B. https://www.meinewebsite.de
             </p>
+            {aehnlicheUrl && (
+              <div className="mt-2">
+                <HinweisBox variant="warnung" tone="achtung" compact>
+                  Es gibt bereits eine sehr ähnliche URL:{' '}
+                  <span className="font-medium">{aehnlicheUrl.url}</span>. Bitte
+                  prüfe, ob es dieselbe Seite ist. Speichern bleibt möglich.
+                </HinweisBox>
+              </div>
+            )}
           </div>
 
           <div>
@@ -486,7 +569,7 @@ export default function ZielUrlsClient({
           <div className="flex gap-2">
             <button
               type="submit"
-              className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+              className="rounded-md bg-marke-blaugrau px-4 py-2 text-sm font-medium text-white hover:bg-marke-blaugrau-dunkel"
             >
               Speichern
             </button>
@@ -541,7 +624,7 @@ export default function ZielUrlsClient({
           <div className="flex gap-2">
             <button
               type="submit"
-              className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+              className="rounded-md bg-marke-blaugrau px-4 py-2 text-sm font-medium text-white hover:bg-marke-blaugrau-dunkel"
             >
               Importieren
             </button>
@@ -557,6 +640,71 @@ export default function ZielUrlsClient({
       )}
 
       <div className="flex flex-wrap items-center gap-3 text-sm">
+        {/* Freitext-Suche mit Autocomplete. Auswahl eines Vorschlags filtert
+            die Tabelle auf diese URL (kein Sofort-Sprung ins Formular) — der
+            vorhandene Bearbeiten-Knopf der Trefferzeile greift dann. */}
+        <div ref={suchRef} className="relative">
+          <input
+            type="text"
+            value={suchbegriff}
+            onChange={(e) => {
+              setSuchbegriff(e.target.value)
+              setSuchOpen(true)
+            }}
+            onFocus={() => setSuchOpen(true)}
+            placeholder="URL suchen …"
+            className="w-64 rounded-md border border-gray-300 px-3 py-1.5 pr-8 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+          />
+          {suchbegriff && (
+            <button
+              type="button"
+              onClick={() => {
+                setSuchbegriff('')
+                setSuchOpen(false)
+              }}
+              aria-label="Suche zurücksetzen"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            >
+              ×
+            </button>
+          )}
+          {suchOpen && suchVorschlaege.length > 0 && (
+            <ul className="absolute z-20 mt-1 max-h-72 w-[28rem] max-w-[90vw] overflow-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg">
+              {suchVorschlaege.map((u) => (
+                <li key={u.id}>
+                  <button
+                    type="button"
+                    onMouseDown={(e) => {
+                      // mousedown statt click: feuert vor dem Blur des Inputs.
+                      e.preventDefault()
+                      setSuchbegriff(u.url)
+                      setSuchOpen(false)
+                    }}
+                    className="block w-full px-3 py-1.5 text-left hover:bg-gray-50"
+                  >
+                    {u.titel ? (
+                      // Mit Titel: Titel darf auf 2 Zeilen umbrechen, darunter
+                      // die URL klein/grau (gekürzt).
+                      <>
+                        <span className="block line-clamp-2 text-sm text-gray-900">
+                          {u.titel}
+                        </span>
+                        <span className="block truncate text-xs text-gray-500">
+                          {u.url}
+                        </span>
+                      </>
+                    ) : (
+                      // Ohne Titel: nur die URL (nicht zweimal dasselbe).
+                      <span className="block truncate text-sm text-gray-900">
+                        {u.url}
+                      </span>
+                    )}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
         <label className="inline-flex cursor-pointer items-center gap-2 text-gray-700">
           <input
             type="checkbox"
@@ -641,10 +789,13 @@ export default function ZielUrlsClient({
                       href={u.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="block truncate text-red-600 hover:text-red-700 hover:underline"
+                      className="flex items-center gap-1 text-link underline underline-offset-2"
                       title={u.url}
                     >
-                      {u.url}
+                      <span className="truncate">{u.url}</span>
+                      <span aria-hidden className="shrink-0">
+                        ↗
+                      </span>
                     </a>
                   </td>
                   <td className="px-4 py-3 text-sm">

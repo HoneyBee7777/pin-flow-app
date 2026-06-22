@@ -207,7 +207,7 @@ function KeywordChips({
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
-          className="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium text-red-700 hover:underline"
+          className="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium text-link underline underline-offset-2"
         >
           {expanded ? `− ${hidden} weniger` : `+ ${hidden} weitere`}
         </button>
@@ -230,7 +230,7 @@ function DescriptionCell({ text }: { text: string | null }) {
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="text-xs font-medium text-red-700 hover:underline"
+        className="text-xs font-medium text-link underline underline-offset-2"
       >
         {expanded ? 'weniger anzeigen' : 'mehr anzeigen'}
       </button>
@@ -379,7 +379,7 @@ export default function PinProduktionClient(props: Props) {
         <button
           type="button"
           onClick={() => (formOpen ? closeForm() : openAdd())}
-          className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+          className="rounded-md bg-marke-blaugrau px-4 py-2 text-sm font-medium text-white hover:bg-marke-blaugrau-dunkel"
         >
           {formOpen ? 'Abbrechen' : 'Neuen Pin erstellen'}
         </button>
@@ -984,7 +984,7 @@ function PinTable({
               <button
                 type="button"
                 onClick={resetFilters}
-                className="font-medium text-red-600 hover:underline"
+                className="font-medium text-link underline underline-offset-2"
               >
                 Alle zurücksetzen
               </button>
@@ -1142,13 +1142,14 @@ function PinTable({
                           href={pin.url.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-red-600 hover:text-red-700 hover:underline"
+                          className="text-link underline underline-offset-2"
                           title={pin.url.url}
                         >
                           {label}
                           {anker && (
                             <span className="text-gray-400"> · {anker}</span>
-                          )}
+                          )}{' '}
+                          <span aria-hidden>↗</span>
                         </a>
                       )
                     })()
@@ -1933,7 +1934,7 @@ function PinForm({
           <button
             type="button"
             onClick={generatePrompt}
-            className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+            className="rounded-md bg-marke-blaugrau px-4 py-2 text-sm font-medium text-white hover:bg-marke-blaugrau-dunkel"
           >
             Prompt generieren
           </button>
@@ -2136,7 +2137,7 @@ function PinForm({
         <button
           type="submit"
           disabled={submitting || (!isEdit && !showStage2)}
-          className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+          className="rounded-md bg-marke-blaugrau px-4 py-2 text-sm font-medium text-white hover:bg-marke-blaugrau-dunkel disabled:opacity-50"
           title={
             !isEdit && !showStage2
               ? 'Erst Prompt generieren, um die Pin-Felder freizugeben'
@@ -2417,7 +2418,7 @@ function ManualPinForm({
         <button
           type="submit"
           disabled={submitting}
-          className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+          className="rounded-md bg-marke-blaugrau px-4 py-2 text-sm font-medium text-white hover:bg-marke-blaugrau-dunkel disabled:opacity-50"
         >
           {submitting ? 'Speichert…' : 'Speichern'}
         </button>
@@ -2553,7 +2554,7 @@ function ZielUrlPicker({
           Zielfläche der gewählten Ziel-URL. Rein informativ, nicht editierbar. */}
       <div className="mt-2">
         <p className="block text-sm font-medium text-gray-700">Pin-Ziel</p>
-        <div className="mt-1 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm">
+        <div className="mt-1 rounded-md border border-gray-200 bg-marke-kachel px-3 py-2 text-sm">
           {selectedUrl && selectedZielLabel ? (
             <span className="font-medium text-gray-900">
               {selectedZielLabel}
@@ -2564,7 +2565,7 @@ function ZielUrlPicker({
               im Bereich{' '}
               <Link
                 href="/dashboard/ziel-urls"
-                className="font-medium text-red-600 hover:underline"
+                className="font-medium text-link underline underline-offset-2"
               >
                 Ziel-URLs
               </Link>{' '}
@@ -2576,7 +2577,7 @@ function ZielUrlPicker({
               kannst es nach dem Anlegen im Bereich{' '}
               <Link
                 href="/dashboard/ziel-urls"
-                className="font-medium text-red-600 hover:underline"
+                className="font-medium text-link underline underline-offset-2"
               >
                 Ziel-URLs
               </Link>{' '}
@@ -3258,7 +3259,7 @@ function CsvImport({
         </select>
       </div>
 
-      <div className="rounded-md border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600">
+      <div className="rounded-md border border-gray-200 bg-marke-kachel p-3 text-xs text-gray-600">
         <p className="font-medium">
           Erwartete Spalten (Reihenfolge egal, Überschrift muss passen):
         </p>
@@ -3275,7 +3276,7 @@ function CsvImport({
           <button
             type="button"
             onClick={downloadTemplate}
-            className="font-medium text-red-600 hover:underline"
+            className="font-medium text-link underline underline-offset-2"
           >
             Leere CSV-Vorlage herunterladen
           </button>
@@ -3320,7 +3321,7 @@ function CsvImport({
       {warnings.length > 0 && (
         <div className="rounded-md border border-yellow-200 bg-yellow-50 p-3 text-xs text-yellow-800">
           <p className="font-medium">
-            {warnings.length} Warnung(en) — Pins werden trotzdem importiert:
+            {warnings.length} Warnung(en). Pins werden trotzdem importiert:
           </p>
           <ul className="mt-1 list-disc pl-5">
             {warnings.slice(0, 8).map((e, i) => (
@@ -3336,7 +3337,7 @@ function CsvImport({
       {missingBoards.length > 0 && (
         <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
           <p className="font-medium">
-            {missingBoards.length} Board(s) nicht gefunden — Pins werden ohne
+            {missingBoards.length} Board(s) nicht gefunden. Pins werden ohne
             Board-Zuordnung importiert:
           </p>
           <p className="mt-1 break-all">{missingBoards.join(', ')}</p>
@@ -3346,7 +3347,7 @@ function CsvImport({
       {missingUrls.length > 0 && (
         <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
           <p className="font-medium">
-            {missingUrls.length} URL(s) nicht gefunden — Pins werden ohne
+            {missingUrls.length} URL(s) nicht gefunden. Pins werden ohne
             URL-Zuordnung importiert:
           </p>
           <p className="mt-1 break-all">{missingUrls.join(', ')}</p>
@@ -3536,7 +3537,7 @@ function CsvImport({
           type="button"
           onClick={doImport}
           disabled={!parsed || parsed.length === 0 || isPending}
-          className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+          className="rounded-md bg-marke-blaugrau px-4 py-2 text-sm font-medium text-white hover:bg-marke-blaugrau-dunkel disabled:opacity-50"
         >
           {isPending
             ? 'Importiert…'

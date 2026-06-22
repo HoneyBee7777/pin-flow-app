@@ -84,7 +84,7 @@ export default async function RessourcenPage() {
             →{' '}
             <Link
               href="/dashboard/analytics?tab=eingabe"
-              className="font-medium text-red-600 hover:underline"
+              className="font-medium text-link underline underline-offset-2"
             >
               Zur Zielgruppe-Eingabe
             </Link>

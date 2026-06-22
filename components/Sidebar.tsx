@@ -185,8 +185,8 @@ export default function Sidebar({
                           href={item.href}
                           className={`flex items-center gap-2 rounded-md border-l-[3px] px-3 py-1 text-sm font-medium transition-colors ${
                             active
-                              ? 'border-l-marke-ocker bg-marke-blaugrau-xhell text-marke-blaugrau'
-                              : 'border-l-transparent text-gray-700 hover:bg-marke-blaugrau-xhell hover:text-marke-blaugrau'
+                              ? 'border-l-marke-ocker bg-marke-creme text-marke-blaugrau'
+                              : 'border-l-transparent text-gray-700 hover:bg-marke-creme hover:text-marke-blaugrau'
                           }`}
                         >
                           <PinKategorieIcon
@@ -250,7 +250,7 @@ export default function Sidebar({
             aria-label="Profil"
             aria-expanded={profilOpen}
             title="Profil"
-            className="rounded-full p-1.5 text-gray-500 transition-colors hover:bg-marke-blaugrau-xhell hover:text-marke-blaugrau"
+            className="rounded-full p-1.5 text-gray-500 transition-colors hover:bg-marke-creme hover:text-marke-blaugrau"
           >
             <PersonIcon />
           </button>
@@ -259,7 +259,7 @@ export default function Sidebar({
               type="submit"
               aria-label="Abmelden"
               title="Abmelden"
-              className="rounded-full p-1.5 text-gray-500 transition-colors hover:bg-marke-blaugrau-xhell hover:text-marke-blaugrau"
+              className="rounded-full p-1.5 text-gray-500 transition-colors hover:bg-marke-creme hover:text-marke-blaugrau"
             >
               <LogOutIcon />
             </button>
@@ -274,12 +274,15 @@ export default function Sidebar({
               <p className="mt-0.5 break-all text-xs text-gray-700">
                 {userEmail ?? 'Unbekannt'}
               </p>
-              <Link
-                href="/dashboard/profil"
-                className="mt-2 inline-block text-xs font-medium text-link underline underline-offset-2 hover:opacity-80"
-              >
-                Mein Profil
-              </Link>
+              <p className="mt-2 text-xs">
+                →{' '}
+                <Link
+                  href="/dashboard/profil"
+                  className="font-medium text-link underline underline-offset-2 hover:opacity-80"
+                >
+                  Mein Profil
+                </Link>
+              </p>
             </div>
           )}
         </div>

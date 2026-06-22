@@ -13,6 +13,8 @@ import {
 } from './actions/aufgaben'
 import { formatDateDe } from './analytics/utils'
 import { StatusDot } from '@/components/StatusDot'
+import { PinKategorieIcon } from '@/components/PinKategorieIcon'
+import { AnzahlBadge } from '@/components/AnzahlBadge'
 
 function PencilIcon() {
   return (
@@ -53,11 +55,26 @@ export default function AufgabenSection({
   const done = tasks.filter((t) => t.erledigt)
 
   return (
-    <section>
-      <h2 className="text-lg font-semibold text-gray-900">
-        Aufgaben & Erinnerungen
-      </h2>
-      <div className="mt-3 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+    <section className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+      {/* Card-Kopf wie die anderen Sektionen: Icon + Titel + AnzahlBadge
+          (offene Aufgaben). Nicht aufklappbar, daher normaler div statt details. */}
+      <div className="flex items-start gap-3">
+        <PinKategorieIcon
+          name="checkliste"
+          className="h-6 w-6 shrink-0 text-marke-blaugrau"
+        />
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-medium text-gray-900">
+            Aufgaben & Erinnerungen
+          </div>
+          <p className="mt-0.5 text-sm text-gray-600">
+            Halte hier alles fest, was dir in den Kopf kommt: Aufgaben,
+            Erinnerungen, lose Gedanken - damit nichts verloren geht.
+          </p>
+        </div>
+        <AnzahlBadge count={open.length} />
+      </div>
+      <div className="mt-4">
         <AddForm />
         <OpenList tasks={open} today={today} />
         <DoneList tasks={done} />
@@ -69,7 +86,7 @@ export default function AufgabenSection({
 function OpenList({ tasks, today }: { tasks: Aufgabe[]; today: string }) {
   if (tasks.length === 0) {
     return (
-      <p className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600">
+      <p className="rounded-md border border-gray-200 bg-marke-kachel px-3 py-2 text-sm text-gray-600">
         Keine offenen Aufgaben
       </p>
     )
@@ -275,7 +292,7 @@ function EditForm({
   return (
     <form
       onSubmit={onSubmit}
-      className="flex flex-wrap items-end gap-2 rounded-md border border-gray-200 bg-gray-50 p-3"
+      className="flex flex-wrap items-end gap-2 rounded-md border border-gray-200 bg-marke-kachel p-3"
     >
       <div className="flex-1 min-w-[200px]">
         <label className="block text-xs font-medium text-gray-500">
@@ -362,7 +379,7 @@ function AddForm() {
   return (
     <form
       onSubmit={onSubmit}
-      className="mb-4 flex flex-wrap items-end gap-2 rounded-md border border-gray-200 bg-gray-50 p-3"
+      className="mb-4 flex flex-wrap items-end gap-2 rounded-md border border-gray-200 bg-marke-kachel p-3"
     >
       <div className="flex-1 min-w-[200px]">
         <label
@@ -378,7 +395,7 @@ function AddForm() {
           onChange={(e) => setTitel(e.target.value)}
           placeholder="z.B. Pinterest-Zahlen aktualisieren"
           maxLength={200}
-          className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+          className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-marke-blaugrau focus:outline-none focus:ring-1 focus:ring-marke-blaugrau"
         />
       </div>
       <div>
@@ -393,7 +410,7 @@ function AddForm() {
           type="date"
           value={datum}
           onChange={(e) => setDatum(e.target.value)}
-          className="mt-1 block rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+          className="mt-1 block rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-marke-blaugrau focus:outline-none focus:ring-1 focus:ring-marke-blaugrau"
         />
       </div>
       <label className="flex items-center gap-2 pb-2 text-sm text-gray-700">

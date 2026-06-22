@@ -15,7 +15,7 @@ export default function FaqPage() {
           Pin-Flow. Für tiefere Strategie-Themen schau in den Bereich{' '}
           <Link
             href="/dashboard/strategie"
-            className="font-medium text-red-600 hover:underline"
+            className="font-medium text-link underline underline-offset-2"
           >
             Pinterest-Wissen
           </Link>

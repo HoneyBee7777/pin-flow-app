@@ -13,7 +13,7 @@ import type { OBlock, OCta, OnboardingStepDef } from '@/lib/onboarding-content'
 // nur das Wort verlinkt ist (siehe Memory-Notiz „Pfeil-Links Formatierung").
 function renderInline(text: string, keyBase: string): ReactNode[] {
   const linkRe = /\[([^\]]+)\]\(([^)]+)\)/g
-  const linkCls = 'font-medium text-red-600 hover:underline'
+  const linkCls = 'font-medium text-link underline underline-offset-2'
 
   function withLinks(segment: string, base: string): ReactNode[] {
     const out: ReactNode[] = []
@@ -122,7 +122,7 @@ function Block({ block, i }: { block: OBlock; i: number }) {
 export function CtaButton({ cta }: { cta: OCta }) {
   const cls =
     cta.variant === 'primary'
-      ? 'inline-flex items-center rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700'
+      ? 'inline-flex items-center rounded-md bg-marke-blaugrau px-4 py-2 text-sm font-medium text-white hover:bg-marke-blaugrau-dunkel'
       : 'inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50'
   if (cta.newTab) {
     return (

@@ -171,7 +171,7 @@ function UnmatchedBoardRow({
             href={boardUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="block break-all text-sm font-medium text-red-600 hover:underline"
+            className="block break-all text-sm font-medium text-link underline underline-offset-2"
           >
             {unmatched.boardSlug} ↗
           </a>
@@ -261,7 +261,7 @@ function UnmatchedBoardRow({
             type="button"
             onClick={onAssign}
             disabled={!selectedId || isPending}
-            className="rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 disabled:opacity-50"
+            className="rounded-md bg-marke-blaugrau px-3 py-1.5 text-xs font-medium text-white hover:bg-marke-blaugrau-dunkel disabled:opacity-50"
           >
             {isPending ? 'Zuordnet…' : 'Zuordnen & importieren'}
           </button>

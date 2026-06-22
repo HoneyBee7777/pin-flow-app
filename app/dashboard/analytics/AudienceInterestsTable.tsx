@@ -243,7 +243,7 @@ export default function AudienceInterestsTable({
           <button
             type="button"
             onClick={() => setShowAll((v) => !v)}
-            className="text-sm font-medium text-red-600 hover:underline"
+            className="text-sm font-medium text-link underline underline-offset-2"
           >
             {showAll
               ? 'Weniger anzeigen'

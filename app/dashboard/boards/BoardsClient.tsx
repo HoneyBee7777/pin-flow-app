@@ -348,7 +348,7 @@ export default function BoardsClient({
         <button
           type="button"
           onClick={() => (showAddForm ? closeForm() : openAdd())}
-          className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+          className="rounded-md bg-marke-blaugrau px-4 py-2 text-sm font-medium text-white hover:bg-marke-blaugrau-dunkel"
         >
           {showAddForm ? 'Abbrechen' : 'Board erstellen'}
         </button>
@@ -559,7 +559,7 @@ export default function BoardsClient({
           <div className="flex gap-2">
             <button
               type="submit"
-              className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+              className="rounded-md bg-marke-blaugrau px-4 py-2 text-sm font-medium text-white hover:bg-marke-blaugrau-dunkel"
             >
               Speichern
             </button>
@@ -725,7 +725,7 @@ export default function BoardsClient({
                                 href={u.url}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-red-600 hover:text-red-700 hover:underline"
+                                className="text-link underline underline-offset-2"
                                 title={u.url}
                               >
                                 {label}
@@ -734,7 +734,8 @@ export default function BoardsClient({
                                     {' '}
                                     · {anker}
                                   </span>
-                                )}
+                                )}{' '}
+                                <span aria-hidden>↗</span>
                               </a>
                             </li>
                           )
@@ -1128,7 +1129,7 @@ Board-Beschreibung: [Beschreibung]`
             type="button"
             onClick={generate}
             disabled={!canGenerate}
-            className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-md bg-marke-blaugrau px-4 py-2 text-sm font-medium text-white hover:bg-marke-blaugrau-dunkel disabled:cursor-not-allowed disabled:opacity-50"
           >
             Prompt generieren
           </button>

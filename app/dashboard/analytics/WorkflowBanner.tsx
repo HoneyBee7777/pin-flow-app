@@ -14,7 +14,7 @@ export default function WorkflowBanner({
         href={analyticsUrl}
         target="_blank"
         rel="noopener noreferrer"
-        className="inline-flex shrink-0 items-center gap-1 rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700"
+        className="inline-flex shrink-0 items-center gap-1 rounded-md bg-marke-blaugrau px-3 py-1.5 text-xs font-medium text-white hover:bg-marke-blaugrau-dunkel"
       >
         Pinterest Analytics öffnen ↗
       </a>

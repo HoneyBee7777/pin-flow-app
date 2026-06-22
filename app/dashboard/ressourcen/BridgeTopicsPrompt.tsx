@@ -68,7 +68,7 @@ export default function BridgeTopicsPrompt({
       <button
         type="button"
         onClick={copy}
-        className="mt-3 inline-flex items-center gap-2 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+        className="mt-3 inline-flex items-center gap-2 rounded-md bg-marke-blaugrau px-4 py-2 text-sm font-medium text-white hover:bg-marke-blaugrau-dunkel"
       >
         {copied ? '✓ Kopiert!' : '📋 Prompt kopieren'}
       </button>
@@ -91,7 +91,7 @@ export default function BridgeTopicsPrompt({
         →{' '}
         <Link
           href="/dashboard/pin-produktion"
-          className="font-medium text-red-600 hover:underline"
+          className="font-medium text-link underline underline-offset-2"
         >
           Ideen direkt umsetzen und Pins erstellen
         </Link>

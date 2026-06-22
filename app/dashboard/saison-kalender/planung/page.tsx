@@ -58,7 +58,7 @@ export default async function PlanungPage() {
       <div className="mb-4">
         <Link
           href="/dashboard/saison-kalender"
-          className="text-sm text-red-600 hover:underline"
+          className="text-sm text-link underline underline-offset-2"
         >
           ← Zurück zum Saison-Kalender
         </Link>

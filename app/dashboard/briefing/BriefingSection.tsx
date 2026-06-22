@@ -8,10 +8,9 @@
 import { useCallback } from 'react'
 import type { BriefingItem } from './lib'
 
-// 3px Border-Left als dezenter Akzent, einheitlich in Marke Blaugrau-mittel
-// (vorher kategorieabhängig orange/blau/grau — das waren keine Status-Farben,
-// daher auf die Markenpalette vereinheitlicht).
-const ITEM_ACCENT = 'var(--marke-blaugrau-mittel)'
+// 3px Border-Left als dezenter Akzent in Camel (Marke Ocker), konsistent zum
+// Coaching-Streifen-Muster (Coaching = Camel-Streifen).
+const ITEM_ACCENT = 'var(--marke-ocker)'
 
 function jumpTo(sectionId: string) {
   if (typeof document === 'undefined') return

@@ -160,7 +160,7 @@ export default function OnboardingClient({
         </ul>
         <Link
           href="/dashboard"
-          className="inline-flex items-center text-sm font-medium text-red-600 hover:underline"
+          className="inline-flex items-center text-sm font-medium text-link underline underline-offset-2"
         >
           ← Zurück zum Dashboard
         </Link>
@@ -239,7 +239,7 @@ export default function OnboardingClient({
           <button
             type="button"
             onClick={handleComplete}
-            className="rounded-md bg-red-600 px-5 py-2 text-sm font-semibold text-white hover:bg-red-700"
+            className="rounded-md bg-marke-blaugrau px-5 py-2 text-sm font-semibold text-white hover:bg-marke-blaugrau-dunkel"
           >
             Zum Dashboard →
           </button>
@@ -248,7 +248,7 @@ export default function OnboardingClient({
             type="button"
             onClick={handleNext}
             disabled={savingProfile}
-            className="rounded-md bg-red-600 px-5 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+            className="rounded-md bg-marke-blaugrau px-5 py-2 text-sm font-semibold text-white hover:bg-marke-blaugrau-dunkel disabled:opacity-60"
           >
             {savingProfile
               ? 'Speichern…'
@@ -350,9 +350,9 @@ function BusinessCheck({
             href="https://www.pinterest.com/settings/"
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-3 inline-flex font-medium text-red-600 hover:underline"
+            className="mt-3 inline-flex font-medium text-link underline underline-offset-2"
           >
-            → Direkt zu den Pinterest-Einstellungen ↗
+            Direkt zu den Pinterest-Einstellungen ↗
           </a>
         </div>
       )}
@@ -459,7 +459,7 @@ function StrategyCtas() {
     <div className="flex flex-wrap gap-3 pt-1">
       <Link
         href="/dashboard/strategie?tab=meine&onboarding=true&returnTo=onboarding-step-10"
-        className="inline-flex items-center rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+        className="inline-flex items-center rounded-md bg-marke-blaugrau px-4 py-2 text-sm font-medium text-white hover:bg-marke-blaugrau-dunkel"
       >
         Strategie festlegen
       </Link>
@@ -493,7 +493,7 @@ function CompletionRecommendation({ info }: { info: CompletionInfo }) {
             <li key={m.href}>
               <Link
                 href={m.href}
-                className="font-medium text-red-600 hover:underline"
+                className="font-medium text-link underline underline-offset-2"
               >
                 {m.label}
               </Link>{' '}

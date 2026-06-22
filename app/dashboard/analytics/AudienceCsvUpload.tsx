@@ -121,7 +121,7 @@ export default function AudienceCsvUpload() {
             <button
               type="submit"
               disabled={!canSubmit}
-              className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+              className="rounded-md bg-marke-blaugrau px-4 py-2 text-sm font-medium text-white hover:bg-marke-blaugrau-dunkel disabled:opacity-50"
             >
               {isPending ? 'Importiert…' : 'Import starten'}
             </button>

@@ -13,11 +13,14 @@ const config: Config = {
         foreground: "var(--foreground)",
         // Marken-Tokens (Quelle: app/globals.css :root --marke-*)
         marke: {
-          blaugrau: "var(--marke-blaugrau)",
+          blaugrau: "rgb(var(--marke-blaugrau-rgb) / <alpha-value>)",
           "blaugrau-mittel": "var(--marke-blaugrau-mittel)",
           "blaugrau-hell": "var(--marke-blaugrau-hell)",
           "blaugrau-xhell": "var(--marke-blaugrau-xhell)",
           "blaugrau-dunkel": "var(--marke-blaugrau-dunkel)",
+          creme: "var(--marke-creme)",
+          kachel: "var(--marke-kachel)",
+          "kachel-hover": "var(--marke-kachel-hover)",
           ocker: "var(--marke-ocker)",
           "ocker-dunkel": "var(--marke-ocker-dunkel)",
           tanne: "var(--marke-tanne)",
