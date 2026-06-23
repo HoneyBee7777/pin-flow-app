@@ -92,7 +92,7 @@ function Block({ block, i }: { block: OBlock; i: number }) {
       )
     case 'callout':
       return (
-        <p className="rounded-md border-l-[3px] border-l-amber-400 bg-amber-50 px-4 py-3 text-[13px] leading-relaxed text-amber-900">
+        <p className="rounded-md border-l-[3px] border-l-hinweis-tipp-stripe bg-hinweis-tipp-flaeche px-4 py-3 text-[13px] leading-relaxed text-hinweis-tipp-text">
           {renderInline(block.text, `c${i}`)}
         </p>
       )

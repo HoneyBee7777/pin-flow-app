@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import type { ReactNode } from 'react'
+import { StatusDot } from '@/components/StatusDot'
 
 // V3.0 Phase 2c — Inhalt des Tabs „👥 Zielgruppe verstehen" auf der
 // Strategie-Seite. Fünf ausklappbare Toggle-Blöcke mit anfänger-tauglicher
@@ -30,7 +31,7 @@ export default function AudienceWissen() {
         wie du sie für deine Pin-Strategie nutzt.
       </p>
 
-      <div className="rounded-md border border-teal-200 border-l-[3px] border-l-teal-400 bg-teal-50 p-4 text-sm leading-relaxed text-teal-800">
+      <div className="rounded-md border border-hinweis-merke-rand border-l-[3px] border-l-hinweis-merke-stripe bg-hinweis-merke-flaeche p-4 text-sm leading-relaxed text-hinweis-merke-text">
         Bevor du auch nur einen Pin gestaltest, musst du eine Frage beantworten
         können: Für wen mache ich das? Marketing funktioniert nicht, wenn man
         für alle pinnt. Es funktioniert, wenn man für einen bestimmten Menschen
@@ -201,22 +202,25 @@ export default function AudienceWissen() {
         <Bullets
           items={[
             <>
-              <span className="font-medium text-green-700">
-                🟢 Affinität ≥ 1,5
+              <span className="inline-flex items-center gap-1.5 font-medium text-haupt">
+                <StatusDot tone="gut" />
+                Affinität ≥ 1,5
               </span>
               : stark überdurchschnittliches Interesse. Hier hat deine
               Zielgruppe einen klaren Schwerpunkt: <strong>hoher Hebel</strong>.
             </>,
             <>
-              <span className="font-medium text-amber-700">
-                🟡 Affinität 0,8 bis 1,5
+              <span className="inline-flex items-center gap-1.5 font-medium text-haupt">
+                <StatusDot tone="achtung" />
+                Affinität 0,8 bis 1,5
               </span>
               : durchschnittlich. Deine Zielgruppe teilt das Interesse mit dem
               Pinterest-Schnitt: <strong>neutral</strong>.
             </>,
             <>
-              <span className="font-medium text-red-700">
-                🔴 Affinität &lt; 0,8
+              <span className="inline-flex items-center gap-1.5 font-medium text-haupt">
+                <StatusDot tone="schlecht" />
+                Affinität &lt; 0,8
               </span>
               : unterdurchschnittlich. Deine Zielgruppe interessiert sich
               spürbar weniger als der Durchschnitt:{' '}
@@ -224,7 +228,7 @@ export default function AudienceWissen() {
             </>,
           ]}
         />
-        <div className="rounded-md border border-teal-200 border-l-[3px] border-l-teal-400 bg-teal-50 p-4 text-sm leading-relaxed text-teal-800">
+        <div className="rounded-md border border-hinweis-merke-rand border-l-[3px] border-l-hinweis-merke-stripe bg-hinweis-merke-flaeche p-4 text-sm leading-relaxed text-hinweis-merke-text">
           <strong>Merke:</strong> Affinität ist relativ, nicht absolut. Ein
           Thema mit Affinität 1,8 bedeutet nicht &bdquo;alle deine Follower
           interessieren sich dafür&ldquo;, sondern &bdquo;deine Zielgruppe

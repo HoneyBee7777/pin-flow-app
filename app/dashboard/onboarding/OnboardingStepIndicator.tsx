@@ -30,7 +30,7 @@ export default function OnboardingStepIndicator({
               key={p.key}
               className={
                 active
-                  ? 'rounded-full bg-red-600 px-3 py-1 text-xs font-semibold text-white'
+                  ? 'rounded-full bg-marke-blaugrau px-3 py-1 text-xs font-semibold text-white'
                   : 'rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-500'
               }
             >
@@ -55,9 +55,9 @@ export default function OnboardingStepIndicator({
               aria-hidden
               className={
                 i === step.id
-                  ? 'h-2 w-4 rounded-full bg-red-600'
+                  ? 'h-2 w-4 rounded-full bg-marke-ocker'
                   : i < step.id
-                    ? 'h-2 w-2 rounded-full bg-red-300'
+                    ? 'h-2 w-2 rounded-full bg-marke-blaugrau-hell'
                     : 'h-2 w-2 rounded-full bg-gray-200'
               }
             />

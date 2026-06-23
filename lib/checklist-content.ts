@@ -1,4 +1,4 @@
-// V3.6 — Setup-Checkliste: 22 Punkte in 6 Kategorien als strukturierte
+// V3.6 — Setup-Checkliste: 23 Punkte in 6 Kategorien als strukturierte
 // Daten (kein React). Die item-`id`s sind stabil — sie werden in
 // einstellungen.checklist_state persistiert; nicht umbenennen.
 //
@@ -28,7 +28,8 @@ export type ChecklistItem = {
 export type ChecklistCategory = {
   id: string
   title: string
-  emoji?: string
+  // Name eines PinKategorieIcon (Outline, currentColor) statt Emoji.
+  icon?: string
   items: ChecklistItem[]
 }
 
@@ -72,7 +73,7 @@ export const CHECKLIST_CATEGORIES: ChecklistCategory[] = [
   {
     id: 'pinterest-setup',
     title: 'Pinterest-Account einrichten',
-    emoji: '📌',
+    icon: 'settings',
     items: [
       {
         id: 'business-account',
@@ -113,7 +114,7 @@ export const CHECKLIST_CATEGORIES: ChecklistCategory[] = [
   {
     id: 'account-verknuepfen',
     title: 'Pinterest-Account verknüpfen',
-    emoji: '🔗',
+    icon: 'url',
     items: [
       {
         id: 'domain-verified',
@@ -141,7 +142,7 @@ export const CHECKLIST_CATEGORIES: ChecklistCategory[] = [
   {
     id: 'pinflow-setup',
     title: 'Pin-Flow-Setup',
-    emoji: '⚙️',
+    icon: 'gauge',
     items: [
       {
         id: 'strategy-onboarding',
@@ -180,12 +181,19 @@ export const CHECKLIST_CATEGORIES: ChecklistCategory[] = [
           K('Geheime Boards', GEHEIME_BOARDS),
         ],
       },
+      {
+        id: 'zielgruppe_definiert',
+        title: 'Zielgruppe definiert',
+        description:
+          'Du weißt, wen du auf Pinterest erreichen willst, was diese Person sucht und welche Begriffe sie benutzt. Wie du das sauber herausarbeitest, zeigt dir die Wissensseite Zielgruppe verstehen.',
+        links: [K('Zielgruppe verstehen', '/dashboard/strategie?tab=audience')],
+      },
     ],
   },
   {
     id: 'tools-einrichtung',
     title: 'Tools-Einrichtung',
-    emoji: '🧰',
+    icon: 'vorlage',
     items: [
       {
         id: 'canva-templates',
@@ -213,7 +221,7 @@ export const CHECKLIST_CATEGORIES: ChecklistCategory[] = [
   {
     id: 'first-pins',
     title: 'Erste Pin-Produktion',
-    emoji: '🎨',
+    icon: 'pen',
     items: [
       {
         id: 'first-pin-seo',
@@ -248,7 +256,7 @@ export const CHECKLIST_CATEGORIES: ChecklistCategory[] = [
   {
     id: 'analytics-routine',
     title: 'Erste Analytics + Routine',
-    emoji: '📈',
+    icon: 'chart',
     items: [
       {
         id: 'first-analytics',
@@ -283,4 +291,4 @@ export const CHECKLIST_ITEM_IDS: string[] = CHECKLIST_CATEGORIES.flatMap(
   (c) => c.items.map((i) => i.id)
 )
 
-export const CHECKLIST_TOTAL = CHECKLIST_ITEM_IDS.length // 22
+export const CHECKLIST_TOTAL = CHECKLIST_ITEM_IDS.length // 23

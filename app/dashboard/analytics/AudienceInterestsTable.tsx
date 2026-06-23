@@ -7,6 +7,7 @@ import {
   slugifyCategory,
 } from '@/lib/audience-translations'
 import InfoTooltip from '@/components/InfoTooltip'
+import { StatusDot, type StatusTone } from '@/components/StatusDot'
 
 // V3.0 — Sektion C des Audience-Tabs: sortierbare Tabelle mit allen
 // Top-Level-Interessen-Kategorien. Klick auf eine Zeile klappt die zugehörigen
@@ -27,21 +28,20 @@ function formatAffinity(a: number): string {
 }
 
 type Rating = {
-  emoji: string
+  tone: StatusTone
   label: string
-  textCls: string
   // Rank für Sortierung: 2 = stark, 1 = neutral, 0 = schwach.
   rank: 0 | 1 | 2
 }
 
 function ratingFor(affinity: number): Rating {
   if (affinity >= STRONG_AFFINITY_THRESHOLD) {
-    return { emoji: '🟢', label: 'Stark', textCls: 'text-green-700', rank: 2 }
+    return { tone: 'gut', label: 'Stark', rank: 2 }
   }
   if (affinity >= NEUTRAL_AFFINITY_THRESHOLD) {
-    return { emoji: '🟡', label: 'Neutral', textCls: 'text-amber-700', rank: 1 }
+    return { tone: 'achtung', label: 'Neutral', rank: 1 }
   }
-  return { emoji: '🔴', label: 'Schwach', textCls: 'text-red-700', rank: 0 }
+  return { tone: 'schlecht', label: 'Schwach', rank: 0 }
 }
 
 export default function AudienceInterestsTable({
@@ -117,7 +117,7 @@ export default function AudienceInterestsTable({
       </h3>
       {/* V3.0.1: Erklär-Hinweis direkt unter dem Titel — macht klar, warum
           die Affinitäts-Sortierung der strategische Default ist. */}
-      <div className="border-b border-gray-100 bg-blue-50 px-4 py-2 text-xs text-blue-900">
+      <div className="border-b border-gray-100 bg-hinweis-tipp-flaeche px-4 py-2 text-xs text-hinweis-tipp-text">
         Sortiert nach Affinitäts-Index — die Themen oben sind dein
         strategischer Hebel: Hier interessiert sich deine interagierende
         Zielgruppe stärker als der Pinterest-Durchschnitt.
@@ -204,11 +204,11 @@ export default function AudienceInterestsTable({
                     <td className="px-4 py-2 text-right tabular-nums text-gray-700">
                       {formatAffinity(interest.affinity)}
                     </td>
-                    <td className={`px-4 py-2 ${rating.textCls}`}>
-                      <span className="mr-1" aria-hidden>
-                        {rating.emoji}
+                    <td className="px-4 py-2">
+                      <span className="inline-flex items-center gap-1.5 text-gray-700">
+                        <StatusDot tone={rating.tone} />
+                        {rating.label}
                       </span>
-                      {rating.label}
                     </td>
                   </tr>
                   {isExpanded && hasSubs && (

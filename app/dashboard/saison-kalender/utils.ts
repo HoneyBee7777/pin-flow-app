@@ -51,13 +51,16 @@ export const SAISON_TYP_LABEL: Record<SaisonTyp, string> = {
   saison: 'Saison',
 }
 
+// Event-Typ ist eine reine Kategorie ohne Wertung, daher neutrale graue Pille
+// für alle Werte (wie die Pins-Kategorie-Badges). Unterschieden wird über das
+// Label, nicht über die Farbe.
 export const SAISON_TYP_BADGE: Record<SaisonTyp, string> = {
-  feiertag: 'bg-red-100 text-red-700',
-  jahreszeit: 'bg-blue-100 text-blue-700',
-  shopping_event: 'bg-purple-100 text-purple-700',
-  evergreen: 'bg-emerald-100 text-emerald-700',
-  anlass: 'bg-orange-100 text-orange-700',
-  saison: 'bg-teal-100 text-teal-700',
+  feiertag: 'bg-gray-100 text-gray-700',
+  jahreszeit: 'bg-gray-100 text-gray-700',
+  shopping_event: 'bg-gray-100 text-gray-700',
+  evergreen: 'bg-gray-100 text-gray-700',
+  anlass: 'bg-gray-100 text-gray-700',
+  saison: 'bg-gray-100 text-gray-700',
 }
 
 const STATUS_LABEL: Record<EventStatus, string> = {
@@ -78,13 +81,17 @@ const STATUS_EMOJI: Record<EventStatus, string> = {
   evergreen: '🌿',
 }
 
+// Saison-Status ist eine Dringlichkeits-Ampel (Pin-Fenster), die Farbe trägt
+// Bedeutung. Daher auf die zentralen Status-Token statt roher Tailwind-Farben:
+// los (gut), vorbereiten (achtung), Stopp (schlecht), kein Druck/erledigt
+// (neutral). Kein Status-Blau, Blau ist im System dem Hinweis vorbehalten.
 const STATUS_BADGE: Record<EventStatus, string> = {
-  abgeschlossen: 'bg-gray-100 text-gray-700',
-  hochphase: 'bg-red-100 text-red-700',
-  jetzt_pinnen: 'bg-green-100 text-green-700',
-  jetzt_produzieren: 'bg-amber-100 text-amber-800',
-  noch_zeit: 'bg-blue-100 text-blue-700',
-  evergreen: 'bg-emerald-100 text-emerald-700',
+  abgeschlossen: 'bg-status-neutral-flaeche text-status-neutral-text',
+  hochphase: 'bg-status-schlecht-flaeche text-status-schlecht-text',
+  jetzt_pinnen: 'bg-status-gut-flaeche text-status-gut-text',
+  jetzt_produzieren: 'bg-status-achtung-flaeche text-status-achtung-text',
+  noch_zeit: 'bg-status-neutral-flaeche text-status-neutral-text',
+  evergreen: 'bg-status-gut-flaeche text-status-gut-text',
 }
 
 export function todayIso(): string {
@@ -162,7 +169,12 @@ export function computeStatus(
     countdown = days === 0 ? 'heute' : `vor ${tageText(days)}`
   } else if (today >= pinEnd) {
     status = 'hochphase'
-    countdown = `noch ${tageText(diffDays(today, eventDatum))} bis Event`
+    // Zeitraum-Event, das bereits läuft (today >= Start): kein Countdown auf
+    // das Start-Datum (das wäre negativ), sondern Hinweis bis zum Ende.
+    countdown =
+      eventDatumEnde && today >= eventDatum
+        ? `läuft noch bis ${formatDateDe(eventDatumEnde)}`
+        : `noch ${tageText(diffDays(today, eventDatum))} bis Event`
   } else if (today >= pinStart) {
     status = 'jetzt_pinnen'
     countdown = `noch ${tageText(diffDays(today, pinEnd))} bis Pin-Ende`

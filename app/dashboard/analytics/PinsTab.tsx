@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { PinKategorieIcon } from '@/components/PinKategorieIcon'
 import {
   Fragment,
   useMemo,
@@ -26,7 +27,6 @@ import {
   formatPercent,
   formatZahl,
   formatZeitraumKurz,
-  PIN_DIAGNOSE_BADGE,
   PIN_DIAGNOSE_LABEL,
   type PinAnalyticsRow,
   type PinAnalyticsThresholds,
@@ -36,10 +36,23 @@ import {
 import {
   diagnosePinAggregated,
   formatPinAge,
-  PIN_DIAGNOSE_META,
   PIN_DIAGNOSE_TOOLTIP,
   type PinDiagnose,
 } from './diagnosePinAggregated'
+
+// Diagnose → Linien-Icon (die Form unterscheidet die Diagnose, keine
+// Wertungsfarbe). Spiegelt die Icons der Diagnose-Erklärboxen weiter unten.
+const DIAGNOSE_ICON: Record<PinDiagnose, string> = {
+  kein_datum: 'warnung',
+  noch_zu_frueh: 'hourglass',
+  aktiver_top_performer: 'aktiver_top_performer',
+  eingeschlafener_gewinner: 'eingeschlafener_gewinner',
+  hidden_gem: 'hidden_gem',
+  save_magnet: 'save_magnet',
+  reichweite_ohne_wirkung: 'reichweite_ohne_wirkung',
+  stiller_pin: 'stiller_pin',
+  keine_vergleichsdaten: 'chart',
+}
 
 // Spalten-Tooltips für die Top-Pins-Tabelle — Klartext-Erklärung was die
 // Kennzahl bedeutet und warum sie wichtig ist. Werden über InfoTooltip neben
@@ -573,10 +586,13 @@ function PinAnalyticsTable({
                   </td>
                   <td className="px-4 py-3 text-sm">
                     <span
-                      className={`inline-flex cursor-help items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${PIN_DIAGNOSE_BADGE[agg.diagnose]}`}
+                      className="inline-flex cursor-help items-center gap-1.5 rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-700"
                       title={PIN_DIAGNOSE_TOOLTIP[agg.diagnose]}
                     >
-                      {PIN_DIAGNOSE_META[agg.diagnose].emoji}{' '}
+                      <PinKategorieIcon
+                        name={DIAGNOSE_ICON[agg.diagnose]}
+                        className="h-4 w-4 shrink-0 text-marke-blaugrau-mittel"
+                      />
                       {PIN_DIAGNOSE_LABEL[agg.diagnose]}
                     </span>
                   </td>
@@ -876,21 +892,21 @@ function ThresholdInfo({
         <div className="space-y-2">
           <div className="rounded-md border border-gray-200 bg-white p-3">
             <p>
-              <span aria-hidden>⭐</span> <strong>Aktiver Top Performer:</strong>{' '}
+              <PinKategorieIcon name="aktiver_top_performer" className="mr-1.5 inline-block h-4 w-4 shrink-0 align-text-bottom text-marke-blaugrau" /> <strong>Aktiver Top Performer:</strong>{' '}
               Viel Reichweite und eine starke Klickrate. Pinterest spielt ihn
               aus, und die Menschen klicken zu dir durch.
             </p>
           </div>
           <div className="rounded-md border border-gray-200 bg-white p-3">
             <p>
-              <span aria-hidden>🧲</span> <strong>Save-Magnet:</strong> Wird oft
+              <PinKategorieIcon name="save_magnet" className="mr-1.5 inline-block h-4 w-4 shrink-0 align-text-bottom text-marke-blaugrau" /> <strong>Save-Magnet:</strong> Wird oft
               gespeichert, aber selten geklickt. Das Cover zieht, der Klick zur
               Website fehlt.
             </p>
           </div>
           <div className="rounded-md border border-gray-200 bg-white p-3">
             <p>
-              <span aria-hidden>🔧</span>{' '}
+              <PinKategorieIcon name="reichweite_ohne_wirkung" className="mr-1.5 inline-block h-4 w-4 shrink-0 align-text-bottom text-marke-blaugrau" />
               <strong>Reichweite ohne Wirkung:</strong> Viel Reichweite, aber
               kaum Klicks und kaum Saves. Pinterest zeigt ihn, doch er löst
               nichts aus.
@@ -898,34 +914,34 @@ function ThresholdInfo({
           </div>
           <div className="rounded-md border border-gray-200 bg-white p-3">
             <p>
-              <span aria-hidden>💎</span> <strong>Hidden Gem:</strong> Ein
+              <PinKategorieIcon name="hidden_gem" className="mr-1.5 inline-block h-4 w-4 shrink-0 align-text-bottom text-marke-blaugrau" /> <strong>Hidden Gem:</strong> Ein
               starkes Signal bei noch wenig Reichweite. Wer ihn sieht, klickt
               oder speichert. Mit besseren Keywords wird er sichtbarer.
             </p>
           </div>
           <div className="rounded-md border border-gray-200 bg-white p-3">
             <p>
-              <span aria-hidden>♻️</span>{' '}
+              <PinKategorieIcon name="eingeschlafener_gewinner" className="mr-1.5 inline-block h-4 w-4 shrink-0 align-text-bottom text-marke-blaugrau" />
               <strong>Eingeschlafener Gewinner:</strong> Lief früher stark, jetzt
               fallen die Impressionen deutlich. Zeit für einen frischen Pin.
             </p>
           </div>
           <div className="rounded-md border border-gray-200 bg-white p-3">
             <p>
-              <span aria-hidden>💤</span> <strong>Stiller Pin:</strong> Hatte
+              <PinKategorieIcon name="stiller_pin" className="mr-1.5 inline-block h-4 w-4 shrink-0 align-text-bottom text-marke-blaugrau" /> <strong>Stiller Pin:</strong> Hatte
               genug Zeit, aber nichts passiert. Steck deine Energie lieber in
               neue Pins.
             </p>
           </div>
           <div className="rounded-md border border-gray-200 bg-white p-3">
             <p>
-              <span aria-hidden>⏳</span> <strong>Noch zu früh:</strong> Zu wenig
+              <PinKategorieIcon name="hourglass" className="mr-1.5 inline-block h-4 w-4 shrink-0 align-text-bottom text-marke-blaugrau" /> <strong>Noch zu früh:</strong> Zu wenig
               Daten für ein verlässliches Urteil. Abwarten.
             </p>
           </div>
           <div className="rounded-md border border-gray-200 bg-white p-3">
             <p>
-              <span aria-hidden>📊</span>{' '}
+              <PinKategorieIcon name="chart" className="mr-1.5 inline-block h-4 w-4 shrink-0 align-text-bottom text-marke-blaugrau" />
               <strong>Noch keine Vergleichsdaten:</strong> Es liegen noch nicht
               genug ausgewertete Pins vor, um deinen persönlichen Durchschnitt zu
               berechnen.

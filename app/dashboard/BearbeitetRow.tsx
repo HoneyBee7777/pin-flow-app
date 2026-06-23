@@ -72,8 +72,9 @@ export default function BearbeitetRow({
       <span className="flex-1 text-gray-700 line-through">
         {row.titel ?? <span className="text-gray-400">(ohne Titel)</span>}
       </span>
-      {/* Lokal neutralisiert (Blaugrau), unabhängig von der zentralen
-          PIN_DIAGNOSE_BADGE-Farb-Map (die im Analytics-Bereich bunt bleibt). */}
+      {/* Neutral (Blaugrau), konsistent zur Diagnose-Pille im Analytics-Tab:
+          dort ist die Pille ebenfalls neutral grau, das Diagnose-Icon trägt
+          die Unterscheidung (keine Wertungsfarbe mehr). */}
       <span className="inline-flex items-center rounded-full bg-marke-blaugrau-hell px-2 py-0.5 text-xs font-medium text-marke-blaugrau">
         {PIN_DIAGNOSE_LABEL[row.kategorie]}
       </span>

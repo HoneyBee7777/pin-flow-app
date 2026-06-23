@@ -11,7 +11,7 @@ export default function NextZeitraumHint({
 }) {
   const hasPrevious = !!von
   return (
-    <div className="rounded-md border border-teal-200 border-l-[3px] border-l-teal-400 bg-teal-50 p-3 text-sm leading-relaxed text-teal-900">
+    <div className="rounded-md border border-hinweis-merke-rand border-l-[3px] border-l-hinweis-merke-stripe bg-hinweis-merke-flaeche p-3 text-sm leading-relaxed text-hinweis-merke-text">
       <p>
         {hasPrevious ? (
           <>

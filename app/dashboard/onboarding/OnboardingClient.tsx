@@ -16,8 +16,10 @@ import {
   getOnboardingStep,
 } from '@/lib/onboarding-content'
 import { ONBOARDING_LAST_STEP } from '@/lib/onboarding-state'
+import { CHECKLIST_TOTAL } from '@/lib/checklist-content'
 import OnboardingStepIndicator from './OnboardingStepIndicator'
 import StepView from './StepView'
+import { HinweisBox } from '@/components/HinweisBox'
 import {
   goToOnboardingStep,
   skipOnboarding,
@@ -217,9 +219,11 @@ export default function OnboardingClient({
         </StepView>
 
         {step.skipWarning && step.skippable && (
-          <p className="mt-5 rounded-md border-l-[3px] border-l-amber-400 bg-amber-50 px-4 py-3 text-[13px] text-amber-900">
-            {step.skipWarning}
-          </p>
+          <div className="mt-5">
+            <HinweisBox variant="warnung" tone="achtung">
+              {step.skipWarning}
+            </HinweisBox>
+          </div>
         )}
       </div>
 
@@ -509,19 +513,19 @@ function CompletionRecommendation({ info }: { info: CompletionInfo }) {
       )}
     </div>
 
-    <div className="rounded-md border border-sky-200 border-l-[3px] border-l-sky-400 bg-sky-50 p-4 text-sm">
-      <p className="font-semibold text-sky-900">
+    <div className="rounded-md border border-hinweis-tipp-rand border-l-[3px] border-l-hinweis-tipp-stripe bg-hinweis-tipp-flaeche p-4 text-sm">
+      <p className="font-semibold text-hinweis-tipp-text">
         Setup-Checkliste für den perfekten Start
       </p>
-      <p className="mt-1 leading-relaxed text-sky-900">
+      <p className="mt-1 leading-relaxed text-hinweis-tipp-text">
         In der Sidebar unter „Checkliste“ findest du eine fokussierte
-        22-Punkte-Setup-Checkliste, von Domain-Verifizierung bis zur
-        ersten Pin-Produktion. Hak ab was du erledigt hast und arbeite
+        {CHECKLIST_TOTAL}-Punkte-Setup-Checkliste, von Domain-Verifizierung bis zur
+        ersten Pin-Produktion. Hake ab, was du erledigt hast, und arbeite
         die Liste in deinem Tempo durch.
       </p>
       <Link
         href="/dashboard/checkliste"
-        className="mt-2 inline-flex font-medium text-sky-700 hover:underline"
+        className="mt-2 inline-flex font-medium text-link underline underline-offset-2"
       >
         → Zur Setup-Checkliste
       </Link>

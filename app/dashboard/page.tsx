@@ -1756,15 +1756,11 @@ export default async function DashboardPage() {
             getrennten Blöcke „Profil-Status" und „Gesamt-Profil-Performance"
             sind hier vereint. Ohne Analytics: Leer-Variante.
             Die Befunde sind nach unten zu „Pins recyceln" gewandert. */}
-      {hatAnalytics ? (
-        <ProfilPerformanceSection
-          latest={latest}
-          previous={previous}
-          chartPoints={chartPoints}
-        />
-      ) : (
-        <ProfilPerformanceEmpty />
-      )}
+      <ProfilPerformanceSection
+        latest={latest}
+        previous={previous}
+        chartPoints={chartPoints}
+      />
 
       {/* 4b. „Was hat funktioniert?" (Erfolge der letzten 30 Tage) — schließt
             den Profil-Performance-Block emotional ab. Rendert nur bei echten
@@ -1970,7 +1966,7 @@ function BriefingBlockEmpty({
             Deine nächsten Schritte
           </h3>
           <ul className="mt-2 space-y-1.5">
-            <li className={itemCls} style={{ borderLeft: '3px solid var(--marke-blaugrau-mittel)' }}>
+            <li className={itemCls} style={{ borderLeft: '3px solid var(--marke-ocker)' }}>
               Schließe dein Setup ab und setze dein Profil weiter auf.{' '}
               →
               <Link href="/dashboard/onboarding" className={linkCls}>
@@ -1980,7 +1976,7 @@ function BriefingBlockEmpty({
             {showContentPrio && (
               <li
                 className={itemCls}
-                style={{ borderLeft: '3px solid var(--marke-blaugrau-mittel)' }}
+                style={{ borderLeft: '3px solid var(--marke-ocker)' }}
               >
                 Du hast{' '}
                 <span className="font-semibold text-gray-900">
@@ -1997,7 +1993,7 @@ function BriefingBlockEmpty({
             {saisonProduzierenCount > 0 && (
               <li
                 className={itemCls}
-                style={{ borderLeft: '3px solid var(--marke-blaugrau-mittel)' }}
+                style={{ borderLeft: '3px solid var(--marke-ocker)' }}
               >
                 <span className="font-semibold text-gray-900">
                   {saisonProduzierenCount}
@@ -2028,25 +2024,6 @@ function BriefingBlockEmpty({
         zuletzt eingepflegten Daten. Pflege einmal monatlich deine
         Pinterest-Analytics ein.
       </p>
-    </section>
-  )
-}
-
-// Sektion 2 — „Profil-Status" ohne Analytics: noch keine Bewertung möglich.
-// Sektion 3 — „Profil-Performance" ohne Analytics.
-function ProfilPerformanceEmpty() {
-  return (
-    <section id="gesamt-profil-performance" className="scroll-mt-4">
-      <div className="mb-4">
-        <h2 className="text-xl font-semibold text-marke-blaugrau">
-          Profil-Performance
-        </h2>
-      </div>
-      <DashEmptyBox>
-        Nach deinem ersten Analytics-Update siehst du hier deine
-        Performance-Entwicklung: Klicks, Saves, Impressionen und
-        Engagement-Rate im Verlauf, jeweils im Vergleich zur Vorperiode.
-      </DashEmptyBox>
     </section>
   )
 }
@@ -2087,11 +2064,9 @@ function HandlungsbedarfEmpty() {
       </div>
       <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
         <DashEmptyBox>
-          Diese Auswertung wird aussagekräftig, sobald deine Pins in der
-          Datenbank hinterlegt sind und du dein erstes Analytics-Update gemacht
-          hast. Dann bekommt jeder Pin automatisch eine Diagnose (z.B. Hidden
-          Gem, Top Performer) und eine konkrete Handlungsempfehlung. Ohne
-          Performance-Daten ist keine ehrliche Bewertung möglich.
+          Sobald du Pins angelegt und dein erstes Analytics-Update gemacht
+          hast, zeigt dir Pin-Flow hier, welche Pins du recyceln, überarbeiten
+          oder neu ausspielen solltest. Noch fehlen die Daten dafür.
         </DashEmptyBox>
       </div>
     </section>
@@ -2401,7 +2376,7 @@ function HandlungsbedarfSection({
   // Merke-Hinweis bleibt Inhalt der Card (erste Zeile), nicht Teil der
   // Überschrift auf Creme.
   const merkHinweis = (
-    <HinweisBox variant="neutral">
+    <HinweisBox variant="merke">
       Erstelle immer einen neuen Pin, bearbeite nie den bei Pinterest
       veröffentlichten Pin. Hake den Pin ab, sobald die Handlung erfolgt ist.
     </HinweisBox>
@@ -2861,6 +2836,11 @@ function SaisonCard({
   // „Heute" ist der dringlichste Fall → hervorgehoben; normale Tageszahlen und
   // der „läuft noch bis …"-Text bleiben dezent.
   const istHeute = countdownLabel === 'Heute'
+  // Vorbereitete Pins nur bei Bestand (narrowt prepared auf non-null).
+  const preparedActive =
+    prepared && (prepared.entwurf > 0 || prepared.geplant > 0)
+      ? prepared
+      : null
   return (
     <div className="flex min-h-[170px] flex-col justify-between rounded-md border border-karte-rand bg-white p-3 shadow-sm">
       <div>
@@ -2887,30 +2867,35 @@ function SaisonCard({
         >
           {countdownLabel}
         </div>
-        {actionButton && (
-          <div className="mt-1.5">
+      </div>
+      {/* Bodenbündiger Aktionsblock mit EINER gemeinsamen Sichtkante (border-t):
+          Button oben, Entwurf-Hinweis darunter. Bei „nichts" hält ein
+          unsichtbarer Platzhalter (transparente Kante) dieselbe Höhe, damit die
+          Linie über die Karten auf einer Höhe sitzt. */}
+      {actionButton || preparedActive ? (
+        <div className="mt-2 flex flex-col gap-2 border-t border-gray-100 pt-2">
+          {actionButton && (
             <Link
               href={`/dashboard/pin-produktion?open=new&saison_event_id=${event.id}`}
-              className="inline-flex items-center justify-center rounded-md bg-marke-blaugrau px-3 py-1.5 text-xs font-medium text-white hover:bg-marke-blaugrau-dunkel"
+              className="inline-flex items-center justify-center self-start rounded-md bg-marke-blaugrau px-3 py-1.5 text-xs font-medium text-white hover:bg-marke-blaugrau-dunkel"
             >
               {actionButton.label}
             </Link>
-          </div>
-        )}
-      </div>
-      {prepared && (prepared.entwurf > 0 || prepared.geplant > 0) ? (
-        <PreparedPinsHinweis
-          basis={`/dashboard/pin-produktion?filter[saison_event]=${event.id}`}
-          prepared={prepared}
-        />
+          )}
+          {preparedActive && (
+            <PreparedPinsHinweis
+              basis={`/dashboard/pin-produktion?filter[saison_event]=${event.id}`}
+              prepared={preparedActive}
+              flush
+            />
+          )}
+        </div>
       ) : (
-        !actionButton && (
-          <div aria-hidden className="mt-1.5">
-            <span className="invisible inline-flex items-center justify-center rounded-md px-3 py-1.5 text-xs font-medium">
-              &nbsp;
-            </span>
-          </div>
-        )
+        <div aria-hidden className="mt-2 border-t border-transparent pt-2">
+          <span className="invisible inline-flex items-center justify-center rounded-md px-3 py-1.5 text-xs font-medium">
+            &nbsp;
+          </span>
+        </div>
       )}
     </div>
   )
@@ -2924,15 +2909,24 @@ function SaisonCard({
 function PreparedPinsHinweis({
   basis,
   prepared,
+  flush = false,
 }: {
   basis: string
   prepared: { entwurf: number; geplant: number }
+  // flush = ohne eigene Trennlinie/Top-Abstand, wenn der Eltern-Block die
+  // gemeinsame Sichtkante stellt (Saison-Karte). Default: eigene Trennlinie
+  // (Board-Karten via PreparedPinsBox).
+  flush?: boolean
 }) {
   const { entwurf, geplant } = prepared
   if (entwurf === 0 && geplant === 0) return null
   const linkCls = 'text-link underline underline-offset-2 hover:opacity-80'
   return (
-    <div className="mt-2 flex items-start gap-1.5 border-t border-gray-100 pt-2 text-xs text-gray-600">
+    <div
+      className={`flex items-start gap-1.5 text-xs text-gray-600${
+        flush ? '' : ' mt-2 border-t border-gray-100 pt-2'
+      }`}
+    >
       <PinKategorieIcon
         name="pin"
         className="mt-0.5 h-3.5 w-3.5 shrink-0 text-marke-blaugrau"
@@ -4195,16 +4189,77 @@ function ProfilPerformanceSection({
             Analytics-Update entwickelt haben.
           </p>
         </div>
-        <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-5">
-          {[
-            'Ausgehende Klicks',
-            'Save-Rate',
-            'Saves',
-            'CTR',
-            'Impressionen',
-          ].map((label) => (
-            <KpiCardEmpty key={label} label={label} />
-          ))}
+        {/* Leerzustand: identisches Layout wie mit Daten — gleiche Kacheln
+            (Werte „–") und echte Graph-Fläche mit Achsen, aber ohne Linie. */}
+        <div className="mt-3 grid items-stretch gap-4 lg:grid-cols-[170px_170px_minmax(0,1fr)]">
+          {/* Spalte 1 — Ergebnis */}
+          <div className="flex flex-col">
+            <h3 className="text-[11px] font-semibold tracking-wide text-slate-600">
+              <LabelWithTooltip
+                label="Ergebnis"
+                tooltip="Was ist am Ende rausgekommen – die Erfolgs-Metriken deines Profils."
+              />
+            </h3>
+            <div className="mt-2 flex flex-1 flex-col gap-2">
+              <KpiCard
+                className="flex-1"
+                label="Ausgehende Klicks"
+                value="–"
+                tooltip="Wie oft Nutzer von Pinterest auf deine Website geklickt haben. Das ist deine wichtigste Metrik für echten Traffic."
+              />
+              <KpiCard
+                className="flex-1"
+                label="Save-Rate"
+                value="–"
+                tooltip="Saves ÷ Impressionen. Wie oft Menschen deine Pins speichern, das stärkste Signal, das Pinterest für die Ausspielung nutzt."
+              />
+            </div>
+          </div>
+
+          {/* Spalte 2 — Treiber */}
+          <div className="flex flex-col">
+            <h3 className="text-[11px] font-semibold tracking-wide text-slate-600">
+              <LabelWithTooltip
+                label="Treiber"
+                tooltip="Was hat das Ergebnis erzeugt – die Hebel, an denen du drehen kannst."
+              />
+            </h3>
+            <div className="mt-2 flex flex-1 flex-col gap-2">
+              <KpiCard
+                label="Saves"
+                value="–"
+                tooltip="Saves sind das stärkste Algorithmus-Signal. Mehr Saves = längere Lebensdauer + mehr Reichweite."
+              />
+              <KpiCard
+                label="CTR"
+                value="–"
+                tooltip="Ausgehende Klicks ÷ Impressionen. Zeigt ob dein Pin-Hook funktioniert."
+              />
+              <KpiCard
+                label="Impressionen"
+                value="–"
+                tooltip="Wie oft deine Pins angezeigt wurden. Zeigt ob deine Keywords und SEO greifen."
+              />
+            </div>
+          </div>
+
+          {/* Spalte 3 — Performance-Verlauf: echte Achsen, keine Linie */}
+          <div className="flex flex-col">
+            <h3 className="text-[11px] font-semibold tracking-wide text-slate-600">
+              <LabelWithTooltip
+                label="Performance-Verlauf"
+                tooltip="Hier siehst du die Entwicklung deiner wichtigsten Metriken über die letzten 12 Monate (rollierend). Sobald ein neuer Monat hinzukommt, fällt der älteste raus."
+              />
+            </h3>
+            <div className="relative mt-2 flex flex-1 flex-col rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
+              <PerformanceChart data={[]} />
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <span className="text-sm text-marke-blaugrau-mittel">
+                  Noch keine Daten
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
         <p className="mt-2 text-xs text-gray-500">
           Noch kein Analytics-Update:{' '}

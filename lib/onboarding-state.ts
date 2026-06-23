@@ -17,14 +17,14 @@ type SupabaseServer = ReturnType<typeof createClient>
 export type OnboardingState = {
   completed: boolean
   skipped: boolean
-  currentStep: number // 0..12
+  currentStep: number // 0..15
   completedSteps: number[]
   lastUpdated: string // ISO-Zeitstempel, '' wenn noch nie gespeichert
 }
 
-// 13 Schritte: 0..12.
-export const ONBOARDING_LAST_STEP = 12
-export const ONBOARDING_TOTAL_STEPS = 13
+// 16 Schritte: 0..15.
+export const ONBOARDING_LAST_STEP = 15
+export const ONBOARDING_TOTAL_STEPS = 16
 
 export const DEFAULT_ONBOARDING_STATE: OnboardingState = {
   completed: false,

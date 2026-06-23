@@ -124,7 +124,7 @@ export default function BoardsTab({
       </p>
 
       {publicBoardsWithoutAnalytics.length > 0 && (
-        <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+        <div className="rounded-md border border-hinweis-tipp-rand bg-hinweis-tipp-flaeche p-4 text-sm text-hinweis-tipp-text">
           <p className="font-medium">
             Diese Boards sind angelegt, haben aber noch keine
             Analytics-Einträge:
@@ -154,7 +154,7 @@ export default function BoardsTab({
       <ThresholdInfo />
 
       {boardAnalytics.some((r) => r.wirkungGated) && (
-        <div className="rounded-md border border-teal-200 border-l-[3px] border-l-teal-400 bg-teal-50 p-3 text-sm text-teal-900">
+        <div className="rounded-md border border-hinweis-merke-rand border-l-[3px] border-l-hinweis-merke-stripe bg-hinweis-merke-flaeche p-3 text-sm text-hinweis-merke-text">
           Die Wirkungs-Diagnose deiner Boards zeigt sich, sobald du genug Boards
           mit ausreichender Reichweite hast. Aktuell sind es noch zu wenige für
           einen verlässlichen Vergleich. Die Aktivität deiner Boards siehst du

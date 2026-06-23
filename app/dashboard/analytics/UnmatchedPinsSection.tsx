@@ -178,9 +178,12 @@ export default function UnmatchedPinsSection({
   const hiddenCount = unmatchedPins.length - visible.length
 
   return (
+    // Hinweis-Tipp-Farbe (zentrale Token --hinweis-tipp-*) — zieht mit, wenn die
+    // Hinweis-Farbe geändert wird. Volle Fläche wie die Tipp-Box, kein Stripe
+    // (ganze Sektion mit Liste, kein kompakter Hinweistext).
     <section
       id="unmatched-pins"
-      className="scroll-mt-6 rounded-lg border border-amber-200 bg-amber-50/40 p-4"
+      className="scroll-mt-6 rounded-lg border border-hinweis-tipp-rand bg-hinweis-tipp-flaeche p-4"
     >
       <div className="mb-3">
         <h3 className="text-sm font-semibold text-gray-900">

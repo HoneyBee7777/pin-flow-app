@@ -49,7 +49,7 @@ export default function BridgeTopicsPrompt({
       </p>
 
       {lowAffinityNotice && (
-        <p className="mt-3 rounded-md border border-blue-200 border-l-[3px] border-l-blue-400 bg-blue-50 p-3 text-sm text-blue-900">
+        <p className="mt-3 rounded-md border border-hinweis-tipp-rand border-l-[3px] border-l-hinweis-tipp-stripe bg-hinweis-tipp-flaeche p-3 text-sm text-hinweis-tipp-text">
           ℹ️ Deine Zielgruppe zeigt aktuell keine besonders hohen Affinitäten
           (alle Werte unter 1,5). Der Prompt wird mit deinen drei höchsten
           Affinitäten gefüllt — die Ergebnisse sind weniger zugespitzt, aber

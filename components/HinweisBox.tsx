@@ -56,11 +56,12 @@ export function HinweisBox({
   }
 
   // Tipp = amber (Handlungsempfehlung), Merke = teal (Prinzip / Wissen).
-  // Beide nutzen einen left-border als visueller Akzent.
+  // Beide nutzen einen left-border als visueller Akzent. Tipp über zentrale
+  // Token --hinweis-tipp-* (eine Quelle; auch von den Unmatched-Sektionen genutzt).
   const cls =
     variant === 'merke'
-      ? 'border border-teal-200 border-l-[3px] border-l-teal-400 bg-teal-50 text-teal-800'
-      : 'border border-amber-200 border-l-[3px] border-l-amber-400 bg-amber-50 text-amber-900'
+      ? 'border border-hinweis-merke-rand border-l-[3px] border-l-hinweis-merke-stripe bg-hinweis-merke-flaeche text-hinweis-merke-text'
+      : 'border border-hinweis-tipp-rand border-l-[3px] border-l-hinweis-tipp-stripe bg-hinweis-tipp-flaeche text-hinweis-tipp-text'
   return (
     <div className={`rounded-md p-4 text-sm leading-relaxed ${cls}`}>
       {children}

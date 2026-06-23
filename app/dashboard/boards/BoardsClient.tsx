@@ -10,6 +10,8 @@ import {
 import { useSearchParams } from 'next/navigation'
 import SortableTh from '@/components/SortableTh'
 import { addBoard, deleteBoard, updateBoard } from './actions'
+import { keywordInText } from '../analytics/utils'
+import InfoTooltip from '@/components/InfoTooltip'
 
 export type KeywordOption = {
   id: string
@@ -53,10 +55,12 @@ const PIN_STATUS_LABEL: Record<BoardPin['status'], string> = {
   veroeffentlicht: 'Veröffentlicht',
 }
 
+// Status = Workflow-Stufe, keine Wertung: ruhige Blaugrau-Staffelung
+// (blass → mittel → kräftig), identisch zu STATUS_BADGE in pin-produktion.
 const PIN_STATUS_BADGE: Record<BoardPin['status'], string> = {
-  entwurf: 'bg-gray-100 text-gray-700',
-  geplant: 'bg-blue-100 text-blue-700',
-  veroeffentlicht: 'bg-green-100 text-green-700',
+  entwurf: 'bg-marke-blaugrau-hell text-marke-blaugrau-dunkel',
+  geplant: 'bg-marke-blaugrau-mittel text-white',
+  veroeffentlicht: 'bg-marke-blaugrau text-white',
 }
 
 function formatBoardPinDate(d: string | null): string {
@@ -598,6 +602,7 @@ export default function BoardsClient({
               </SortableTh>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Keywords
+                <InfoTooltip text="N = Keyword steht im Board-Namen, B = Keyword steht in der Board-Beschreibung." />
               </th>
               <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Inhalte
@@ -685,14 +690,36 @@ export default function BoardsClient({
                       <span className="text-gray-400">—</span>
                     ) : (
                       <div className="flex flex-wrap gap-1">
-                        {board.keywords.map((k) => (
-                          <span
-                            key={k.id}
-                            className="inline-flex items-center rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-700"
-                          >
-                            {k.keyword}
-                          </span>
-                        ))}
+                        {board.keywords.map((k) => {
+                          // Fundort-Kürzel analog zur Pin-Seite: N = im Board-
+                          // Namen, B = in der Board-Beschreibung.
+                          const inName = keywordInText(k.keyword, board.name)
+                          const inBeschreibung = keywordInText(
+                            k.keyword,
+                            board.beschreibung
+                          )
+                          const kuerzel =
+                            inName && inBeschreibung
+                              ? 'N B'
+                              : inName
+                                ? 'N'
+                                : inBeschreibung
+                                  ? 'B'
+                                  : ''
+                          return (
+                            <span
+                              key={k.id}
+                              className="inline-flex items-center rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-700"
+                            >
+                              {k.keyword}
+                              {kuerzel && (
+                                <span className="ml-1 text-xs font-bold text-marke-blaugrau-mittel">
+                                  {kuerzel}
+                                </span>
+                              )}
+                            </span>
+                          )
+                        })}
                       </div>
                     )}
                   </td>

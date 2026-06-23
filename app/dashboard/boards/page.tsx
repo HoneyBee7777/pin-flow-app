@@ -7,6 +7,7 @@ import BoardsClient, {
   type KeywordOption,
   type UrlOption,
 } from './BoardsClient'
+import { keywordInText } from '../analytics/utils'
 
 type RawBoardRow = {
   id: string
@@ -90,9 +91,15 @@ export default async function BoardsPage() {
     pinterest_url: row.pinterest_url,
     created_at: row.created_at,
     // Automatisches Screening: zeigt die Keywords aus der Keyword-Datenbank,
-    // die als Teilstring im Board-Namen vorkommen (statt manueller Zuordnung).
+    // die als Teilstring im Board-Namen ODER in der Board-Beschreibung
+    // vorkommen (statt manueller Zuordnung). beschreibung kann null sein,
+    // keywordInText fängt das ab.
     keywords: availableKeywords
-      .filter((k) => row.name.toLowerCase().includes(k.keyword.toLowerCase()))
+      .filter(
+        (k) =>
+          keywordInText(k.keyword, row.name) ||
+          keywordInText(k.keyword, row.beschreibung)
+      )
       .map((k) => ({ id: k.id, keyword: k.keyword })),
     contents: row.content_boards
       .filter((cb) => cb.content_inhalte)
@@ -218,11 +225,13 @@ export default async function BoardsPage() {
               <p className="font-semibold text-gray-900">Keywords</p>
               <p>
                 Die Keyword-Spalte zeigt automatisch, welche deiner Keywords im
-                Board-Namen vorkommen. So siehst du auf einen Blick, ob dein
-                Board-Name die richtigen Begriffe enthält, denn der Board-Name
-                zählt für deine Sichtbarkeit. Steht in der Spalte nichts,
-                enthält dein Board-Name noch keines deiner Keywords, ein Hinweis,
-                den Namen zu schärfen. Gematcht wird nur, was genauso in deiner
+                Board-Namen und in der Board-Beschreibung vorkommen. Hinter jedem
+                Keyword steht ein N (Name) oder B (Beschreibung). So siehst du
+                auf einen Blick, ob dein Board die richtigen Begriffe enthält,
+                denn Board-Name und Beschreibung zählen für deine Sichtbarkeit.
+                Steht in der Spalte nichts, enthalten Board-Name und
+                Board-Beschreibung noch keines deiner Keywords, ein Hinweis, sie
+                zu schärfen. Gematcht wird nur, was genauso in deiner
                 Keyword-Liste steht. Pflege dort alle Varianten, nach denen
                 gesucht wird, also etwa „Wellness Hotel“ und einzeln „Wellness“
                 und „Hotel“.

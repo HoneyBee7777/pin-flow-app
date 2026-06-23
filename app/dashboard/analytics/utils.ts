@@ -309,10 +309,12 @@ export const PIN_STATUS_LABEL: Record<string, string> = {
   veroeffentlicht: 'Veröffentlicht',
 }
 
+// Status = Workflow-Stufe, keine Wertung: ruhige Blaugrau-Staffelung
+// (blass → mittel → kräftig), identisch zu STATUS_BADGE in pin-produktion.
 export const PIN_STATUS_BADGE: Record<string, string> = {
-  entwurf: 'bg-gray-100 text-gray-700',
-  geplant: 'bg-blue-100 text-blue-700',
-  veroeffentlicht: 'bg-green-100 text-green-700',
+  entwurf: 'bg-marke-blaugrau-hell text-marke-blaugrau-dunkel',
+  geplant: 'bg-marke-blaugrau-mittel text-white',
+  veroeffentlicht: 'bg-marke-blaugrau text-white',
 }
 
 export type PinOption = {

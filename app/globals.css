@@ -50,6 +50,24 @@
   --status-neutral-text: #5b6470;
   --status-neutral-flaeche: #f0f2f3;
 
+  /* Callout HINWEIS (kühles Blau) — Token heißt historisch "tipp".
+     Eine Quelle: nutzt HinweisBox variant="tipp" UND die token-gebundenen
+     inline-Callouts (Unmatched-Sektionen, BoardsTab, EingabeTab, StepView,
+     PinProduktion). Kühles Blau bewusst getrennt von der warmen Ampel
+     (achtung/gut), damit Hinweis-ART und Wertung nicht kollidieren. */
+  --hinweis-tipp-flaeche: #e8eef7;
+  --hinweis-tipp-rand: #b4c6e0;
+  --hinweis-tipp-stripe: #4a72a8; /* linker Streifen der Hinweis-Box */
+  --hinweis-tipp-text: #293e5c;
+  /* Callout MERKE (kühles Violett) — Token heißt historisch "merke".
+     Eine Quelle: HinweisBox variant="merke" + token-gebundene inline-Callouts.
+     Violett vorher erdiges Grün, das byte-identisch mit Ampel-"gut" war und
+     deshalb kollidierte. */
+  --hinweis-merke-flaeche: #ece8f5;
+  --hinweis-merke-rand: #bdb0dc;
+  --hinweis-merke-stripe: #6a57a8; /* linker Streifen der Merke-Box */
+  --hinweis-merke-text: #352a5c;
+
   /* Semantische Rollen -> zeigen auf die obigen Marken-Tokens */
   --rolle-bg-seite: var(--marke-creme);
   --rolle-bg-karte: #ffffff;
@@ -120,11 +138,11 @@ input[type='range'].pf-slider::-moz-range-thumb {
 /* Vereinheitlichte Box-Typen für das Dashboard.
    Border-left als Akzent + abgerundete rechte Ecken (linke bleiben eckig
    wegen der Akzentkante). 12px 16px Padding, 6px Radius rechts.
-   .hinweis-box bleibt Sonderfall (blau, Onboarding-Welcome). */
+   .hinweis-box nutzt das Callout-Hinweis-Token (kühles Blau, --hinweis-tipp-*). */
 @layer components {
   .hinweis-box {
-    @apply rounded-r-md bg-blue-50 px-4 py-3 text-sm text-blue-900;
-    border-left: 3px solid #60a5fa; /* blue-400 */
+    @apply rounded-r-md bg-hinweis-tipp-flaeche px-4 py-3 text-sm text-hinweis-tipp-text;
+    border-left: 3px solid var(--hinweis-tipp-stripe);
   }
   .coaching-box {
     background-color: #ffffff;

@@ -43,6 +43,15 @@ const PATHS: Record<string, ReactNode> = {
       <path d="m13.378 9.633 4.096 1.098 1.097-4.096" />
     </>
   ),
+  // Stiller Pin: Mondsichel = schlafend / leise ausgelaufen.
+  stiller_pin: <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />,
+  // Variante/Recycling: Abzweig-Pfeil = aus einem anderen Pin abgeleitet.
+  abgeleitet: (
+    <>
+      <path d="M4 4v7a4 4 0 0 0 4 4h12" />
+      <path d="m15 10 5 5-5 5" />
+    </>
+  ),
   // Neue Pins produzieren
   inhalt: (
     <>
@@ -85,6 +94,13 @@ const PATHS: Record<string, ReactNode> = {
       <path d="M5 2h14" />
       <path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22" />
       <path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2" />
+    </>
+  ),
+  // Evergreen / „läuft immer": ruhiges Blatt mit Stiel.
+  leaf: (
+    <>
+      <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z" />
+      <path d="M2 21c0-3 1.85-5.36 5.08-6" />
     </>
   ),
   // Allgemein: flacher Haken (z. B. „Handlung abgeschlossen").

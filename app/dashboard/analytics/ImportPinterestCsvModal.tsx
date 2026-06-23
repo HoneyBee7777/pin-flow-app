@@ -13,6 +13,7 @@ import {
 } from './actions'
 import { parseFilenamePeriod } from './csvImport'
 import { formatDateDe } from './utils'
+import { HinweisBox } from '@/components/HinweisBox'
 
 type Props = {
   open: boolean
@@ -218,7 +219,7 @@ export default function ImportPinterestCsvModal({
         </div>
 
         <div className="space-y-5 p-5">
-          <div className="rounded-md border-l-4 border-teal-400 bg-teal-50 p-3 text-[13px] text-teal-900">
+          <div className="rounded-md border-l-4 border-hinweis-merke-stripe bg-hinweis-merke-flaeche p-3 text-[13px] text-hinweis-merke-text">
             <p className="font-semibold">So lädst du die CSV optimal hoch:</p>
             <p className="mt-1">
               Exportiere in Pinterest 3× die Top Pins (je nach Klicks,
@@ -282,9 +283,9 @@ export default function ImportPinterestCsvModal({
               {!slotWithBadFilename &&
                 !crossFileMismatch &&
                 snapshotMismatch && (
-                  <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                  <div className="rounded-md border border-status-achtung bg-status-achtung-flaeche p-3 text-sm text-status-achtung-text">
                     <p>
-                      ⚠️ Der Zeitraum dieser CSV (
+                      Der Zeitraum dieser CSV (
                       {formatDateDe(snapshotMismatch.csvVon)} –{' '}
                       {formatDateDe(snapshotMismatch.csvBis)}) weicht vom
                       erwarteten nächsten Zeitraum (
@@ -295,7 +296,7 @@ export default function ImportPinterestCsvModal({
                       <button
                         type="submit"
                         disabled={!canSubmit || isPending}
-                        className="rounded-md border border-amber-400 bg-white px-3 py-1.5 text-sm font-medium text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+                        className="rounded-md border border-status-achtung bg-white px-3 py-1.5 text-sm font-medium text-status-achtung-text hover:bg-status-achtung-flaeche disabled:opacity-50"
                       >
                         {isPending
                           ? 'Importiert…'
@@ -370,7 +371,7 @@ function FileSlotInput({
           type="file"
           accept=".csv"
           onChange={(e) => onChange(e.target.files?.[0] ?? null)}
-          className="block flex-1 text-sm text-gray-700 file:mr-3 file:rounded-md file:border-0 file:bg-red-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-red-700 hover:file:bg-red-100"
+          className="block flex-1 text-sm text-gray-700 file:mr-3 file:rounded-md file:border-0 file:bg-marke-blaugrau file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white hover:file:bg-marke-blaugrau-dunkel"
         />
         {file && (
           <button
@@ -383,7 +384,7 @@ function FileSlotInput({
         )}
       </div>
       {file && detectedPeriod && (
-        <p className="mt-1 break-all text-xs text-teal-700">
+        <p className="mt-1 break-all text-xs text-status-gut-text">
           ✓ {file.name}, Zeitraum:{' '}
           {formatPeriodCompact(detectedPeriod.von, detectedPeriod.bis)}
         </p>
@@ -437,21 +438,23 @@ function ImportSummary({
       </div>
 
       {(pinsUnmatched > 0 || boardsUnmatched > 0) && (
-        <div className="space-y-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-          {pinsUnmatched > 0 && (
-            <p>
-              ⚠️ {pinsUnmatched} Pin{pinsUnmatched === 1 ? '' : 's'} konnten
-              nicht zugeordnet werden, siehe weiter unten im Eingabe-Tab
-            </p>
-          )}
-          {boardsUnmatched > 0 && (
-            <p>
-              ⚠️ {boardsUnmatched} Board
-              {boardsUnmatched === 1 ? '' : 's'} konnten nicht zugeordnet
-              werden, siehe weiter unten im Eingabe-Tab
-            </p>
-          )}
-        </div>
+        <HinweisBox variant="warnung" tone="achtung">
+          <div className="space-y-2">
+            {pinsUnmatched > 0 && (
+              <p>
+                {pinsUnmatched} Pin{pinsUnmatched === 1 ? '' : 's'} konnten
+                nicht zugeordnet werden, siehe weiter unten im Eingabe-Tab
+              </p>
+            )}
+            {boardsUnmatched > 0 && (
+              <p>
+                {boardsUnmatched} Board
+                {boardsUnmatched === 1 ? '' : 's'} konnten nicht zugeordnet
+                werden, siehe weiter unten im Eingabe-Tab
+              </p>
+            )}
+          </div>
+        </HinweisBox>
       )}
 
       <div className="flex items-center justify-end gap-3 border-t border-gray-200 pt-4">

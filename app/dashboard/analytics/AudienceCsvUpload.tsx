@@ -77,7 +77,7 @@ export default function AudienceCsvUpload() {
                 setError(null)
                 setResult(null)
               }}
-              className="block flex-1 text-sm text-gray-700 file:mr-3 file:rounded-md file:border-0 file:bg-red-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-red-700 hover:file:bg-red-100"
+              className="block flex-1 text-sm text-gray-700 file:mr-3 file:rounded-md file:border-0 file:bg-marke-blaugrau file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white hover:file:bg-marke-blaugrau-dunkel"
             />
             {file && (
               <button
@@ -90,7 +90,7 @@ export default function AudienceCsvUpload() {
             )}
           </div>
           {file && (
-            <p className="mt-1 break-all text-xs text-teal-700">
+            <p className="mt-1 break-all text-xs text-status-gut-text">
               ✓ {file.name}
             </p>
           )}

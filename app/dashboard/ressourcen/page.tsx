@@ -8,6 +8,7 @@ import {
   type PromptData,
 } from '@/lib/prompts/bridge-topics-prompt'
 import BridgeTopicsPrompt from './BridgeTopicsPrompt'
+import { HinweisBox } from '@/components/HinweisBox'
 
 // V3.1 — „Prompts & Vorlagen". Erste Karte: personalisierter
 // Brücken-Themen-Prompt, server-seitig mit den echten Account-Daten
@@ -75,11 +76,13 @@ export default async function RessourcenPage() {
           <h2 className="text-lg font-semibold text-gray-900">
             Brücken-Themen-Ideen für deine Zielgruppe
           </h2>
-          <p className="mt-3 rounded-md border border-amber-200 border-l-[3px] border-l-amber-400 bg-amber-50 p-3 text-sm text-amber-900">
-            ⚠️ Du hast noch keine Zielgruppen-Daten importiert. Importiere
-            deine Audience-Insights-CSV im Bereich Analytics &gt; Eingabe, um
-            diesen Prompt mit deinen Daten zu personalisieren.
-          </p>
+          <div className="mt-3">
+            <HinweisBox variant="tipp">
+              Du hast noch keine Zielgruppen-Daten importiert. Importiere deine
+              Audience-Insights-CSV im Bereich Analytics &gt; Eingabe, um diesen
+              Prompt mit deinen Daten zu personalisieren.
+            </HinweisBox>
+          </div>
           <p className="mt-3 text-sm">
             →{' '}
             <Link

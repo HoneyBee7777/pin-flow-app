@@ -165,14 +165,14 @@ export default function PinAnalyticsEditModal({
                 </div>
               )}
               {removeCurrentUrl && (
-                <div className="mb-2 flex flex-wrap items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                <div className="mb-2 flex flex-wrap items-center gap-2 rounded-md border border-status-achtung bg-status-achtung-flaeche px-3 py-2 text-xs text-status-achtung-text">
                   <span>
                     Bisherige URL wird beim Speichern entfernt.
                   </span>
                   <button
                     type="button"
                     onClick={() => setRemoveCurrentUrl(false)}
-                    className="ml-auto rounded-md border border-amber-300 bg-white px-2 py-1 text-xs font-medium text-amber-900 hover:bg-amber-50"
+                    className="ml-auto rounded-md border border-gray-300 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
                   >
                     Rückgängig
                   </button>

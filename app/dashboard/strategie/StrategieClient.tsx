@@ -8,6 +8,7 @@ import type { PinAnalyticsThresholds } from '../analytics/utils'
 import AudienceWissen from './AudienceWissen'
 import MyStrategy from './MyStrategy'
 import { HinweisBox } from '@/components/HinweisBox'
+import { PinKategorieIcon } from '@/components/PinKategorieIcon'
 
 type TabKey =
   | 'faktoren'
@@ -298,51 +299,6 @@ function PinTypKarte({
         )}
       </p>
       <p className="mt-1 text-sm leading-relaxed text-gray-600">{children}</p>
-    </div>
-  )
-}
-
-function Table({
-  head,
-  rows,
-}: {
-  head: string[]
-  rows: string[][]
-}) {
-  return (
-    <div className="overflow-x-auto rounded-md border border-gray-200">
-      <table className="min-w-full divide-y divide-gray-200 text-sm">
-        <thead className="bg-gray-50">
-          <tr>
-            {head.map((h) => (
-              <th
-                key={h}
-                className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500"
-              >
-                {h}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-100 bg-white">
-          {rows.map((row, i) => (
-            <tr key={i}>
-              {row.map((cell, j) => (
-                <td
-                  key={j}
-                  className={`px-3 py-2 align-top ${
-                    j === 0
-                      ? 'font-medium text-gray-900'
-                      : 'text-gray-700'
-                  }`}
-                >
-                  {cell}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
     </div>
   )
 }
@@ -1160,7 +1116,7 @@ function TabGrundlagen() {
                 href="https://help.pinterest.com/en/article/limits-for-pins-boards-and-follows"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="break-all text-amber-900 underline hover:text-amber-700"
+                className="break-all text-link underline"
               >
                 https://help.pinterest.com/en/article/limits-for-pins-boards-and-follows
               </a>
@@ -1170,7 +1126,7 @@ function TabGrundlagen() {
                 href="https://business.pinterest.com/blog/how-to-build-audience-pinterest/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="break-all text-amber-900 underline hover:text-amber-700"
+                className="break-all text-link underline"
               >
                 https://business.pinterest.com/blog/how-to-build-audience-pinterest/
               </a>
@@ -1245,23 +1201,39 @@ function TabGrundlagen() {
         <Bullets
           items={[
             <>
-              <strong>🎬 Jetzt produzieren</strong>: Pins werden erstellt und
+              <PinKategorieIcon
+                name="pen"
+                className="mr-1.5 inline-block h-4 w-4 shrink-0 align-text-bottom text-marke-blaugrau"
+              />
+              <strong>Jetzt produzieren</strong>: Pins werden erstellt und
               zum Veröffentlichen vorbereitet. Das beginnt einige Wochen vor dem
               Pin-Start.
             </>,
             <>
-              <strong>📌 Jetzt pinnen</strong>: Pin-Fenster ist offen, neue
+              <PinKategorieIcon
+                name="pin"
+                className="mr-1.5 inline-block h-4 w-4 shrink-0 align-text-bottom text-marke-blaugrau"
+              />
+              <strong>Jetzt pinnen</strong>: Pin-Fenster ist offen, neue
               Pins werden veröffentlicht. Das ist die Hauptphase für Pinterest,
               in der Pins indexiert und ausgespielt werden.
             </>,
             <>
-              <strong>🚀 Hochphase</strong>: Das Event nähert sich. Keine neuen
+              <PinKategorieIcon
+                name="flame"
+                className="mr-1.5 inline-block h-4 w-4 shrink-0 align-text-bottom text-marke-blaugrau"
+              />
+              <strong>Hochphase</strong>: Das Event nähert sich. Keine neuen
               Pins mehr erstellen, Pinterest würde sie nicht mehr rechtzeitig
               ausspielen. Jetzt nur noch beobachten, was funktioniert, und nicht
               mehr in laufende Pins eingreifen.
             </>,
             <>
-              <strong>⏳ Noch Zeit</strong>: Event liegt weit in der Zukunft.
+              <PinKategorieIcon
+                name="hourglass"
+                className="mr-1.5 inline-block h-4 w-4 shrink-0 align-text-bottom text-marke-blaugrau"
+              />
+              <strong>Noch Zeit</strong>: Event liegt weit in der Zukunft.
               Vormerken, Ideen sammeln, Produktion startet später.
             </>,
           ]}
@@ -2900,7 +2872,7 @@ function TabKeywords() {
         </Para>
 
         <div className="rounded-md border border-gray-200 bg-white p-4">
-          <H3>🔴 Haupt-Keywords: breite Reichweite, hohe Konkurrenz</H3>
+          <H3>Haupt-Keywords: breite Reichweite, hohe Konkurrenz</H3>
           <Para>
             Bestehen aus einem einzigen Wort oder einem sehr allgemeinen
             Begriff.
@@ -2917,7 +2889,7 @@ function TabKeywords() {
         </div>
 
         <div className="rounded-md border border-gray-200 bg-white p-4">
-          <H3>🟡 Mid-Tail-Keywords: die goldene Mitte</H3>
+          <H3>Mid-Tail-Keywords: die goldene Mitte</H3>
           <Para>Bestehen aus zwei bis drei Wörtern.</Para>
           <Para>
             <em>Beispiele:</em> „Outfit Herbst Frauen", „schnelle vegane
@@ -2933,7 +2905,7 @@ function TabKeywords() {
         </div>
 
         <div className="rounded-md border border-gray-200 bg-white p-4">
-          <H3>🟢 Longtail-Keywords: hohe Conversion</H3>
+          <H3>Longtail-Keywords: hohe Conversion</H3>
           <Para>Bestehen aus vier oder mehr Wörtern.</Para>
           <Para>
             <em>Beispiele:</em> „Outfit Herbst Frauen 40 casual", „schnelle
@@ -3143,7 +3115,7 @@ function TabKeywords() {
           Der KI-Prompt in der{' '}
           <Link
             href="/dashboard/pin-produktion"
-            className="text-amber-900 underline underline-offset-2 hover:text-amber-700"
+            className="text-link underline underline-offset-2"
           >
             Pin-Produktion
           </Link>{' '}
@@ -3276,7 +3248,7 @@ function TabKeywords() {
           Nutze den →{' '}
           <Link
             href="/dashboard/boards"
-            className="text-amber-900 underline underline-offset-2 hover:text-amber-700"
+            className="text-link underline underline-offset-2"
           >
             KI-Prompt Generator
           </Link>{' '}
@@ -3765,43 +3737,73 @@ function TabAnalytics() {
           je nachdem, was die Diagnose dir zeigt.
         </Para>
 
-        <Table
-          head={['Reichweite?', 'Klicks?', 'Saves?', 'Was das heißt', 'Diagnose']}
+        <WissenTabelle
+          headers={['Reichweite?', 'Klicks?', 'Saves?', 'Was das heißt', 'Diagnose']}
           rows={[
             [
               'Hoch',
               'stark',
               'egal',
               'Läuft rundum, dein Blueprint',
-              '⭐ Aktiver Top Performer',
+              <span className="inline-flex items-center gap-1.5">
+                <PinKategorieIcon
+                  name="aktiver_top_performer"
+                  className="h-4 w-4 shrink-0 text-marke-blaugrau"
+                />
+                Aktiver Top Performer
+              </span>,
             ],
             [
               'Hoch',
               'schwach',
               'stark',
               'Cover zieht, Klick fehlt',
-              '🧲 Save-Magnet',
+              <span className="inline-flex items-center gap-1.5">
+                <PinKategorieIcon
+                  name="save_magnet"
+                  className="h-4 w-4 shrink-0 text-marke-blaugrau"
+                />
+                Save-Magnet
+              </span>,
             ],
             [
               'Hoch',
               'schwach',
               'schwach',
               'Wird gesehen, keiner reagiert',
-              '🔧 Reichweite ohne Wirkung',
+              <span className="inline-flex items-center gap-1.5">
+                <PinKategorieIcon
+                  name="reichweite_ohne_wirkung"
+                  className="h-4 w-4 shrink-0 text-marke-blaugrau"
+                />
+                Reichweite ohne Wirkung
+              </span>,
             ],
             [
               'Niedrig',
               'eins davon stark*',
               'eins davon stark*',
               'Gut, aber kaum sichtbar',
-              '💎 Hidden Gem',
+              <span className="inline-flex items-center gap-1.5">
+                <PinKategorieIcon
+                  name="hidden_gem"
+                  className="h-4 w-4 shrink-0 text-marke-blaugrau"
+                />
+                Hidden Gem
+              </span>,
             ],
             [
               'Niedrig',
               'schwach',
               'schwach',
               'Hatte Zeit, kam nicht an',
-              '💤 Stiller Pin',
+              <span className="inline-flex items-center gap-1.5">
+                <PinKategorieIcon
+                  name="stiller_pin"
+                  className="h-4 w-4 shrink-0 text-marke-blaugrau"
+                />
+                Stiller Pin
+              </span>,
             ],
           ]}
         />
@@ -3817,22 +3819,40 @@ function TabAnalytics() {
         <Bullets
           items={[
             <>
-              ♻️ <strong>Eingeschlafener Gewinner:</strong> Lief früher stark,
+              <PinKategorieIcon
+                name="eingeschlafener_gewinner"
+                className="mr-1.5 inline-block h-4 w-4 shrink-0 align-text-bottom text-marke-blaugrau"
+              />
+              <strong>Eingeschlafener Gewinner:</strong> Lief früher stark,
               jetzt fällt die Reichweite deutlich. Zeit für einen frischen Pin.
             </>,
             <>
-              ⏳ <strong>Noch zu früh:</strong> Zu wenig Daten für ein
+              <PinKategorieIcon
+                name="hourglass"
+                className="mr-1.5 inline-block h-4 w-4 shrink-0 align-text-bottom text-marke-blaugrau"
+              />
+              <strong>Noch zu früh:</strong> Zu wenig Daten für ein
               verlässliches Urteil.
             </>,
             <>
-              📊 <strong>Noch keine Vergleichsdaten:</strong> Es fehlen noch
+              <PinKategorieIcon
+                name="chart"
+                className="mr-1.5 inline-block h-4 w-4 shrink-0 align-text-bottom text-marke-blaugrau"
+              />
+              <strong>Noch keine Vergleichsdaten:</strong> Es fehlen noch
               genug ausgewertete Pins für deinen persönlichen Durchschnitt.
             </>,
           ]}
         />
 
         <div className="rounded-md border border-gray-200 bg-white p-4">
-          <H3><span aria-hidden>⭐</span> Aktiver Top Performer</H3>
+          <H3>
+            <PinKategorieIcon
+              name="aktiver_top_performer"
+              className="mr-1.5 inline-block h-5 w-5 shrink-0 align-text-bottom text-marke-blaugrau"
+            />
+            Aktiver Top Performer
+          </H3>
           <Para>
             Diese Pins haben bewiesen: Pinterest spielt sie aus, Menschen
             klicken sie an, das Thema hat echte Nachfrage. Sie sind dein
@@ -3865,7 +3885,13 @@ function TabAnalytics() {
         </div>
 
         <div className="rounded-md border border-gray-200 bg-white p-4">
-          <H3><span aria-hidden>🧲</span> Save-Magnet</H3>
+          <H3>
+            <PinKategorieIcon
+              name="save_magnet"
+              className="mr-1.5 inline-block h-5 w-5 shrink-0 align-text-bottom text-marke-blaugrau"
+            />
+            Save-Magnet
+          </H3>
           <Para>
             Dieser Pin wird oft gespeichert, aber selten geklickt. Das Cover und
             das Thema ziehen, doch der Weg zur Website fehlt.
@@ -3887,7 +3913,13 @@ function TabAnalytics() {
         </div>
 
         <div className="rounded-md border border-gray-200 bg-white p-4">
-          <H3><span aria-hidden>🔧</span> Reichweite ohne Wirkung</H3>
+          <H3>
+            <PinKategorieIcon
+              name="reichweite_ohne_wirkung"
+              className="mr-1.5 inline-block h-5 w-5 shrink-0 align-text-bottom text-marke-blaugrau"
+            />
+            Reichweite ohne Wirkung
+          </H3>
           <Para>
             Pinterest spielt diesen Pin gut aus, viele Menschen sehen ihn, aber
             kaum jemand reagiert.
@@ -3908,7 +3940,13 @@ function TabAnalytics() {
         </div>
 
         <div className="rounded-md border border-gray-200 bg-white p-4">
-          <H3><span aria-hidden>💎</span> Hidden Gem</H3>
+          <H3>
+            <PinKategorieIcon
+              name="hidden_gem"
+              className="mr-1.5 inline-block h-5 w-5 shrink-0 align-text-bottom text-marke-blaugrau"
+            />
+            Hidden Gem
+          </H3>
           <Para>
             Wer diesen Pin sieht, reagiert stark, klickt oder speichert
             überdurchschnittlich. Aber Pinterest zeigt ihn fast niemandem.
@@ -3934,7 +3972,13 @@ function TabAnalytics() {
         </div>
 
         <div className="rounded-md border border-gray-200 bg-white p-4">
-          <H3><span aria-hidden>💤</span> Stiller Pin</H3>
+          <H3>
+            <PinKategorieIcon
+              name="stiller_pin"
+              className="mr-1.5 inline-block h-5 w-5 shrink-0 align-text-bottom text-marke-blaugrau"
+            />
+            Stiller Pin
+          </H3>
           <Para>
             Weder Pinterest noch Nutzer reagieren auf diesen Pin. Er hat genug
             Zeit gehabt zu performen, aber er hat nicht funktioniert.
@@ -3965,7 +4009,13 @@ function TabAnalytics() {
         </div>
 
         <div className="rounded-md border border-gray-200 bg-white p-4">
-          <H3><span aria-hidden>♻️</span> Eingeschlafener Gewinner</H3>
+          <H3>
+            <PinKategorieIcon
+              name="eingeschlafener_gewinner"
+              className="mr-1.5 inline-block h-5 w-5 shrink-0 align-text-bottom text-marke-blaugrau"
+            />
+            Eingeschlafener Gewinner
+          </H3>
           <Para>
             Dieser Pin lief früher stark, verliert inzwischen aber an
             Reichweite. Pinterest priorisiert frische Inhalte, ältere Pins
@@ -3990,7 +4040,13 @@ function TabAnalytics() {
         </div>
 
         <div className="rounded-md border border-gray-200 bg-white p-4">
-          <H3><span aria-hidden>⏳</span> Noch zu früh</H3>
+          <H3>
+            <PinKategorieIcon
+              name="hourglass"
+              className="mr-1.5 inline-block h-5 w-5 shrink-0 align-text-bottom text-marke-blaugrau"
+            />
+            Noch zu früh
+          </H3>
           <Para>
             Wir haben zu wenig Daten für eine ehrliche Bewertung. Entweder ist
             der Pin noch jung oder Pinterest hat ihn noch nicht oft genug
@@ -4016,7 +4072,13 @@ function TabAnalytics() {
         </div>
 
         <div className="rounded-md border border-gray-200 bg-white p-4">
-          <H3><span aria-hidden>📊</span> Noch keine Vergleichsdaten</H3>
+          <H3>
+            <PinKategorieIcon
+              name="chart"
+              className="mr-1.5 inline-block h-5 w-5 shrink-0 align-text-bottom text-marke-blaugrau"
+            />
+            Noch keine Vergleichsdaten
+          </H3>
           <Para>
             Pin-Flow vergleicht jeden Pin mit deinem persönlichen Durchschnitt.
             Solange du noch zu wenige ausgewertete Pins hast, gibt es diesen

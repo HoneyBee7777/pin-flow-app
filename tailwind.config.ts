@@ -41,6 +41,18 @@ const config: Config = {
           "neutral-text": "var(--status-neutral-text)",
           "neutral-flaeche": "var(--status-neutral-flaeche)",
         },
+        // Hinweis-Tipp-Farbe (eine Quelle, Token aus globals.css). Genutzt von
+        // HinweisBox variant="tipp" + den Unmatched-Sektionen (Analytics).
+        hinweis: {
+          "tipp-flaeche": "var(--hinweis-tipp-flaeche)",
+          "tipp-rand": "var(--hinweis-tipp-rand)",
+          "tipp-stripe": "var(--hinweis-tipp-stripe)",
+          "tipp-text": "var(--hinweis-tipp-text)",
+          "merke-flaeche": "var(--hinweis-merke-flaeche)",
+          "merke-rand": "var(--hinweis-merke-rand)",
+          "merke-stripe": "var(--hinweis-merke-stripe)",
+          "merke-text": "var(--hinweis-merke-text)",
+        },
         // Semantische Rollen-Aliase (zeigen via CSS-Variable auf die Marke):
         // bg-seite, bg-karte, border-karte-rand, text-link, text-haupt,
         // text-sekundaer. button-primaer = bg-marke-blaugrau + text-white,

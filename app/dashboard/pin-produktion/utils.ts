@@ -57,10 +57,13 @@ export const STATUS_LABEL: Record<Status, string> = {
   veroeffentlicht: 'Veröffentlicht',
 }
 
+// Status ist eine Workflow-Stufe, keine Wertung. Daher kein Ampel-Grün/Blau,
+// sondern eine ruhige Blaugrau-Staffelung: blass (Entwurf) über mittel
+// (Geplant) zu kräftig (Veröffentlicht).
 export const STATUS_BADGE: Record<Status, string> = {
-  entwurf: 'bg-gray-100 text-gray-700',
-  geplant: 'bg-blue-100 text-blue-700',
-  veroeffentlicht: 'bg-green-100 text-green-700',
+  entwurf: 'bg-marke-blaugrau-hell text-marke-blaugrau-dunkel',
+  geplant: 'bg-marke-blaugrau-mittel text-white',
+  veroeffentlicht: 'bg-marke-blaugrau text-white',
 }
 
 export const STRATEGIE_LABEL: Record<StrategieTyp, string> = {
@@ -70,11 +73,14 @@ export const STRATEGIE_LABEL: Record<StrategieTyp, string> = {
   dienstleistung: 'Dienstleistung',
 }
 
+// Angebotsart ist eine reine Kategorie ohne Wertung, daher neutrale graue
+// Pille für alle Werte (wie die Keyword-Chips). Unterschieden wird über das
+// Label, nicht über die Farbe.
 export const STRATEGIE_BADGE: Record<StrategieTyp, string> = {
-  blog_content: 'bg-blue-100 text-blue-700',
-  affiliate: 'bg-amber-100 text-amber-800',
-  produkt: 'bg-purple-100 text-purple-700',
-  dienstleistung: 'bg-teal-100 text-teal-700',
+  blog_content: 'bg-gray-100 text-gray-700',
+  affiliate: 'bg-gray-100 text-gray-700',
+  produkt: 'bg-gray-100 text-gray-700',
+  dienstleistung: 'bg-gray-100 text-gray-700',
 }
 
 export const HOOK_ART_LABEL: Record<HookArt, string> = {
@@ -95,13 +101,15 @@ export const PIN_FORMAT_LABEL: Record<PinFormat, string> = {
   infografik: 'Infografik',
 }
 
+// Pin-Typ ist eine reine Kategorie ohne Wertung, daher neutrale graue Pille
+// für alle Werte. Unterschieden wird über das Label, nicht über die Farbe.
 export const PIN_FORMAT_BADGE: Record<PinFormat, string> = {
   standard: 'bg-gray-100 text-gray-700',
-  video: 'bg-pink-100 text-pink-700',
-  collage: 'bg-emerald-100 text-emerald-700',
-  shopping: 'bg-rose-100 text-rose-700',
-  carousel: 'bg-amber-100 text-amber-800',
-  infografik: 'bg-sky-100 text-sky-700',
+  video: 'bg-gray-100 text-gray-700',
+  collage: 'bg-gray-100 text-gray-700',
+  shopping: 'bg-gray-100 text-gray-700',
+  carousel: 'bg-gray-100 text-gray-700',
+  infografik: 'bg-gray-100 text-gray-700',
 }
 
 export const KEYWORD_TYP_LABEL: Record<KeywordTyp, string> = {

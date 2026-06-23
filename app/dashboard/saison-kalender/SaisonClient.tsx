@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useMemo, useState, useTransition, type FormEvent } from 'react'
 import SortableTh from '@/components/SortableTh'
+import { PinKategorieIcon } from '@/components/PinKategorieIcon'
 import { addEvent, deleteEvent, updateEvent } from './actions'
 import {
   formatDateDe,
@@ -23,6 +24,16 @@ const STATUS_RANK: Record<EventStatus, number> = {
   noch_zeit: 3,
   evergreen: 4,
   abgeschlossen: 5,
+}
+
+// Status-Pille: Form-Icon je Status (die farbige Pille trägt die Ampel).
+const STATUS_ICON: Record<EventStatus, string> = {
+  jetzt_pinnen: 'pin',
+  jetzt_produzieren: 'pen',
+  hochphase: 'flame',
+  noch_zeit: 'hourglass',
+  abgeschlossen: 'check',
+  evergreen: 'leaf',
 }
 
 const TYP_OPTIONS: Array<{ value: SaisonTyp; label: string }> = [
@@ -461,7 +472,10 @@ export default function SaisonClient({
                         className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${s.badge}`}
                         title={s.label}
                       >
-                        <span aria-hidden>{s.emoji}</span>
+                        <PinKategorieIcon
+                          name={STATUS_ICON[s.status]}
+                          className="h-3.5 w-3.5 shrink-0"
+                        />
                         {s.label}
                       </span>
                     </td>
@@ -498,11 +512,11 @@ export default function SaisonClient({
                           : formatDateDe(ev.event_datum)}
                         {ev.datum_variabel && (
                           <span
-                            className="text-yellow-500"
+                            className="inline-flex items-center gap-1 rounded-full bg-status-achtung-flaeche px-2 py-0.5 text-xs font-medium text-status-achtung-text"
                             title="Datum ändert sich jährlich, bitte vorausschauend pflegen"
-                            aria-label="Datum ändert sich jährlich, bitte vorausschauend pflegen"
                           >
-                            ⚠️
+                            <PinKategorieIcon name="kalender" className="h-3.5 w-3.5 shrink-0" />
+                            jährlich pflegen
                           </span>
                         )}
                       </span>

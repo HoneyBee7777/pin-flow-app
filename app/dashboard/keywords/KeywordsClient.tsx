@@ -272,7 +272,7 @@ export default function KeywordsClient({
           onClick={onMatchKeywords}
           disabled={matching}
           className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-          title="Gleicht alle Pins erneut mit der Keyword-Datenbank ab — anhand von Pin-Titel, Beschreibung und Board-Name."
+          title="Gleicht alle Pins erneut mit der Keyword-Datenbank ab, anhand von Pin-Titel und Pin-Beschreibung."
         >
           {matching ? 'Gleiche ab…' : 'Keywords neu abgleichen'}
         </button>

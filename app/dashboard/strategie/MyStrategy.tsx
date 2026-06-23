@@ -366,7 +366,7 @@ export default function MyStrategy({
                     type="checkbox"
                     checked={businessModell.includes(o.value)}
                     onChange={() => toggleModell(o.value)}
-                    className="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
+                    className="h-4 w-4 rounded border-gray-300 accent-marke-blaugrau focus:ring-red-500"
                   />
                   <span className="text-gray-900">{o.label}</span>
                 </label>
@@ -441,7 +441,7 @@ export default function MyStrategy({
                         step={5}
                         value={zielflaechen[v]}
                         onChange={(e) => onSlider(v, Number(e.target.value))}
-                        className="w-full accent-red-600"
+                        className="w-full accent-marke-blaugrau"
                         aria-label={label}
                       />
                       <span className="text-right text-sm tabular-nums text-gray-900">
@@ -464,7 +464,9 @@ export default function MyStrategy({
 
             <p
               className={`text-sm font-medium ${
-                sichtbareSumme === 100 ? 'text-green-700' : 'text-red-700'
+                sichtbareSumme === 100
+                  ? 'text-status-gut-text'
+                  : 'text-status-schlecht-text'
               }`}
             >
               Summe: {sichtbareSumme} %{' '}
@@ -512,7 +514,7 @@ export default function MyStrategy({
                         type="checkbox"
                         checked={contentSaeulen.includes(k)}
                         onChange={() => toggleSaeule(k)}
-                        className="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
+                        className="h-4 w-4 rounded border-gray-300 accent-marke-blaugrau focus:ring-red-500"
                       />
                       <span className="text-gray-900">{k}</span>
                     </label>
@@ -553,7 +555,7 @@ export default function MyStrategy({
               </p>
             </div>
 
-            <p className="rounded-md border-l-[3px] border-l-sky-400 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+            <p className="rounded-md border-l-[3px] border-l-hinweis-tipp-stripe bg-hinweis-tipp-flaeche px-4 py-3 text-sm text-hinweis-tipp-text">
               Pin-Flow hat dir eine Frequenz vorgeschlagen, die zu deiner Anzahl
               an Inhalten passt. Du kannst sie anpassen.
             </p>
@@ -569,7 +571,7 @@ export default function MyStrategy({
                     name="pinning_frequenz"
                     checked={pinningFrequenz === o.value}
                     onChange={() => setPinningFrequenz(o.value)}
-                    className="mt-0.5 h-4 w-4 border-gray-300 text-red-600 focus:ring-red-500"
+                    className="mt-0.5 h-4 w-4 border-gray-300 accent-marke-blaugrau focus:ring-red-500"
                   />
                   <span className="min-w-0 flex-1">
                     <span className="flex flex-wrap items-center gap-2">
@@ -577,7 +579,7 @@ export default function MyStrategy({
                         {o.label}
                       </span>
                       {o.value === empfohlen && (
-                        <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">
+                        <span className="inline-flex items-center rounded-full bg-status-gut-flaeche px-2 py-0.5 text-xs font-medium text-status-gut-text">
                           Vorgeschlagen
                         </span>
                       )}
@@ -684,7 +686,7 @@ export default function MyStrategy({
 // =====================================================
 function OnboardingHint() {
   return (
-    <div className="rounded-md border-l-[3px] border-l-sky-400 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+    <div className="rounded-md border-l-[3px] border-l-hinweis-tipp-stripe bg-hinweis-tipp-flaeche px-4 py-3 text-sm text-hinweis-tipp-text">
       Teil deines Gesamt-Onboardings: <strong>Schritt 9 von 13</strong>. Nach
       Abschluss geht es dort automatisch weiter.
     </div>
@@ -703,7 +705,7 @@ function Fortschritt({ step }: { step: 1 | 2 | 3 | 4 | 5 }) {
           <span
             key={i}
             className={`h-1.5 rounded-full ${
-              step > 4 || step >= i ? 'bg-red-600' : 'bg-gray-200'
+              step > 4 || step >= i ? 'bg-marke-blaugrau' : 'bg-gray-200'
             }`}
             aria-hidden
           />
@@ -770,7 +772,7 @@ export function ZusammenfassungInhalt({
                 <span className="w-52 shrink-0 text-gray-700">{z.label}</span>
                 <div className="h-2 flex-1 overflow-hidden rounded-full bg-gray-100">
                   <div
-                    className="h-full rounded-full bg-red-500"
+                    className="h-full rounded-full bg-marke-blaugrau"
                     style={{ width: `${zielflaechen[z.value]}%` }}
                   />
                 </div>

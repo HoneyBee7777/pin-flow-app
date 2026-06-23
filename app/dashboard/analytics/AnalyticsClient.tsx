@@ -239,7 +239,7 @@ export default function AnalyticsClient({
                 {label}
                 {badge > 0 && (
                   <span
-                    className="ml-1.5 inline-flex items-center justify-center rounded-full bg-amber-100 px-2 text-xs font-semibold text-amber-800"
+                    className="ml-1.5 inline-flex items-center justify-center rounded-full bg-hinweis-tipp-flaeche px-2 text-xs font-semibold text-hinweis-tipp-text"
                     title={`${badge} nicht zugeordnete Einträge aus dem letzten CSV-Import`}
                   >
                     {badge}
@@ -346,7 +346,7 @@ function ClassificationExplainerBanner() {
   }
 
   return (
-    <div className="rounded-md border border-cyan-200 bg-cyan-50 p-4 text-sm text-cyan-900">
+    <div className="rounded-md border border-hinweis-tipp-rand bg-hinweis-tipp-flaeche p-4 text-sm text-hinweis-tipp-text">
       <div className="flex items-start gap-3">
         <div className="flex-1 space-y-2">
           <p className="text-base font-semibold">
@@ -378,7 +378,7 @@ function ClassificationExplainerBanner() {
             <button
               type="button"
               onClick={dismiss}
-              className="rounded-md border border-cyan-300 bg-white px-3 py-1 text-xs font-medium text-cyan-900 hover:bg-cyan-100"
+              className="rounded-md border border-hinweis-tipp-rand bg-white px-3 py-1 text-xs font-medium text-hinweis-tipp-text hover:bg-hinweis-tipp-flaeche"
             >
               Verstanden
             </button>
@@ -387,7 +387,7 @@ function ClassificationExplainerBanner() {
         <button
           type="button"
           onClick={dismiss}
-          className="shrink-0 rounded-md p-1 text-cyan-700 hover:bg-cyan-100"
+          className="shrink-0 rounded-md p-1 text-hinweis-tipp-text hover:bg-hinweis-tipp-flaeche"
           aria-label="Banner schließen"
           title="Schließen"
         >

@@ -164,9 +164,47 @@ export const ONBOARDING_STEPS: OnboardingStepDef[] = [
     skippable: false,
   },
 
-  // ---- Schritt 2 — Business-Account-Check ----
+  // ---- Schritt 2 — Zielgruppe ----
   {
     id: 2,
+    phase: P.einstieg,
+    title: 'Wen willst du auf Pinterest erreichen?',
+    blocks: [
+      {
+        kind: 'intro',
+        text: 'Bevor du dein Profil einrichtest, Keywords sammelst oder Boards anlegst, brauchst du eine klare Antwort auf eine Frage: Wen willst du auf Pinterest erreichen? Diese Antwort ist die Brille, durch die du alles andere planst.',
+      },
+      {
+        kind: 'p',
+        text: 'Pinterest ist eine Suchmaschine. Menschen tippen dort ein, was sie suchen, planen oder träumen. Wenn du genau weißt, wer diese Menschen sind, was sie umtreibt und welche Worte sie benutzen, triffst du mit jedem Pin ins Schwarze. Wenn nicht, produzierst du an ihnen vorbei.',
+      },
+      {
+        kind: 'ul',
+        items: [
+          'Wer ist dein idealer Mensch auf Pinterest, möglichst konkret, nicht „Frauen zwischen 30 und 50", sondern eine echte Person mit echtem Anliegen',
+          'Was sucht diese Person, welches Problem will sie lösen, welches Ziel erreichen',
+          'Welche Begriffe tippt sie in die Suche, in ihrer Sprache, nicht in deiner Fachsprache',
+        ],
+      },
+      {
+        kind: 'callout',
+        text: 'Die Zielgruppe bestimmt deine Keywords, deine Boards und deine Pin-Texte. Deshalb steht sie am Anfang. Wie du deine Zielgruppe sauber herausarbeitest, zeigt dir [Zielgruppe verstehen](/dashboard/strategie?tab=audience) auf der Wissensseite.',
+      },
+    ],
+    ctas: [
+      {
+        label: 'Zielgruppe verstehen',
+        href: '/dashboard/strategie?tab=audience',
+        newTab: true,
+        variant: 'primary',
+      },
+    ],
+    skippable: true,
+  },
+
+  // ---- Schritt 3 — Business-Account-Check ----
+  {
+    id: 3,
     phase: P.einstieg,
     title: 'Hast du einen Pinterest-Business-Account?',
     blocks: [
@@ -181,9 +219,9 @@ export const ONBOARDING_STEPS: OnboardingStepDef[] = [
       'Ohne Business-Account stehen dir keine Analytics-Daten zur Verfügung: Pin-Flow funktioniert dann nur eingeschränkt.',
   },
 
-  // ---- Schritt 3 — Profil & Pinterest-Zugang ----
+  // ---- Schritt 4 — Profil & Pinterest-Zugang ----
   {
-    id: 3,
+    id: 4,
     phase: P.setup,
     title: 'Personalisiere deine App',
     blocks: [
@@ -191,16 +229,20 @@ export const ONBOARDING_STEPS: OnboardingStepDef[] = [
         kind: 'p',
         text: 'Drei Angaben, damit Pin-Flow dich persönlich begrüßt und dich beim monatlichen Update direkt zu Pinterest führt. Alle Angaben kannst du jederzeit in den Einstellungen anpassen.',
       },
+      {
+        kind: 'callout',
+        text: 'Überlege, nach welchen Keywords deine Zielgruppe sucht. Wenn möglich, verwende die wichtigsten davon natürlich integriert in deiner Profilbeschreibung.',
+      },
     ],
     special: 'profile-form',
     skippable: true,
   },
 
-  // ---- Schritt 4 — Dein Content ----
+  // ---- Schritt 5 — Dein Content ----
   {
-    id: 4,
+    id: 5,
     phase: P.setup,
-    phaseProgress: 'Setup: Schritt 1 von 6',
+    phaseProgress: 'Setup: Schritt 1 von 7',
     title: 'Trage deine Inhalte ein',
     blocks: [
       {
@@ -240,11 +282,11 @@ export const ONBOARDING_STEPS: OnboardingStepDef[] = [
     skippable: true,
   },
 
-  // ---- Schritt 5 — Ziel-URLs ----
+  // ---- Schritt 6 — Ziel-URLs ----
   {
-    id: 5,
+    id: 6,
     phase: P.setup,
-    phaseProgress: 'Setup: Schritt 2 von 6',
+    phaseProgress: 'Setup: Schritt 2 von 7',
     title: 'Sammle deine Ziel-URLs',
     blocks: [
       {
@@ -275,11 +317,11 @@ export const ONBOARDING_STEPS: OnboardingStepDef[] = [
     skippable: true,
   },
 
-  // ---- Schritt 6 — Keywords (Herzstück) ----
+  // ---- Schritt 7 — Keywords (Herzstück) ----
   {
-    id: 6,
+    id: 7,
     phase: P.setup,
-    phaseProgress: 'Setup: Schritt 3 von 6',
+    phaseProgress: 'Setup: Schritt 3 von 7',
     title: 'Deine Keyword-Datenbank: das Herzstück',
     blocks: [
       {
@@ -335,11 +377,11 @@ export const ONBOARDING_STEPS: OnboardingStepDef[] = [
     skippable: true,
   },
 
-  // ---- Schritt 7 — Boards ----
+  // ---- Schritt 8 — Boards ----
   {
-    id: 7,
+    id: 8,
     phase: P.setup,
-    phaseProgress: 'Setup: Schritt 4 von 6',
+    phaseProgress: 'Setup: Schritt 4 von 7',
     title: 'Lege deine Boards an',
     blocks: [
       {
@@ -383,11 +425,11 @@ export const ONBOARDING_STEPS: OnboardingStepDef[] = [
     skippable: true,
   },
 
-  // ---- Schritt 8 — Saisonkalender ----
+  // ---- Schritt 9 — Saisonkalender ----
   {
-    id: 8,
+    id: 9,
     phase: P.setup,
-    phaseProgress: 'Setup: Schritt 5 von 6',
+    phaseProgress: 'Setup: Schritt 5 von 7',
     title: 'Pflege deinen Saisonkalender',
     blocks: [
       {
@@ -444,11 +486,11 @@ export const ONBOARDING_STEPS: OnboardingStepDef[] = [
     skippable: true,
   },
 
-  // ---- Schritt 9 — Einstellungen + Strategie-Onboarding ----
+  // ---- Schritt 10 — Einstellungen + Strategie-Onboarding ----
   {
-    id: 9,
+    id: 10,
     phase: P.setup,
-    phaseProgress: 'Setup: Schritt 6 von 6',
+    phaseProgress: 'Setup: Schritt 6 von 7',
     title: 'Deine Strategie festlegen',
     blocks: [
       {
@@ -494,9 +536,40 @@ export const ONBOARDING_STEPS: OnboardingStepDef[] = [
       'Ohne festgelegte Strategie funktioniert der Strategie-Check auf dem Dashboard nicht. Du kannst die Strategie jederzeit nachholen.',
   },
 
-  // ---- Schritt 10 — Pins ----
+  // ---- Schritt 11 — Dein Marken-Design ----
   {
-    id: 10,
+    id: 11,
+    phase: P.setup,
+    phaseProgress: 'Setup: Schritt 7 von 7',
+    title: 'Dein Marken-Design',
+    blocks: [
+      {
+        kind: 'intro',
+        text: 'Bevor du deinen ersten Pin erstellst, lohnt sich ein Schritt, der dir auf Pinterest einen echten Vorsprung gibt: ein durchgängiges Design für deine Pins.',
+      },
+      {
+        kind: 'p',
+        text: 'Vertrauen und Markenidentität sind heute das Wichtigste. Menschen kaufen erst, wenn sie einer Marke vertrauen, und Vertrauen entsteht durch Wiedererkennung. Wenn deine Pins eine klare, einheitliche Bildsprache haben, prägt sich deine Marke ein, und genau das zahlt am Ende auf deine Verkäufe ein.',
+      },
+      {
+        kind: 'callout',
+        text: 'Achte darauf, deine Canva-Vorlagen nach deinem Marken-Design auszurichten, gleiche Farben, gleiche Schriften, gleiche Handschrift in jedem Pin. Deine Vorlagen findest du in [Canva-Vorlagen](/dashboard/canva-vorlagen).',
+      },
+    ],
+    ctas: [
+      {
+        label: 'Zu deinen Canva-Vorlagen',
+        href: '/dashboard/canva-vorlagen',
+        newTab: true,
+        variant: 'primary',
+      },
+    ],
+    skippable: true,
+  },
+
+  // ---- Schritt 12 — Pins ----
+  {
+    id: 12,
     phase: P.produktion,
     phaseProgress: 'Produktion: Schritt 1 von 2',
     title: 'Deine Pins: erstellen oder importieren',
@@ -531,9 +604,9 @@ export const ONBOARDING_STEPS: OnboardingStepDef[] = [
     skippable: true,
   },
 
-  // ---- Schritt 11 — Analytics importieren ----
+  // ---- Schritt 13 — Analytics importieren ----
   {
-    id: 11,
+    id: 13,
     phase: P.produktion,
     phaseProgress: 'Auswertung: Schritt 2 von 2',
     title: 'Importiere deine Analytics',
@@ -576,9 +649,9 @@ export const ONBOARDING_STEPS: OnboardingStepDef[] = [
     skippable: true,
   },
 
-  // ---- Schritt 12 — Abschluss ----
+  // ---- Schritt 14 — Dein System steht ----
   {
-    id: 12,
+    id: 14,
     phase: P.produktion,
     title: 'Dein System steht.',
     blocks: [
@@ -615,6 +688,41 @@ export const ONBOARDING_STEPS: OnboardingStepDef[] = [
       {
         kind: 'callout',
         text: 'Pin-Flow ist dein dauerhaftes Archiv. Jeder Datenpunkt den du heute einpflegst, ist in 2 Jahren noch da. Auch wenn Pinterest die Daten längst gelöscht hat. So baust du dir ein Asset auf, das dir niemand nehmen kann.',
+      },
+    ],
+    skippable: false,
+  },
+
+  // ---- Schritt 15 — Pinterest ist ein Marathon, kein Sprint ----
+  {
+    id: 15,
+    phase: P.produktion,
+    title: 'Pinterest ist ein Marathon, kein Sprint',
+    blocks: [
+      {
+        kind: 'intro',
+        text: 'Dein System steht. Jetzt kommt der Teil, der über Erfolg entscheidet: dranbleiben und in Zyklen denken.',
+      },
+      {
+        kind: 'p',
+        text: 'Dein Weg auf Pinterest läuft immer im selben Kreis: Du pinnst, du wertest aus, du optimierst, und dann pinnst du wieder. Je öfter du diesen Kreis durchläufst, desto besser wirst du, weil du mit jeder Runde mehr über deine Zielgruppe lernst und Pin-Flow dir die richtigen Stellschrauben zeigt.',
+      },
+      {
+        kind: 'p',
+        text: 'Eine Sache musst du wissen, damit du nicht zu früh aufgibst: Pinterest braucht Zeit. Ein neuer Pin wird nicht sofort voll ausgespielt, das dauert oft 60 bis 90 Tage. Dein Dashboard wird also erst nach etwa drei Monaten wirklich aussagekräftig. Wenn du nach vier Wochen auswertest, sind die Zahlen noch nicht final, das ist normal und kein Grund zur Sorge.',
+      },
+      {
+        kind: 'ul',
+        items: [
+          'Pinnen, regelmäßig und mit Plan, nicht in Schüben',
+          'Auswerten, einmal im Monat, mit dem Wissen, dass die Daten erst nach Monaten valide werden',
+          'Optimieren, anhand der Vorschläge, die dir Pin-Flow macht',
+          'Wieder pinnen, mit dem, was du gelernt hast',
+        ],
+      },
+      {
+        kind: 'p',
+        text: 'Bleib dran. Nach etwa drei Monaten fängt Pinterest an, dich auszuspielen, und du bekommst Stück für Stück mehr Klicks auf deine Website. Achte dort darauf, die Customer Journey einzuhalten, damit aus Klicks auch Ergebnisse werden. Je länger und konsequenter du den Kreislauf fährst, desto stärker wirst du.',
       },
     ],
     special: 'completion',

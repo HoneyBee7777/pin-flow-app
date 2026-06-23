@@ -277,9 +277,9 @@ export async function addPin(
       }
   }
 
-  // Auto-Keyword-Match für den neu angelegten Pin — fügt zusätzlich zu den
+  // Auto-Keyword-Match für den neu angelegten Pin: fügt zusätzlich zu den
   // manuell ausgewählten Keywords alle Datenbank-Keywords hinzu, die im
-  // Titel, in der Beschreibung oder im Board-Namen vorkommen.
+  // Pin-Titel oder in der Pin-Beschreibung vorkommen.
   await matchKeywordsForPinAction(inserted.id)
 
   revalidatePath('/dashboard/pin-produktion')

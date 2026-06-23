@@ -12,6 +12,7 @@ import {
   type ChecklistItem,
   type ChecklistLink,
 } from '@/lib/checklist-content'
+import { PinKategorieIcon } from '@/components/PinKategorieIcon'
 import { toggleChecklistItem } from './actions'
 
 export default function ChecklistClient({
@@ -60,13 +61,14 @@ export default function ChecklistClient({
     <div className="space-y-6 p-6 sm:p-8">
       <header>
         <h1 className="text-3xl font-bold text-gray-900">
-          📋 Setup-Checkliste
+          Deine Setup-Checkliste
         </h1>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-gray-600">
-          Eine konkrete Schritt-für-Schritt-Anleitung, was du tun solltest,
-          um Pin-Flow optimal einzurichten und mit Pinterest erfolgreich zu
-          starten. Hak ab, was du erledigt hast — dein Fortschritt wird
-          automatisch gespeichert.
+          Hier liegt dein Fundament. Jeder Punkt auf dieser Liste bringt dich
+          einen Schritt näher an einen Pinterest-Auftritt, der trägt. Geh sie in
+          deinem Tempo durch, hake ab, was steht, und komm zurück, wann immer du
+          etwas nachschärfen willst. Diese Liste wartet auf dich, nicht
+          umgekehrt.
         </p>
       </header>
 
@@ -81,8 +83,8 @@ export default function ChecklistClient({
         <div className="mt-2 h-3 w-full overflow-hidden rounded-full bg-gray-200">
           <div
             className={`h-full rounded-full transition-all duration-500 ${
-              allDone ? 'bg-emerald-500' : 'bg-red-500'
-            } ${allDone ? 'animate-pulse' : ''}`}
+              allDone ? 'bg-status-gut' : 'bg-marke-blaugrau'
+            }`}
             style={{ width: `${pct}%` }}
           />
         </div>
@@ -112,14 +114,19 @@ export default function ChecklistClient({
                   <span className="inline group-open:hidden">▸</span>
                   <span className="hidden group-open:inline">▾</span>
                 </span>
-                <span className="flex-1 text-base font-semibold text-gray-900">
-                  {cat.emoji ? `${cat.emoji} ` : ''}
+                <span className="flex flex-1 items-center gap-2 text-base font-semibold text-gray-900">
+                  {cat.icon && (
+                    <PinKategorieIcon
+                      name={cat.icon}
+                      className="h-4 w-4 shrink-0 text-marke-blaugrau"
+                    />
+                  )}
                   {cat.title}
                 </span>
                 <span
                   className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
                     doneInCat === total
-                      ? 'bg-emerald-100 text-emerald-700'
+                      ? 'bg-status-gut-flaeche text-status-gut-text'
                       : 'bg-gray-100 text-gray-600'
                   }`}
                 >
@@ -142,11 +149,11 @@ export default function ChecklistClient({
       </div>
 
       {allDone ? (
-        <div className="rounded-lg border border-emerald-200 border-l-[3px] border-l-emerald-500 bg-emerald-50 p-6">
-          <h2 className="text-lg font-bold text-emerald-900">
-            🎉 Glückwunsch — du bist bestens aufgestellt!
+        <div className="rounded-lg border border-status-gut border-l-[3px] border-l-status-gut bg-status-gut-flaeche p-6">
+          <h2 className="text-lg font-bold text-status-gut-text">
+            Glückwunsch — du bist bestens aufgestellt!
           </h2>
-          <div className="mt-2 space-y-2 text-sm leading-relaxed text-emerald-900">
+          <div className="mt-2 space-y-2 text-sm leading-relaxed text-status-gut-text">
             <p>
               Du hast alle Setup-Punkte abgehakt. Pin-Flow läuft jetzt mit
               der Datentiefe, die wirklich Erkenntnisse liefert.
@@ -165,14 +172,14 @@ export default function ChecklistClient({
           </div>
           <Link
             href="/dashboard"
-            className="mt-4 inline-flex items-center rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+            className="mt-4 inline-flex items-center rounded-md bg-marke-blaugrau px-4 py-2 text-sm font-semibold text-white hover:bg-marke-blaugrau-dunkel"
           >
             → Zum Dashboard
           </Link>
         </div>
       ) : (
-        <p className="text-center text-sm italic text-gray-500">
-          Hak alle Punkte ab, um die Setup-Reise abzuschließen.
+        <p className="text-center text-sm text-marke-blaugrau-mittel">
+          Hake alle Punkte ab, um die Setup-Reise abzuschließen.
         </p>
       )}
     </div>
@@ -195,7 +202,7 @@ function ChecklistRow({
         checked={checked}
         onChange={onToggle}
         aria-label={item.title}
-        className="mt-0.5 h-5 w-5 shrink-0 cursor-pointer accent-red-600"
+        className="mt-0.5 h-5 w-5 shrink-0 cursor-pointer accent-marke-blaugrau"
       />
       <div className="min-w-0 flex-1">
         <button

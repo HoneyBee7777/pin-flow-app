@@ -239,8 +239,9 @@ export default async function PinProduktionPage() {
         <h1 className="text-3xl font-bold text-gray-900">Pin-Produktion</h1>
         <p className="mt-1 max-w-3xl text-sm leading-relaxed text-gray-600">
           Hier verwaltest du alle deine Pins: veröffentlichte, geplante und
-          Entwürfe. Du siehst, welche Keywords in jedem Pin stecken (📌 im
-          Titel, 📝 in der Beschreibung), filterst nach Board, Status, Keyword
+          Entwürfe. Du siehst, welche Keywords in jedem Pin stecken (
+          <strong>T</strong> im Titel, <strong>B</strong> in der Beschreibung),
+          filterst nach Board, Status, Keyword
           und mehr, und legst neue Pins direkt an oder importierst sie per CSV.
           Diese Seite ist die Grundlage für dein monatliches Analytics-Update.
         </p>
@@ -272,12 +273,10 @@ export default async function PinProduktionPage() {
                 Wo deine Keywords stecken
               </p>
               <p>
-                An jedem Pin siehst du, wo seine Keywords vorkommen: 📌 steht
-                für den Titel, 📝 für die Beschreibung. So erkennst du auf einen
-                Blick, ob deine wichtigen Keywords an den richtigen Stellen
-                stehen. Die Farbe eines Keyword-Chips zeigt, wie es läuft: grün
-                steht für ein starkes Signal, gelb für beobachten, grau für noch
-                keine oder wenig aussagekräftige Daten.
+                An jedem Pin siehst du, wo seine Keywords vorkommen: Ein fettes
+                T steht für den Pin-Titel, ein B für die Pin-Beschreibung. So
+                erkennst du auf einen Blick, ob deine wichtigen Keywords an den
+                richtigen Stellen stehen.
               </p>
             </div>
             <div>

@@ -56,6 +56,8 @@ import {
 } from './utils'
 import { keywordInText } from '../analytics/utils'
 import { ZIELFLAECHEN, type Zielflaeche } from '../strategie/lib'
+import InfoTooltip from '@/components/InfoTooltip'
+import { PinKategorieIcon } from '@/components/PinKategorieIcon'
 
 // Menschenlesbares Label je Zielfläche, abgeleitet aus der zentralen
 // Definition in strategie/lib.ts, damit der Text nur einmal gepflegt wird.
@@ -94,26 +96,24 @@ function matchSourceTooltip(source: PinKeywordMatchSource): string {
 type KeywordPresence = {
   inTitel: boolean
   inBeschreibung: boolean
-  inBoardName: boolean
 }
 
 function checkKeywordPresence(
   keyword: string,
   titel: string | null,
-  beschreibung: string | null,
-  boardName: string | null
+  beschreibung: string | null
 ): KeywordPresence {
   return {
     inTitel: keywordInText(keyword, titel),
     inBeschreibung: keywordInText(keyword, beschreibung),
-    inBoardName: keywordInText(keyword, boardName),
   }
 }
 
-function fundortEmoji(p: KeywordPresence): string {
-  if (p.inTitel && p.inBeschreibung) return '📌📝'
-  if (p.inTitel) return '📌'
-  if (p.inBeschreibung) return '📝'
+// Fundort-Kürzel statt Emoji: T = im Pin-Titel, B = in der Pin-Beschreibung.
+function fundortKuerzel(p: KeywordPresence): string {
+  if (p.inTitel && p.inBeschreibung) return 'T B'
+  if (p.inTitel) return 'T'
+  if (p.inBeschreibung) return 'B'
   return ''
 }
 
@@ -159,12 +159,10 @@ function KeywordChips({
   keywords,
   titel,
   beschreibung,
-  boardName,
 }: {
   keywords: PinKeywordWithSource[]
   titel: string | null
   beschreibung: string | null
-  boardName: string | null
 }) {
   const [expanded, setExpanded] = useState(false)
   // Filter direkt am Text: nur Keywords zeigen die tatsächlich in Titel,
@@ -173,11 +171,10 @@ function KeywordChips({
   const visibleKeywords = keywords
     .map((kw) => ({
       kw,
-      presence: checkKeywordPresence(kw.keyword, titel, beschreibung, boardName),
+      presence: checkKeywordPresence(kw.keyword, titel, beschreibung),
     }))
     .filter(
-      ({ presence }) =>
-        presence.inTitel || presence.inBeschreibung || presence.inBoardName
+      ({ presence }) => presence.inTitel || presence.inBeschreibung
     )
 
   if (visibleKeywords.length === 0) {
@@ -191,7 +188,7 @@ function KeywordChips({
     // dass sie sich auf volle Zellenbreite ziehen.
     <div className="flex flex-col items-start gap-1">
       {visible.map(({ kw, presence }) => {
-        const emoji = fundortEmoji(presence)
+        const kuerzel = fundortKuerzel(presence)
         return (
           <span
             key={kw.id}
@@ -199,7 +196,11 @@ function KeywordChips({
             className="inline-flex items-center gap-1 whitespace-nowrap rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-700"
           >
             <span>{kw.keyword}</span>
-            {emoji && <span>{emoji}</span>}
+            {kuerzel && (
+              <span className="ml-1 text-xs font-bold text-marke-blaugrau-mittel">
+                {kuerzel}
+              </span>
+            )}
           </span>
         )
       })}
@@ -783,11 +784,11 @@ function PinTable({
       }
       if (filters.keyword.trim() !== '') {
         // Filter MUSS exakt dieselbe Logik haben wie die Anzeige in der
-        // Keywords-Spalte (📌 / 📝): Pin matcht nur wenn ein Keyword aus der
+        // Keywords-Spalte (T / B): Pin matcht nur wenn ein Keyword aus der
         // pin_keywords-Verknüpfung dieses Pins existiert, dessen Name
         // case-insensitive identisch mit dem Filter ist UND das tatsächlich
         // im Titel oder in der Beschreibung vorkommt. Board-Treffer alleine
-        // qualifizieren nicht — analog zur Emoji-Anzeige.
+        // qualifizieren nicht — analog zur Kürzel-Anzeige.
         const filterKw = filters.keyword.trim().toLowerCase()
         const titelLower = (p.titel ?? '').toLowerCase()
         const beschreibungLower = (p.beschreibung ?? '').toLowerCase()
@@ -998,7 +999,7 @@ function PinTable({
           <thead className="sticky top-0 z-10 bg-gray-50">
             <tr>
               <SortableTh dir={dirOf('titel')} onClick={() => toggleSort('titel')}>
-                Titel 📌
+                Titel
               </SortableTh>
               <SortableTh dir={dirOf('status')} onClick={() => toggleSort('status')}>
                 Status
@@ -1009,10 +1010,13 @@ function PinTable({
               <SortableTh dir={dirOf('board')} onClick={() => toggleSort('board')}>
                 Board
               </SortableTh>
-              <Th>Keywords</Th>
+              <Th>
+                Keywords
+                <InfoTooltip text="T = Keyword steht im Pin-Titel, B = Keyword steht in der Pin-Beschreibung." />
+              </Th>
               <Th>Content</Th>
               <Th>Hook</Th>
-              <Th>Beschreibung 📝</Th>
+              <Th>Beschreibung</Th>
               <SortableTh dir={dirOf('strategie')} onClick={() => toggleSort('strategie')}>
                 Angebotsart
               </SortableTh>
@@ -1052,21 +1056,22 @@ function PinTable({
                   {pin.titel ?? <span className="text-gray-400">—</span>}
                   {pin.variante_typ && (
                     <span
-                      className={`ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                        pin.variante_typ === 'recycling'
-                          ? 'bg-amber-100 text-amber-800'
-                          : 'bg-purple-100 text-purple-700'
-                      }`}
+                      className="mt-1 flex w-full items-center rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-700"
                       title={
                         pin.variante_von_titel
                           ? `${pin.variante_typ === 'recycling' ? 'Recycling' : 'Variante'} von „${pin.variante_von_titel}"`
                           : `${pin.variante_typ === 'recycling' ? 'Recycling' : 'Variante'} (Original-Pin gelöscht)`
                       }
                     >
-                      {pin.variante_typ === 'recycling' ? '♻️' : '🔁'}{' '}
-                      {pin.variante_typ === 'recycling' ? 'Recycling' : 'Variante'}
+                      <PinKategorieIcon
+                        name="abgeleitet"
+                        className="mr-1 h-3 w-3 shrink-0 text-marke-blaugrau-mittel"
+                      />
+                      <span className="shrink-0">
+                        {pin.variante_typ === 'recycling' ? 'Recycling' : 'Variante'}
+                      </span>
                       {pin.variante_von_titel && (
-                        <span className="ml-1 max-w-[160px] truncate text-gray-700">
+                        <span className="ml-1 min-w-0 flex-1 truncate text-gray-700">
                           von „{pin.variante_von_titel}"
                         </span>
                       )}
@@ -1091,7 +1096,6 @@ function PinTable({
                     keywords={pin.keywords}
                     titel={pin.titel}
                     beschreibung={pin.beschreibung}
-                    boardName={pin.board?.name ?? null}
                   />
                 </td>
                 <td className="max-w-xs px-4 py-3 text-sm text-gray-700">
@@ -2047,11 +2051,11 @@ function PinForm({
           </div>
 
           {dupCount > 3 && (
-            <div className="rounded-md border border-yellow-300 bg-yellow-50 p-3 text-sm text-yellow-800">
-              ⚠️ Diese Kombination Vorlage + URL existiert bereits {dupCount}×
-              — Pinterest wertet sehr ähnliche Pins als Spam. Erwäge eine
-              andere Vorlage oder Ziel-URL.
-            </div>
+            <HinweisBox variant="warnung" tone="achtung">
+              Diese Kombination Vorlage + URL existiert bereits {dupCount}×.
+              Pinterest wertet sehr ähnliche Pins als Spam. Erwäge eine andere
+              Vorlage oder Ziel-URL.
+            </HinweisBox>
           )}
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -2405,11 +2409,11 @@ function ManualPinForm({
       </div>
 
       {dupCount > 3 && (
-        <div className="rounded-md border border-yellow-300 bg-yellow-50 p-3 text-sm text-yellow-800">
-          ⚠️ Diese Kombination Vorlage + URL existiert bereits {dupCount}× —
+        <HinweisBox variant="warnung" tone="achtung">
+          Diese Kombination Vorlage + URL existiert bereits {dupCount}×.
           Pinterest wertet sehr ähnliche Pins als Spam. Erwäge eine andere
           Vorlage oder Ziel-URL.
-        </div>
+        </HinweisBox>
       )}
 
       {formError && <p className="text-sm text-red-700">{formError}</p>}
@@ -3319,7 +3323,7 @@ function CsvImport({
       )}
 
       {warnings.length > 0 && (
-        <div className="rounded-md border border-yellow-200 bg-yellow-50 p-3 text-xs text-yellow-800">
+        <div className="rounded-md border border-status-achtung bg-status-achtung-flaeche p-3 text-xs text-status-achtung-text">
           <p className="font-medium">
             {warnings.length} Warnung(en). Pins werden trotzdem importiert:
           </p>
@@ -3335,23 +3339,23 @@ function CsvImport({
       )}
 
       {missingBoards.length > 0 && (
-        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+        <HinweisBox variant="warnung" tone="achtung" compact>
           <p className="font-medium">
             {missingBoards.length} Board(s) nicht gefunden. Pins werden ohne
             Board-Zuordnung importiert:
           </p>
           <p className="mt-1 break-all">{missingBoards.join(', ')}</p>
-        </div>
+        </HinweisBox>
       )}
 
       {missingUrls.length > 0 && (
-        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+        <HinweisBox variant="warnung" tone="achtung" compact>
           <p className="font-medium">
             {missingUrls.length} URL(s) nicht gefunden. Pins werden ohne
             URL-Zuordnung importiert:
           </p>
           <p className="mt-1 break-all">{missingUrls.join(', ')}</p>
-        </div>
+        </HinweisBox>
       )}
 
       {parsed && parsed.length > 0 && (() => {
@@ -3374,7 +3378,7 @@ function CsvImport({
         return (
         <div>
           {emptyEntries.length > 0 && (
-            <div className="mb-3 rounded-md border border-yellow-200 bg-yellow-50 p-3 text-xs text-yellow-900">
+            <div className="mb-3 rounded-md border border-hinweis-tipp-rand bg-hinweis-tipp-flaeche p-3 text-xs text-hinweis-tipp-text">
               <p className="font-medium">
                 Hinweis: Folgende Felder sind bei einigen Pins leer und können
                 nach dem Import nachgepflegt werden:
@@ -3457,7 +3461,7 @@ function CsvImport({
                           </div>
                         )}
                         {rawDate && !r.geplante_veroeffentlichung && (
-                          <div className="text-[10px] text-amber-700">
+                          <div className="text-[10px] text-status-achtung-text">
                             „{rawDate}" nicht erkannt
                           </div>
                         )}

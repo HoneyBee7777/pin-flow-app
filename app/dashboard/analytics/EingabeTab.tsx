@@ -41,6 +41,7 @@ import {
 import type { AudienceSnapshot } from '@/lib/audience-types'
 import AudienceCsvUpload from './AudienceCsvUpload'
 import { HinweisBox } from '@/components/HinweisBox'
+import { PinKategorieIcon } from '@/components/PinKategorieIcon'
 
 const inputCls =
   'mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500'
@@ -320,7 +321,7 @@ export default function EingabeTab({
                 <button
                   type="button"
                   onClick={onJumpToUnmatchedPins}
-                  className="font-medium text-amber-900 underline underline-offset-2 hover:text-amber-950"
+                  className="font-medium text-link underline underline-offset-2"
                 >
                   weiter unten
                 </button>{' '}
@@ -342,7 +343,7 @@ export default function EingabeTab({
                 <button
                   type="button"
                   onClick={onJumpToUnmatchedBoards}
-                  className="font-medium text-amber-900 underline underline-offset-2 hover:text-amber-950"
+                  className="font-medium text-link underline underline-offset-2"
                 >
                   weiter unten
                 </button>{' '}
@@ -706,8 +707,8 @@ function Schritt1ProfilForm({
               className={inputCls}
             />
             {existingForBis && (
-              <p className="mt-1 text-xs text-amber-700">
-                ⚠️ Eintrag mit diesem End-Datum existiert bereits, wird
+              <p className="mt-1 text-xs text-status-achtung-text">
+                Eintrag mit diesem End-Datum existiert bereits, wird
                 überschrieben.
               </p>
             )}
@@ -1092,7 +1093,7 @@ function Schritt2CsvUpload({
         {!slotWithBadFilename &&
           !crossFileMismatch &&
           snapshotMismatch && (
-            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            <div className="rounded-md border border-status-achtung bg-status-achtung-flaeche p-3 text-sm text-status-achtung-text">
               <p>
                 Der Zeitraum dieser CSV (
                 {formatDateDe(snapshotMismatch.csvVon)} –{' '}
@@ -1105,7 +1106,7 @@ function Schritt2CsvUpload({
                 <button
                   type="submit"
                   disabled={!canSubmit || isPending}
-                  className="rounded-md border border-amber-400 bg-white px-3 py-1.5 text-sm font-medium text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+                  className="rounded-md border border-status-achtung bg-white px-3 py-1.5 text-sm font-medium text-status-achtung-text hover:bg-status-achtung-flaeche disabled:opacity-50"
                 >
                   {isPending
                     ? 'Importiert…'
@@ -1191,7 +1192,7 @@ function FileSlotInput({
           type="file"
           accept=".csv"
           onChange={(e) => onChange(e.target.files?.[0] ?? null)}
-          className="block flex-1 text-sm text-gray-700 file:mr-3 file:rounded-md file:border-0 file:bg-red-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-red-700 hover:file:bg-red-100"
+          className="block flex-1 text-sm text-gray-700 file:mr-3 file:rounded-md file:border-0 file:bg-marke-blaugrau file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white hover:file:bg-marke-blaugrau-dunkel"
         />
         {file && (
           <button
@@ -1204,32 +1205,35 @@ function FileSlotInput({
         )}
       </div>
       {file && detectedPeriod && (
-        <p className="mt-1 break-all text-xs text-teal-700">
+        <p className="mt-1 break-all text-xs text-status-gut-text">
           ✓ {file.name}, Zeitraum:{' '}
           {formatPeriodCompact(detectedPeriod.von, detectedPeriod.bis)}
         </p>
       )}
       {file && !detectedPeriod && (
-        <p className="mt-1 break-all text-xs text-red-700" title={file.name}>
-          ⚠️ {file.name}
+        <p className="mt-1 break-all text-xs text-status-achtung-text" title={file.name}>
+          <PinKategorieIcon name="warnung" className="mr-1 inline-block h-3.5 w-3.5 shrink-0 align-text-bottom" />
+          {file.name}
         </p>
       )}
       {file && metricMatches && (
-        <p className="mt-1 text-xs font-medium text-green-700">
+        <p className="mt-1 text-xs font-medium text-status-gut-text">
           ✓ Erkannt: {METRIC_LABEL[detectedMetric as PinMetric]}
         </p>
       )}
       {file && metricMismatch && (
-        <div className="mt-1 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
-          Diese Datei enthält{' '}
-          <strong>{METRIC_LABEL[detectedMetric as PinMetric]}</strong>,
-          dieses Feld erwartet <strong>{METRIC_LABEL[expectedMetric]}</strong>
-          . Bitte die richtige CSV hochladen.
+        <div className="mt-1">
+          <HinweisBox variant="warnung" tone="achtung" compact>
+            Diese Datei enthält{' '}
+            <strong>{METRIC_LABEL[detectedMetric as PinMetric]}</strong>,
+            dieses Feld erwartet <strong>{METRIC_LABEL[expectedMetric]}</strong>
+            . Bitte die richtige CSV hochladen.
+          </HinweisBox>
         </div>
       )}
       {file && detectedMetric === null && (
-        <p className="mt-1 text-xs text-amber-800">
-          ⚠️ In dieser CSV wurde kein „Top Pins"-Block gefunden, bitte
+        <p className="mt-1 text-xs text-status-achtung-text">
+          In dieser CSV wurde kein „Top Pins"-Block gefunden, bitte
           prüfen, ob das wirklich der Pinterest-Analytics-Overview-Export ist.
         </p>
       )}
@@ -1282,7 +1286,7 @@ function ImportSummary({
         )}
       </div>
       {pinsUnmatched > 0 && (
-        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+        <div className="rounded-md border border-hinweis-tipp-rand bg-hinweis-tipp-flaeche p-3 text-sm text-hinweis-tipp-text">
           <p>
             {pinsUnmatched} Pin{pinsUnmatched === 1 ? '' : 's'}{' '}
             {pinsUnmatched === 1 ? 'wurde' : 'wurden'} importiert, aber noch
@@ -1293,7 +1297,7 @@ function ImportSummary({
             <button
               type="button"
               onClick={onJumpToUnmatchedPins}
-              className="font-medium text-amber-900 underline hover:opacity-80"
+              className="font-medium text-link underline underline-offset-2"
             >
               Jetzt zuordnen
             </button>
@@ -1301,7 +1305,7 @@ function ImportSummary({
         </div>
       )}
       {boardsUnmatched > 0 && (
-        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+        <div className="rounded-md border border-hinweis-tipp-rand bg-hinweis-tipp-flaeche p-3 text-sm text-hinweis-tipp-text">
           <p>
             {boardsUnmatched} Board
             {boardsUnmatched === 1 ? '' : 's'}{' '}
@@ -1313,7 +1317,7 @@ function ImportSummary({
             <button
               type="button"
               onClick={onJumpToUnmatchedBoards}
-              className="font-medium text-amber-900 underline hover:opacity-80"
+              className="font-medium text-link underline underline-offset-2"
             >
               Jetzt zuordnen
             </button>
