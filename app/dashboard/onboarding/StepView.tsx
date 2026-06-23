@@ -53,7 +53,7 @@ function renderInline(text: string, keyBase: string): ReactNode[] {
     return out.length > 0 ? out : [<span key={`${base}-empty`}>{segment}</span>]
   }
 
-  return text.split('**').flatMap((seg, i) => {
+  return text.split('**').flatMap<ReactNode>((seg, i): ReactNode[] => {
     const segKey = `${keyBase}-${i}`
     if (i % 2 === 1) {
       return [
