@@ -58,6 +58,7 @@ import { StatusDot, type StatusTone } from '@/components/StatusDot'
 import { PinKategorieIcon } from '@/components/PinKategorieIcon'
 import { AnzahlBadge } from '@/components/AnzahlBadge'
 import { computeRichtungsAmpel } from '@/lib/profil-gesundheit'
+import { PhasenNavigation, PhaseSpur } from './PhasenSpur'
 import { BefundeListe } from './AccountDiagnoseSection'
 import WinsBlock from './WinsBlock'
 import {
@@ -1680,6 +1681,63 @@ export default async function DashboardPage() {
   const hatAnalytics = rows.length > 0
   const hatStrategie = strategieCheckResult.onboardingAbgeschlossen
 
+  // ===== Phasen-Header-Status (Etappe 1) =====
+  // Phase 1 aus der Richtungs-Ampel (Trend ggü. Vormonat), Phase 2 aus dem
+  // Strategie-Check-Gesamtstatus. Phase 3 und 4 sind in dieser Etappe bewusst
+  // neutral — ihr echter Status folgt später.
+  const phase1SaveRate = latest
+    ? calcSaveRate(latest.saves, latest.impressionen)
+    : null
+  const phase1PrevSaveRate = previous
+    ? calcSaveRate(previous.saves, previous.impressionen)
+    : null
+  const phase1AmpelStatus = latest
+    ? computeRichtungsAmpel({
+        hasPrevious: previous !== null,
+        klicksGrowth: latest.klicks_growth,
+        savesGrowth: latest.saves_growth,
+        saveRateGrowth:
+          phase1SaveRate !== null && phase1PrevSaveRate !== null
+            ? calcGrowth(phase1SaveRate, phase1PrevSaveRate)
+            : null,
+      }).status
+    : 'leer'
+  const phase1Status: PhasenStatus =
+    phase1AmpelStatus === 'gruen'
+      ? 'gut'
+      : phase1AmpelStatus === 'gelb'
+        ? 'achtung'
+        : phase1AmpelStatus === 'rot'
+          ? 'schlecht'
+          : 'neutral'
+  const phase1Text =
+    phase1Status === 'gut'
+      ? 'Deine Reichweite wächst.'
+      : phase1Status === 'achtung'
+        ? 'Deine Entwicklung ist gemischt.'
+        : phase1Status === 'schlecht'
+          ? 'Deine Reichweite ist rückläufig.'
+          : 'Deine ersten Zahlen erscheinen hier nach deinem ersten Monats-Update.'
+
+  const phase2Status: PhasenStatus = !hatStrategie
+    ? 'neutral'
+    : strategieCheckResult.gesamtStatus === 'auf_kurs'
+      ? 'gut'
+      : strategieCheckResult.gesamtStatus === 'leicht_daneben'
+        ? 'achtung'
+        : strategieCheckResult.gesamtStatus === 'deutlich_daneben'
+          ? 'schlecht'
+          : 'neutral'
+  const phase2Text = !hatStrategie
+    ? 'Wird aktiv, sobald du eine Strategie festgelegt hast.'
+    : phase2Status === 'gut'
+      ? 'Deine Pins folgen deiner Strategie.'
+      : phase2Status === 'achtung'
+        ? 'Leichte Abweichung von deiner Strategie.'
+        : phase2Status === 'schlecht'
+          ? 'Größere Abweichung von deiner Strategie.'
+          : 'Sobald du Pins veröffentlichst, prüfen wir sie hier gegen deinen Plan.'
+
   return (
     // Seitenhintergrund = Rolle bg-seite (hellste Blaugrau-Stufe
     // marke-blaugrau-xhell #EEF1F3), Haupt-Textfarbe = text-haupt (Marke Tanne).
@@ -1735,8 +1793,25 @@ export default async function DashboardPage() {
         analyticsUpdateDatum={settingsRes.data?.analytics_update_datum ?? null}
       />
 
-      {/* 3. Phasen-Trenner */}
-      <PhasenTrenner title="Wo stehst du?" />
+      {/* Phasen-Spur: vier Pinterest-Phasen mit Knoten-Linie links (Scroll-Spy
+          + dynamische Knoten/Füllung in PhasenSpur.tsx). Die Intro-Zone oben und
+          der Aufgaben-Bereich unten bleiben vollbreit (außerhalb). */}
+      <PhasenNavigation
+        phasen={[
+          { ziffer: '01', frage: 'Wo stehst du?' },
+          { ziffer: '02', frage: 'Pinnst du das Richtige?' },
+          { ziffer: '03', frage: 'Was pinnst du als Nächstes?' },
+          { ziffer: '04', frage: 'Wie gut sind deine Boards aufgestellt?' },
+        ]}
+      >
+        {/* Phase 01 */}
+        <PhaseSpur nummer={1} position="erste">
+      {/* Phasen-Header 01 */}
+      <PhasenHeader
+        frage="Wo stehst du?"
+        vorschauText={phase1Text}
+        vorschauStatus={phase1Status}
+      />
 
       {/* 4. Profil-Performance: ein zusammenhängender Block — Richtungs-Ampel
             (oben, in der Sektion), darunter KPI-Kacheln + Verlauf. Die früher
@@ -1793,8 +1868,16 @@ export default async function DashboardPage() {
         />
       )}
 
-      {/* 4. Phasen-Trenner */}
-      <PhasenTrenner title="Pinnst du das Richtige?" />
+        </PhaseSpur>
+
+        {/* Phase 02 */}
+        <PhaseSpur nummer={2} position="mitte">
+      {/* Phasen-Header 02 */}
+      <PhasenHeader
+        frage="Pinnst du das Richtige?"
+        vorschauText={phase2Text}
+        vorschauStatus={phase2Status}
+      />
 
       {/* 5. Strategie-Check (V2). Hängt NICHT an Analytics, sondern an der
             festgelegten Strategie und den erfassten Pins. „Keine Strategie"
@@ -1815,8 +1898,16 @@ export default async function DashboardPage() {
         previous={previous}
       />
 
-      {/* 6. Phasen-Trenner */}
-      <PhasenTrenner title="Was pinnst du als Nächstes?" />
+        </PhaseSpur>
+
+        {/* Phase 03 */}
+        <PhaseSpur nummer={3} position="mitte">
+      {/* Phasen-Header 03 (Status folgt später, jetzt neutral) */}
+      <PhasenHeader
+        frage="Was pinnst du als Nächstes?"
+        vorschauText="Dein Saison-Fahrplan und deine nächsten Pins stehen unten."
+        vorschauStatus="neutral"
+      />
 
       {/* 7. Saisonkalender */}
       <SaisonKalenderSection
@@ -1850,8 +1941,16 @@ export default async function DashboardPage() {
         <HandlungsbedarfEmpty />
       )}
 
-      {/* 10. Phasen-Trenner */}
-      <PhasenTrenner title="Wie gut sind deine Boards aufgestellt?" />
+        </PhaseSpur>
+
+        {/* Phase 04 */}
+        <PhaseSpur nummer={4} position="letzte">
+      {/* Phasen-Header 04 (Status folgt später, jetzt neutral) */}
+      <PhasenHeader
+        frage="Wie gut sind deine Boards aufgestellt?"
+        vorschauText="Unten siehst du, wie aktiv und wirksam deine Boards sind."
+        vorschauStatus="neutral"
+      />
 
       {/* 11. Board-Gesundheit.
             Weiche Sektion 9: Ohne angelegte Boards ein neutraler Hinweis.
@@ -1872,6 +1971,9 @@ export default async function DashboardPage() {
           boardsOhneAnalyticsCount={boardsOhneAnalyticsCount}
         />
       )}
+
+        </PhaseSpur>
+      </PhasenNavigation>
 
       {/* 12. Phasen-Trenner */}
       <PhasenTrenner title="Was steht noch an?" />
@@ -4127,6 +4229,53 @@ function PhasenTrenner({ title }: { title: string }) {
         {title}
       </span>
       <span aria-hidden className="h-px flex-1 bg-marke-blaugrau-mittel" />
+    </div>
+  )
+}
+
+// Status-Punkt-Farben des Phasen-Headers. Neutral bewusst ohne Ampelfarbe
+// (blasses Blaugrau), damit ein fehlender/leerer Status nicht wie eine
+// Bewertung wirkt.
+type PhasenStatus = 'gut' | 'achtung' | 'schlecht' | 'neutral'
+const PHASEN_STATUS_PUNKT: Record<PhasenStatus, string> = {
+  gut: 'var(--status-gut)',
+  achtung: 'var(--status-achtung)',
+  schlecht: 'var(--status-schlecht)',
+  neutral: 'var(--marke-blaugrau-mittel)',
+}
+
+// Phasen-Header: Leitfrage (Lora, groß) + einzeilige Status-Vorschau mit Punkt.
+// Die Phasen-Nummer steht in der Pille (PhaseSpur), nicht mehr hier — so
+// erscheint sie nur einmal. Das obere Spacing liegt ebenfalls in PhaseSpur.
+function PhasenHeader({
+  frage,
+  vorschauText,
+  vorschauStatus,
+}: {
+  frage: string
+  vorschauText: string
+  vorschauStatus: PhasenStatus
+}) {
+  return (
+    <div className="relative mb-8 pl-4 max-[599px]:pl-3 min-[900px]:pl-0">
+      {/* Akzentstreifen nur unter 900px (dort entfällt die Pfad-Spur): Farbe =
+          Phasen-Status, wie der Vorschau-Punkt. Ab 900px ausgeblendet. */}
+      <span
+        aria-hidden
+        className="absolute inset-y-0 left-0 w-1 rounded-full max-[599px]:w-[3px] min-[900px]:hidden"
+        style={{ backgroundColor: PHASEN_STATUS_PUNKT[vorschauStatus] }}
+      />
+      <h2 className="font-serif text-3xl font-semibold leading-tight text-haupt max-[599px]:text-2xl">
+        {frage}
+      </h2>
+      <p className="mt-2 flex items-center gap-2 text-[15px] text-marke-blaugrau">
+        <span
+          aria-hidden
+          className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+          style={{ backgroundColor: PHASEN_STATUS_PUNKT[vorschauStatus] }}
+        />
+        {vorschauText}
+      </p>
     </div>
   )
 }
