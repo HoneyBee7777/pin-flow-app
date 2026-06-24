@@ -1,4 +1,5 @@
-// V3.4 — App-FAQ: 18 FAQs in 6 Kategorien als kategorisierte Accordions.
+// V3.4 — App-FAQ: kategorisierte Accordions (6 Kategorien). Anzahl der
+// Einträge bewusst nicht hartkodiert, damit der Hinweis nicht veraltet.
 // Inhalte liegen in lib/faq-content.ts, Rendering/Toggle in FaqAccordion.
 
 import Link from 'next/link'
@@ -11,8 +12,8 @@ export default function FaqPage() {
       <header>
         <h1 className="text-3xl font-bold text-gray-900">FAQ</h1>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-gray-600">
-          Hier findest du Antworten auf häufige Fragen zur Nutzung von
-          Pin-Flow. Für tiefere Strategie-Themen schau in den Bereich{' '}
+          Hier findest du Antworten auf die häufigsten Fragen rund um Pin-Flow.
+          Geht es dir um die tiefere Pinterest-Strategie, schaue in den Bereich{' '}
           <Link
             href="/dashboard/strategie"
             className="font-medium text-link underline underline-offset-2"

@@ -29,33 +29,24 @@ export const FAQ_CATEGORIES: FaqCategory[] = [
         answer: `In fünf Schritten bist du startklar:
 
 1. **Pinterest-Business-Account bereithalten.** Falls du noch einen privaten Account hast: Umstellung ist kostenlos und in 2 Minuten erledigt (in den Pinterest-Einstellungen unter „Konto verwalten").
-2. **Strategie festlegen**: beim ersten Start führt dich Pin-Flow durch ein geführtes Setup mit vier Bausteinen: dein **Business-Modell und deine Hauptnische**, deine **Pin-Ziel-Verteilung** (wohin deine Pins führen: Blog, Shop, Etsy, Affiliate, Landingpage, Newsletter und Lead-Magnet oder Buchung), deine **Content-Säulen** (deine Themen-Schwerpunkte) und dein **Pinning-Rhythmus**. Das ist das Fundament für alle späteren Analysen. Du kannst deine Strategie jederzeit unter [Strategie festlegen](/dashboard/strategie?tab=meine) anpassen.
+2. **Strategie festlegen**: beim ersten Start führt dich Pin-Flow durch ein geführtes Setup mit vier Bausteinen: dein **Business-Modell und deine Hauptnische**, deine **Pin-Ziel-Verteilung** (wohin deine Pins führen: Blog, Shop, Etsy, Affiliate, Landingpage, Newsletter und Lead-Magnet oder Buchung), deine **Themen-Schwerpunkte** (die großen Themen, um die sich bei dir alles dreht) und dein **Pinning-Rhythmus**. Das ist das Fundament für alle späteren Analysen. Du kannst deine Strategie jederzeit unter [Strategie festlegen](/dashboard/strategie?tab=meine) anpassen.
 3. **Erste Analytics importieren** auf der [Analytics-Eingabe-Seite](/dashboard/analytics). Pin-Flow führt dich Schritt für Schritt durch die 4 CSV-Exporte aus Pinterest.
 4. **Setup pflegen**: trage deine [Keywords](/dashboard/keywords), [Ziel-URLs](/dashboard/ziel-urls), [Boards](/dashboard/boards) und [Inhalte](/dashboard/content-inhalte) (Blogposts, Produkte, Affiliate) ein. Je mehr Verknüpfungen du anlegst, desto präziser werden die Empfehlungen.
-5. **Dashboard-Tour:** Schau dir an, was die App aus deinen Daten gemacht hat. Prioritäten oben sagen dir, wo du am besten anfängst.
+5. **Dashboard-Tour:** Schaue dir an, was die App aus deinen Daten gemacht hat. Prioritäten oben sagen dir, wo du am besten anfängst.
 
 Nimm dir für das initiale Setup etwa **45-60 Minuten Zeit**. Danach läuft alles in monatlichen 15-Minuten-Updates.`,
       },
       {
         question: 'Was soll ich in den Einstellungen alles eintragen?',
-        answer: `Die Einstellungen sind das Fundament für eine präzise Analyse: je sauberer sie gepflegt sind, desto besser werden Pin-Flows Empfehlungen. Die [Einstellungs-Seite](/dashboard/einstellungen) ist von oben nach unten so aufgebaut, dass das Häufige und Einfache zuerst kommt und die technischen Feineinstellungen gebündelt darunter.
-
-**Oben, schnell ausgefüllt:**
+        answer: `Die Einstellungen sind das Fundament für eine präzise Analyse: je sauberer sie gepflegt sind, desto besser werden Pin-Flows Empfehlungen. Die [Einstellungs-Seite](/dashboard/einstellungen) ist von oben nach unten aufgebaut:
 
 1. **Mein Profil**: dein Begrüßungsname für das Dashboard.
-2. **Persönliche Links (Dashboard)**: Quick-Buttons zu deinem Pinterest-Account, Pinterest-Trends, Pinterest-Analytics und optional Tailwind.
+2. **Persönliche Links**: Quick-Buttons zu deinem Pinterest-Account, deiner Website und optional Tailwind.
 3. **Pinterest Analytics Link**: die direkte URL zu deiner Pinterest-Analytics-Seite, damit du beim monatlichen Update mit einem Klick dort landest.
-4. **Signalwörter**: eine kuratierbare Liste der Wörter, die bei der KI-gestützten Pin-Produktion in den Vorschlag einfließen. Du kannst einzelne Standard-Wörter abwählen, die nicht zu dir passen, oder eigene ergänzen.
+4. **Signalwörter**: eine kuratierbare Liste der Wörter, die bei der Pin-Produktion in den Vorschlag einfließen. Du kannst einzelne Standard-Wörter abwählen, die nicht zu dir passen, oder eigene ergänzen.
 5. **Deine Pinterest-Strategie**: ein kurzer Überblick mit Link zum geführten Setup. Deine Strategie legst du nicht hier fest, sondern unter [Strategie festlegen](/dashboard/strategie?tab=meine).
 
-**Erweiterte Einstellungen (bereits sinnvoll voreingestellt, nur bei Bedarf anpassen):**
-
-6. **Pin-Schwellwerte für Analytics**: die Werte, die bestimmen, ab wann ein Pin als „gut" oder „schlecht" gilt (z. B. Mindest-Impressionen für ein CTR-Urteil, Top-Performer-Schwellen).
-7. **Board-Schwellwerte für Analytics**: wann gilt ein Board als „aktiv", „inaktiv" oder „Top"?
-8. **Content-Pipeline-Schwellwerte**: wann markiert die App einen Inhalt als „braucht mehr Pins"?
-9. **Status-Schwellwerte**: nach wie vielen Tagen gilt dein Analytics-Update als „überfällig"?
-
-**Wichtig (Premium-Detail):** Jedes Schwellwert-Feld hat einen „Wann anpassen?"-Hinweis mit Orientierungswerten für Anfänger:innen, Erfahrene und Profis. Du musst nichts wissen, die Standardwerte funktionieren für die meisten Profile. Anpassen lohnt sich erst, wenn du Pin-Flow ein paar Monate kennst und merkst, dass eine Schwelle zu streng oder zu locker ist.
+Mehr musst du in den Einstellungen nicht tun, der Rest passiert an den jeweiligen Stellen in der App.
 
 → Zur [Einstellungs-Seite](/dashboard/einstellungen)`,
       },
@@ -70,7 +61,7 @@ Eine klare Content-Strategie zu Beginn hat drei Effekte:
 2. **Du wirst von der richtigen Zielgruppe gefunden.** Pinterest-User:innen suchen nach Themen, nicht nach Profilen. Ein fokussiertes Profil wird in den richtigen Suchen sichtbar.
 3. **Du baust nachhaltig auf.** Pinterest belohnt langfristige Konsistenz. Strategie-Wechsel kosten Reichweite, weil der Algorithmus dich neu einordnen muss.
 
-**Wie Pin-Flow dir hilft:** Im geführten Setup unter [Strategie festlegen](/dashboard/strategie?tab=meine) bestimmst du deine vier Bausteine, allen voran deine Pin-Ziel-Verteilung und deine Content-Säulen. Das Dashboard zeigt dir dann im Strategie-Check, ob deine tatsächlichen Pins zu deinem Plan passen. Abweichungen werden mit klaren Hinweisen sichtbar.`,
+**Wie Pin-Flow dir hilft:** Im geführten Setup unter [Strategie festlegen](/dashboard/strategie?tab=meine) bestimmst du deine vier Bausteine, allen voran deine Pin-Ziel-Verteilung und deine Themen-Schwerpunkte. Das Dashboard zeigt dir dann im Strategie-Check, ob deine tatsächlichen Pins zu deinem Plan passen. Abweichungen werden mit klaren Hinweisen sichtbar.`,
       },
       {
         question: 'Brauche ich einen Pinterest-Business-Account?',
@@ -82,6 +73,10 @@ Eine klare Content-Strategie zu Beginn hat drei Effekte:
 2. „Zu Business-Account wechseln" auswählen
 3. Wenige Angaben zu deinem Business machen
 4. Fertig, deine bisherigen Pins und Boards bleiben erhalten`,
+      },
+      {
+        question: 'Warum sehe ich am Anfang noch keine Ergebnisse?',
+        answer: `Weil Pinterest ein Marathon ist, kein Sprint. Anders als bei anderen Plattformen passiert auf Pinterest am Anfang wenig Sichtbares, und das ist normal. Pinterest braucht in der Regel 60 bis 90 Tage, um dein Profil einzuordnen und deine Pins in den richtigen Suchergebnissen zu platzieren. Ein Pin, der heute nichts tut, kann in zwei Monaten plötzlich Reichweite bekommen, und dann oft über Jahre. Deshalb arbeitest du mit Pin-Flow in einem ruhigen Kreislauf: pinnen, auswerten, optimieren, immer wieder. Lass dich von den ersten leisen Wochen nicht entmutigen. Wer dranbleibt, wird auf Pinterest belohnt, gerade weil so viele zu früh aufgeben.`,
       },
     ],
   },
@@ -127,18 +122,8 @@ Begründung:
     title: 'Verständnis & Begriffe',
     items: [
       {
-        question: 'Was bedeutet „Profil-Status: Ausbaufähig"?',
-        answer: `Pin-Flow bewertet dein Pinterest-Profil in fünf Stufen:
-
-- **Schwach**: kritische Probleme, Profil funktioniert kaum
-- **Ausbaufähig**: erkennbare Probleme mit klaren Lösungs-Schritten
-- **Optimierbar**: funktioniert grundsätzlich, hat aber noch Verbesserungspotential
-- **Solide**: stabil und gut performend
-- **Stark**: vorbildlich, über dem Branchenschnitt
-
-Die Einordnung basiert auf der **typischen Pin-Leistung** deines Profils (Median) im Vergleich zum Branchenschnitt deiner Nische. „Ausbaufähig" ist eine konstruktive Einstufung: es gibt erkannte Probleme, aber sie sind lösbar. Die konkreten Befunde findest du direkt unter der Skala im Bereich „Befunde".
-
-**Wichtig:** Der Status wird **automatisch** neu berechnet, wenn du neue Analytics-Daten importierst. Wenn sich deine Werte verbessern, steigst du in eine höhere Stufe auf, das ist das motivierende Element.`,
+        question: 'Was zeigt mir die Profil-Performance?',
+        answer: `Auf dem Dashboard siehst du in der Profil-Performance, in welche Richtung sich dein Profil entwickelt. Eine Ampel zeigt dir den Trend gegenüber dem Vormonat in drei Stufen: Wachsend, wenn es aufwärtsgeht, Stabil, wenn es gleich bleibt, und Rückläufig, wenn mehrere deiner Kernzahlen nachlassen. Bewertet werden dabei drei Signale: deine ausgehenden Klicks, deine Saves und deine Save-Rate. Solange du erst einen Monat Daten hast, bleibt die Ampel leer, sie braucht einen Vormonat zum Vergleichen. Darunter findest du im Bereich „Was dein Profil dir zeigt" konkrete Befunde, geordnet nach Dringlichkeit (Kritisch, Wichtig, Hinweis). Die sagen dir nicht nur, wo du stehst, sondern was du als Nächstes tun kannst. Die Ampel zeigt also die Richtung, die Befunde zeigen die konkreten Schritte.`,
       },
       {
         question: 'Was ist der Affinitäts-Index?',
@@ -185,7 +170,7 @@ Ein Pin bekommt sein Pin-Ziel über seine verknüpfte **Ziel-URL**: der Fläche 
 
 Pin-Ziele ersetzen das frühere Denken in abstrakten Stufen. Statt allgemein von „Traffic" oder „Verkauf" zu sprechen, legst du konkret fest, wohin deine Pins führen. Das macht deine Strategie greifbar und messbar.
 
-Mehr dazu in [Pinterest-Wissen → Strategie-Modelle](/dashboard/strategie?tab=strategien).`,
+Mehr dazu in [Pinterest-Wissen → Strategie verstehen](/dashboard/strategie?tab=strategien).`,
       },
       {
         question: 'Was sind Content-Säulen?',
@@ -195,7 +180,9 @@ Pin-Flow leitet deine Content-Säulen aus den **Kategorien deiner Boards** ab. D
 
 **Warum sie wichtig sind:** Pinterest will verstehen, worum es bei dir geht. Wenn du immer wieder zu denselben Themen pinnst, ordnet Pinterest dein Profil klarer ein und zeigt dich den richtigen Menschen. Klare Schwerpunkte schlagen ein buntes Durcheinander.
 
-Im **Strategie-Check** auf dem Dashboard siehst du, welche deiner Säulen aktiv neue Pins bekommen und welche gerade schlafen, damit kein Schwerpunkt unbemerkt liegen bleibt.`,
+Im **Strategie-Check** auf dem Dashboard siehst du, welche deiner Säulen aktiv neue Pins bekommen und welche gerade schlafen, damit kein Schwerpunkt unbemerkt liegen bleibt.
+
+In der App findest du diesen Baustein unter dem Namen „Themen-Schwerpunkte".`,
       },
       {
         question: 'Wie funktioniert der Strategie-Check?',
@@ -221,6 +208,10 @@ Pin-Flow baut sie in den **KI-Vorschlag** ein, wenn du auf der [Pins-Seite](/das
 
 Mehr dazu, wie Signalwörter wirken, in [Pinterest-Wissen](/dashboard/strategie?tab=design&accordion=signalwoerter).`,
       },
+      {
+        question: 'Warum ist meine Zielgruppe auf Pinterest wichtig?',
+        answer: `Pinterest spielt deine Pins bevorzugt den Menschen aus, deren Interessen zu deinen Themen passen. Je klarer du weißt, wen du erreichen willst und wonach diese Person sucht, desto gezielter kannst du pinnen, und desto besser versteht Pinterest, zu wem du gehörst. Deine Zielgruppe ist also nicht nur eine nette Zusatzinfo, sondern der Hebel, über den deine Reichweite entsteht. In Pin-Flow vertiefst du das über den Affinitäts-Index und die Brücken-Themen, beide zeigen dir, welche Interessen deine Zielgruppe wirklich hat. Den Einstieg findest du unter [Zielgruppe verstehen](/dashboard/strategie?tab=audience).`,
+      },
     ],
   },
   {
@@ -238,7 +229,7 @@ Mehr dazu, wie Signalwörter wirken, in [Pinterest-Wissen](/dashboard/strategie?
 - **Konsistenz** ist wichtiger als Frequenz. 5 Pins pro Woche dauerhaft sind besser als 20 Pins eine Woche und dann nichts.
 - **Qualität bedeutet:** durchdachtes Cover, klarer Hook, Keywords in Titel und Beschreibung, Verlinkung zu starkem Content.
 
-**Für Einsteiger:innen:** Lieber **3-5 Pins pro Woche**, dafür durchdacht und mit Keywords optimiert. Sobald du den Workflow beherrschst, kannst du auf 1-3 Pins pro Tag hochfahren.
+**Für Einsteiger** ist ein Pin pro Tag das Minimum, ideal sind ein bis drei pro Tag. Lieber jeden Tag einen durchdachten Pin als zwanzig auf einmal und danach nichts. Wenn du den Workflow sicher beherrschst, kannst du dich steigern.
 
 **Dein Pinning-Rhythmus in Pin-Flow:** Im Setup unter [Strategie festlegen](/dashboard/strategie?tab=meine) schlägt dir Pin-Flow eine Frequenz passend zu deiner Anzahl an Inhalten vor:
 
@@ -291,14 +282,37 @@ Pinterest belohnt Varianten desselben Inhalts als **frischen Content**: du nutzt
 - **5-15 fokussierte Boards** sind für die meisten Profile ideal
 - Jedes Board sollte ein **klar abgegrenztes Sub-Thema** deiner Hauptnische bedienen
 - Boards mit weniger als 10-20 Pins wirken auf Pinterest schwach
-- Inaktive Boards (länger als 60 Tage kein neuer Pin) schaden deiner Reichweite
+- Inaktive Boards (länger als 90 Tage kein neuer Pin) schaden deiner Reichweite
 
 **Was Pin-Flow checkt:** Im Bereich [Board-Gesundheit](/dashboard/boards) unten auf dem Dashboard siehst du:
 - **Aktivitätsrate** (Wie viele deiner Boards bekommen regelmäßig neue Pins?)
-- **Engagement-Rate pro Board**
-- **Inaktive Boards** (>60 Tage): direkt mit Handlungs-Empfehlung
+- **Ø Letzter Pin** (im Schnitt, wie lange der letzte Pin pro Board zurückliegt)
+- **Inaktive Boards** (>90 Tage): direkt mit Handlungs-Empfehlung
 
 **Wenn du zu viele Boards hast** und es dir schwerfällt, sie alle aktiv zu halten: lieber Boards zusammenführen oder die schwächsten löschen, statt alles halbherzig zu bedienen.`,
+      },
+      {
+        question: 'Wie plane ich meine Pins ein?',
+        answer: `Du musst nicht jeden Pin von Hand im richtigen Moment posten, du kannst vorplanen. Dafür gibt es zwei Wege, und am besten kombinierst du sie.
+
+Direkt in Pinterest: Pinterest hat einen eigenen Planer, kostenlos und in jedem Business-Account enthalten. Du erstellst einen Pin wie gewohnt und wählst statt „Veröffentlichen" ein späteres Datum. So planst du bis zu 30 Tage im Voraus, einen Pin nach dem anderen. Der Vorteil: Pinterest belohnt es, wenn du direkt in der App aktiv bist, und die Zahlen frisch veröffentlichter Pins siehst du sofort. Die Grenze: maximal etwa 30 Tage Vorlauf, keine Massen-Planung, und ein eingeplantes Bild lässt sich nachträglich nicht mehr austauschen.
+
+Mit Tailwind: Tailwind ist ein offiziell von Pinterest geprüfter Partner, gebaut für genau diesen Zweck. Hier planst du unbegrenzt weit im Voraus, lädst viele Pins auf einmal hoch und verteilst sie in einer Kalenderansicht. Die Funktion SmartSchedule schlägt dir die besten Zeiten für deinen Account vor, und SmartLoop kann deine stärksten Pins automatisch wieder ausspielen. Tailwind startet bei rund 15 Dollar im Monat und hat einen kostenlosen Einstieg.
+
+Mein Rat: Nutze den Pinterest-eigenen Planer für deinen frischen Content, weil Pinterest native Aktivität belohnt, und ergänze Tailwind, wenn du weiter vorausplanen oder ältere, gut laufende Pins recyceln willst. So hast du das Beste aus beidem.`,
+      },
+      {
+        question: 'Was bedeutet frisches oder neues Design?',
+        answer: `Frisches Design heißt: Pinterest bevorzugt neue, eigenständige Pins gegenüber demselben Bild, das du immer wieder hochlädst. Frisch ist ein Pin schon dann, wenn er anders aussieht, auch wenn er auf dieselbe Seite verlinkt. Du musst dafür nicht jedes Mal ein neues Foto schießen. Oft reicht es, dasselbe Foto in einem anderen Bildausschnitt zu zeigen, mal quer, mal hochkant, mal nah dran, mal mit mehr Drumherum. Dazu ein anderer Text im Bild, ein anderes Layout, und schon hast du aus einem Motiv mehrere frische Pins gemacht. Das hält dein Profil lebendig und gibt Pinterest immer wieder etwas Neues zum Ausspielen.`,
+      },
+      {
+        question:
+          'Wie schaffe ich 1 bis 3 Pins pro Tag, ohne immer denselben Pin zu bauen?',
+        answer: `Mit Vorlagen und bewusster Variation. Leg dir in Canva ein paar Vorlagen in deinem Marken-Design an, dann erstellst du in wenigen Minuten einen neuen Pin, der frisch wirkt, ohne bei null anzufangen. Variiere gezielt: ein anderer Bildausschnitt desselben Fotos, eine andere Überschrift, mal eine Frage, mal ein Zitat, mal eine Schritt-für-Schritt-Optik. So entstehen aus einem einzigen Inhalt viele unterschiedliche Pins, nie zwei identische. Der Trick ist nicht, schneller zu gestalten, sondern ein System zu haben, das dir Abwechslung leicht macht. Bewahre dir außerdem deine besten Vorlagen auf, dann wird jeder Pin-Tag schneller.`,
+      },
+      {
+        question: 'Warum ist ein einheitliches Pin-Design wichtig?',
+        answer: `Ein wiedererkennbares Design macht aus einzelnen Pins einen Auftritt. Wenn deine Pins dieselben Farben, Schriften und denselben Stil tragen, erkennt deine Zielgruppe dich im Feed sofort, noch bevor sie deinen Namen liest. Das baut Vertrauen auf, und Vertrauen führt zu Klicks und Saves. Du musst dafür kein Grafikprofi sein. Leg dir in Canva ein paar Vorlagen in deinen Marken-Farben an, dann sieht jeder neue Pin wie aus einem Guss aus, und du erstellst ihn in wenigen Minuten. Dieses Marken-Design ist auch der Schlüssel, um viele frische Pins zu bauen, ohne dass sie beliebig wirken.`,
       },
     ],
   },
@@ -307,10 +321,10 @@ Pinterest belohnt Varianten desselben Inhalts als **frischen Content**: du nutzt
     items: [
       {
         question: 'Wo finde ich meine Pins?',
-        answer: `Im linken Menü unter **[Produktion → Pins](/dashboard/pin-produktion)**. Dort siehst du:
+        answer: `Im linken Menü unter **[Produzieren → Pins](/dashboard/pin-produktion)**. Dort siehst du:
 
 - Alle Pins deines Profils mit Performance-Werten
-- Pin-Kategorien (Top Performer, Hidden Gem, Reichweite ohne Wirkung, Eingeschlafener Gewinner)
+- Pin-Kategorien (Aktiver Top Performer, Hidden Gem, Reichweite ohne Wirkung, Save-Magnet, Eingeschlafener Gewinner)
 - Filter- und Sortier-Optionen
 - Möglichkeit, Pin-Inhalte zu bearbeiten und neue Pin-Varianten zu produzieren
 
@@ -318,17 +332,17 @@ Pinterest belohnt Varianten desselben Inhalts als **frischen Content**: du nutzt
       },
       {
         question: 'Wie pflege ich meine Keywords, Inhalte und URLs?',
-        answer: `In der Sidebar unter „SETUP" findest du **vier Bereiche** zur Inhalts-Pflege:
+        answer: `In der Sidebar unter „Einrichten" findest du **vier Bereiche** zur Inhalts-Pflege:
 
-**[Content & Strategie](/dashboard/content-inhalte)**: deine **Inhalts-Datenbank**. Hier trägst du alle Inhalte ein, auf die deine Pins verlinken: Blogposts, Produkte, Affiliate-Inhalte. Jeder Inhalt wird verknüpft mit Angebotsart (Blog, Affiliate, Produkt, Dienstleistung), Pin-Anzahl, Keywords, Ziel-URLs und Boards. Über die Ziel-URL bekommt jeder Pin sein Pin-Ziel, also die Fläche, auf die er führt. So weiß Pin-Flow für jeden deiner Inhalte, wie viele Pins schon dafür existieren und wo Lücken sind.
+**[Dein Content](/dashboard/content-inhalte)**: deine **Inhalts-Datenbank**. Hier trägst du alles ein, worauf deine Pins verlinken, also Blogposts, Produkte, Affiliate-Inhalte. Jeder Inhalt wird mit Keywords, Ziel-URLs und Boards verknüpft. So weiß Pin-Flow für jeden Inhalt, wie viele Pins schon dafür existieren und wo Lücken sind.
 
-**[Ziel-URLs](/dashboard/ziel-urls)**: alle URLs, auf die deine Pins verlinken (Blog-Artikel, Produktseiten, Affiliate-Links). Mit Priorität und Verknüpfung zu deinen Inhalten und Boards.
+**[Ziel-URLs](/dashboard/ziel-urls)**: alle URLs, auf die deine Pins verlinken, mit Verknüpfung zu deinen Inhalten und Boards. Über die Ziel-URL bekommt jeder Pin sein Pin-Ziel, also die Fläche, auf die er führt.
 
-**[Keywords](/dashboard/keywords)**: deine Keyword-Datenbank. Pin-Flow zeigt, welche Keywords gut performen, welche ungenutzt sind und welche unter dem Pinterest-Schnitt liegen. Auf dem Dashboard siehst du im Bereich „Keyword-Analyse" konkrete Handlungs-Kategorien (Stark performend, Verstecktes Potenzial, Quick Wins, Überdenken).
+**[Keywords](/dashboard/keywords)**: deine Keyword-Datenbank. Auf dem Dashboard siehst du im Bereich „Keyword-Einsatz", welche Keywords noch ungenutzt sind, damit dir kein Potenzial entgeht.
 
 **[Boards](/dashboard/boards)**: alle deine Pinterest-Boards mit Aktivitäts-Status und Performance-Werten.
 
-**Empfehlung:** Pflege diese Bereiche **einmal sauber initial** beim Setup, danach nur noch ergänzen, wenn neue Inhalte, Keywords oder URLs dazukommen, z. B. mit jedem neuen Blogartikel oder Produkt. Pin-Flow wird mit jedem zusätzlichen Datenpunkt präziser.`,
+Pflege diese Bereiche **einmal sauber** beim Setup, danach ergänzt du nur noch, wenn neue Inhalte, Keywords oder URLs dazukommen.`,
       },
     ],
   },
@@ -341,7 +355,7 @@ Pinterest belohnt Varianten desselben Inhalts als **frischen Content**: du nutzt
 
 1. **Business-Modell und Hauptnische**: Was beschreibt dich am besten, Blog oder Content-Website, eigener Shop, Dienstleistung oder Affiliate? Mehrfachauswahl ist möglich. Dazu wählst du deine Hauptnische, damit Pin-Flow deine Zahlen mit typischen Werten dieser Nische vergleichen kann.
 2. **Pin-Ziel-Verteilung**: Wohin sollen deine Pins die Menschen führen? Du verteilst 100 Prozent auf die Flächen, die für dich zählen: Blog, Shop auf eigener Website, Etsy-Shop, Affiliate-Seite, Landingpage, Newsletter und Lead-Magnet oder Buchungs- und Angebotsseite.
-3. **Content-Säulen**: die drei bis fünf großen Themen, um die sich bei dir alles dreht. Pin-Flow leitet sie aus den Kategorien deiner Boards ab. Klare Schwerpunkte helfen Pinterest, dich richtig einzuordnen.
+3. **Themen-Schwerpunkte**: die drei bis fünf großen Themen, um die sich bei dir alles dreht. Pin-Flow leitet sie aus den Kategorien deiner Boards ab. Klare Schwerpunkte helfen Pinterest, dich richtig einzuordnen.
 4. **Pinning-Rhythmus**: wie oft du pinnst, als Einsteiger, im Wachstum oder etabliert. Wichtiger als die Menge ist, dass du dranbleibst. Konsistenz schlägt Masse.
 
 **Wichtig:** Deine Strategie ist nicht in Stein gemeißelt. Pin-Flow zeigt dir im **Strategie-Check** auf dem Dashboard, wie deine **tatsächlichen Pins** zu deinem **Plan** passen. Wenn du große Abweichungen siehst, hast du zwei Optionen:
@@ -355,7 +369,7 @@ Beides ist okay, wichtig ist die **bewusste Entscheidung**.
 
 Im geführten Setup unter [Strategie festlegen](/dashboard/strategie?tab=meine). Dort beantwortest du die vier Bausteine Schritt für Schritt und bekommst eine Empfehlung, die du anpassen kannst. Du kannst dein Setup jederzeit erneut öffnen und deine Strategie aktualisieren.
 
-Mehr dazu in [Pinterest-Wissen → Strategie-Modelle](/dashboard/strategie?tab=strategien).`,
+Mehr dazu in [Pinterest-Wissen → Strategie verstehen](/dashboard/strategie?tab=strategien).`,
       },
       {
         question: 'Wie nutze ich die Prompt-Bibliothek?',

@@ -162,7 +162,8 @@
       "PowerShell(npx eslint app/dashboard/analytics/EingabeTab.tsx app/dashboard/pin-produktion/PinProduktionClient.tsx app/dashboard/analytics/ImportPinterestCsvModal.tsx app/dashboard/onboarding/OnboardingClient.tsx app/dashboard/analytics/BoardAnalyticsEditModal.tsx app/dashboard/analytics/PinAnalyticsEditModal.tsx 2>&1 | Select-String -Pattern 'no-unused-vars|no-unescaped|error' | Group-Object { \\($_ -split '\\\\s{2,}'\\)[-1] } | Select-Object Count,Name)",
       "PowerShell(git rev-list *)",
       "PowerShell('=====CONFIG-DATEIEN====='; Get-ChildItem -Force -Filter 'next.config.*' | Select-Object -ExpandProperty Name; '=====GIT LOG -1====='; git log -1 --stat; '=====HEAD HASH====='; git rev-parse HEAD)",
-      "PowerShell(npm run *)"
+      "PowerShell(npm run *)",
+      "PowerShell(Get-Content .env.local | Where-Object { $_ -match '^NEXT_PUBLIC_SUPABASE_ANON_KEY=' })"
     ]
   }
 }
