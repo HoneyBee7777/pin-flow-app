@@ -1,7 +1,5 @@
 import { createClient } from '@/lib/supabase-server'
 import EinstellungenClient from './EinstellungenClient'
-import { loadUserBenchmark } from '../analytics/benchmark'
-import { loadAccountNicheProfile } from '../analytics/account-niche'
 
 export default async function EinstellungenPage() {
   const supabase = createClient()
@@ -10,11 +8,10 @@ export default async function EinstellungenPage() {
   } = await supabase.auth.getUser()
   if (!user) return null
 
-  const [{ data, error }, benchmark, nicheProfile] = await Promise.all([
-    supabase
-      .from('einstellungen')
-      .select(
-        `profil_name, eigene_signalwoerter, signalwoerter_deaktiviert,
+  const { data, error } = await supabase
+    .from('einstellungen')
+    .select(
+      `profil_name, eigene_signalwoerter, signalwoerter_deaktiviert,
        pinterest_analytics_url,
        pinterest_account_url, website_url, tailwind_url,
        schwellwert_beobachtung, schwellwert_min_klicks,
@@ -24,12 +21,9 @@ export default async function EinstellungenPage() {
        schwellwert_top_performer_max_alter,
        schwellwert_schlafender_gewinner_alter,
        schwellwert_ctr_boost_faktor`
-      )
-      .eq('user_id', user.id)
-      .maybeSingle(),
-    loadUserBenchmark(user.id),
-    loadAccountNicheProfile(user.id),
-  ])
+    )
+    .eq('user_id', user.id)
+    .maybeSingle()
 
   return (
     <div className="p-8">
@@ -60,8 +54,6 @@ export default async function EinstellungenPage() {
           websiteUrl: data?.website_url ?? '',
           tailwindUrl: data?.tailwind_url ?? '',
         }}
-        initialBenchmark={benchmark}
-        initialNicheProfile={nicheProfile}
       />
     </div>
   )

@@ -118,16 +118,10 @@ export const KEYWORD_TYP_LABEL: Record<KeywordTyp, string> = {
   longtail: 'Longtail',
 }
 
-export const KEYWORD_TYP_EMOJI: Record<KeywordTyp, string> = {
-  haupt: '🔴',
-  mid_tail: '🟡',
-  longtail: '🟢',
-}
-
 export const KEYWORD_TYP_BADGE: Record<KeywordTyp, string> = {
-  haupt: 'bg-red-100 text-red-700',
-  mid_tail: 'bg-yellow-100 text-yellow-800',
-  longtail: 'bg-green-100 text-green-700',
+  haupt: 'bg-gray-100 text-gray-700',
+  mid_tail: 'bg-gray-100 text-gray-700',
+  longtail: 'bg-gray-100 text-gray-700',
 }
 
 // ===== Types =====
@@ -236,7 +230,7 @@ export function buildPrompt(args: {
     args.keywords.length === 0
       ? '(keine ausgewählt)'
       : args.keywords
-          .map((k) => `${KEYWORD_TYP_EMOJI[k.typ]} ${k.keyword}`)
+          .map((k) => `${KEYWORD_TYP_LABEL[k.typ]}: ${k.keyword}`)
           .join(', ')
 
   const signalwoerterLine = baueAktiveSignalwoerter(

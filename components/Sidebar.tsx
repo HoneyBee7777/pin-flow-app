@@ -64,12 +64,12 @@ const NAV_GROUPS: NavGroup[] = [
     defaultOpen: true,
     items: [{ name: 'Analytics', href: '/dashboard/analytics', icon: 'chart' }],
   },
-  // Ressourcen: einzige einklappbare Gruppe, standardmäßig zugeklappt.
+  // Ressourcen: einzige einklappbare Gruppe, standardmäßig aufgeklappt.
   {
     key: 'ressourcen',
     label: 'Ressourcen',
     collapsible: true,
-    defaultOpen: false,
+    defaultOpen: true,
     items: [
       { name: 'Onboarding', href: '/dashboard/onboarding', icon: 'flag' },
       { name: 'Checkliste', href: '/dashboard/checkliste', icon: 'checkliste' },
@@ -81,13 +81,11 @@ const NAV_GROUPS: NavGroup[] = [
 ]
 
 export default function Sidebar({
-  userEmail,
   pinterestAccountUrl,
   websiteUrl,
   tailwindUrl,
   pinterestAnalyticsUrl,
 }: {
-  userEmail?: string | null
   pinterestAccountUrl: string | null
   websiteUrl: string | null
   tailwindUrl: string | null
@@ -114,9 +112,6 @@ export default function Sidebar({
   function toggle(key: string) {
     setOpenGroups((prev) => ({ ...prev, [key]: !prev[key] }))
   }
-
-  // Profil-Popover (zeigt die E-Mail erst auf Klick auf den Avatar).
-  const [profilOpen, setProfilOpen] = useState(false)
 
   const linkItems: Array<{ label: string; url: string }> = [
     { label: 'Pinterest Trends', url: 'https://trends.pinterest.com' },
@@ -241,19 +236,16 @@ export default function Sidebar({
       </nav>
 
       <div className="p-3">
-        {/* Kompakte Gruppe: Avatar (zeigt die E-Mail erst auf Klick) + Logout,
-            eng beieinander statt über die ganze Breite. */}
-        <div className="relative flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => setProfilOpen((v) => !v)}
+        {/* Avatar führt direkt zum Profil, daneben das Logout-Icon. */}
+        <div className="flex items-center gap-1">
+          <Link
+            href="/dashboard/profil"
             aria-label="Profil"
-            aria-expanded={profilOpen}
             title="Profil"
             className="rounded-full p-1.5 text-gray-500 transition-colors hover:bg-marke-creme hover:text-marke-blaugrau"
           >
             <PersonIcon />
-          </button>
+          </Link>
           <form action={logout}>
             <button
               type="submit"
@@ -264,27 +256,6 @@ export default function Sidebar({
               <LogOutIcon />
             </button>
           </form>
-
-          {/* Popover über dem Avatar: E-Mail + Profil-Link, nur auf Klick. */}
-          {profilOpen && (
-            <div className="absolute bottom-full left-0 mb-2 w-56 rounded-md border border-gray-200 bg-white p-3 shadow-md">
-              <p className="text-[11px] uppercase tracking-wide text-gray-400">
-                Angemeldet als
-              </p>
-              <p className="mt-0.5 break-all text-xs text-gray-700">
-                {userEmail ?? 'Unbekannt'}
-              </p>
-              <p className="mt-2 text-xs">
-                →{' '}
-                <Link
-                  href="/dashboard/profil"
-                  className="font-medium text-link underline underline-offset-2 hover:opacity-80"
-                >
-                  Mein Profil
-                </Link>
-              </p>
-            </div>
-          )}
         </div>
       </div>
     </aside>

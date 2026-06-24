@@ -163,7 +163,9 @@
       "PowerShell(git rev-list *)",
       "PowerShell('=====CONFIG-DATEIEN====='; Get-ChildItem -Force -Filter 'next.config.*' | Select-Object -ExpandProperty Name; '=====GIT LOG -1====='; git log -1 --stat; '=====HEAD HASH====='; git rev-parse HEAD)",
       "PowerShell(npm run *)",
-      "PowerShell(Get-Content .env.local | Where-Object { $_ -match '^NEXT_PUBLIC_SUPABASE_ANON_KEY=' })"
+      "PowerShell(Get-Content .env.local | Where-Object { $_ -match '^NEXT_PUBLIC_SUPABASE_ANON_KEY=' })",
+      "Bash(node *)",
+      "Bash(npm run *)"
     ]
   }
 }

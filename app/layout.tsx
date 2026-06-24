@@ -1,17 +1,20 @@
 import type { Metadata } from "next";
-import localFont from "next/font/local";
-import { Space_Grotesk } from "next/font/google";
+import { Lora, DM_Sans, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 
-const geistSans = localFont({
-  src: "./fonts/GeistVF.woff",
-  variable: "--font-geist-sans",
-  weight: "100 900",
+// Lora ist ein Variable Font (Gewichtsbereich 400–700). Geladen werden die
+// Gewichte, die die Überschriften nutzen (font-semibold/bold).
+const lora = Lora({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
+  variable: "--font-lora",
 });
-const geistMono = localFont({
-  src: "./fonts/GeistMonoVF.woff",
-  variable: "--font-geist-mono",
-  weight: "100 900",
+const dmSans = DM_Sans({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
+  variable: "--font-dm-sans",
 });
 const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
@@ -32,7 +35,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} antialiased`}
+        className={`${dmSans.variable} ${lora.variable} ${spaceGrotesk.variable} antialiased`}
       >
         {children}
       </body>

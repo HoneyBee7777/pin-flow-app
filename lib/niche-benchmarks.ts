@@ -230,36 +230,3 @@ export function getNicheBenchmark(
   const slug = labelToSlug(trimmed)
   return NICHE_BENCHMARKS.find((n) => n.id === slug) ?? null
 }
-
-// Einordnung eines Account-Median-Werts gegen eine Nischen-Range.
-// Beide positiven Stufen (top-performer + überdurchschnittlich) sind grün —
-// das ist gewollt, damit ein Pin deutlich über Schnitt visuell genauso gut
-// aussieht wie ein Top-Performer.
-export type EinordnungLabel =
-  | 'top-performer'
-  | 'überdurchschnittlich'
-  | 'durchschnittlich'
-  | 'unter-durchschnitt'
-
-export type EinordnungIcon = '🏆' | '✓' | '➖' | '⚠️'
-
-export type EinordnungColor = 'green' | 'gray' | 'orange'
-
-export type Einordnung = {
-  label: EinordnungLabel
-  icon: EinordnungIcon
-  color: EinordnungColor
-}
-
-export function getEinordnung(value: number, range: Range): Einordnung {
-  if (value >= range.stark) {
-    return { label: 'top-performer', icon: '🏆', color: 'green' }
-  }
-  if (value >= range.durchschnitt) {
-    return { label: 'überdurchschnittlich', icon: '✓', color: 'green' }
-  }
-  if (value >= range.schwach) {
-    return { label: 'durchschnittlich', icon: '➖', color: 'gray' }
-  }
-  return { label: 'unter-durchschnitt', icon: '⚠️', color: 'orange' }
-}

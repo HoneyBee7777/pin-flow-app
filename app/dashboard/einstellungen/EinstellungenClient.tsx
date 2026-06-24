@@ -9,8 +9,6 @@ import {
   parseSignalwoerterListe,
   serializeSignalwoerterListe,
 } from '@/lib/signalwoerter'
-import type { UserPinBenchmark } from '../analytics/utils'
-import type { AccountNicheProfile } from '@/lib/account-niche-profile'
 
 export type InitialPersoenlicheLinks = {
   pinterestAccountUrl: string
@@ -30,8 +28,6 @@ export default function EinstellungenClient({
   initialSignalwoerterDeaktiviert: string
   initialPinterestAnalyticsUrl: string
   initialPersoenlicheLinks: InitialPersoenlicheLinks
-  initialBenchmark: UserPinBenchmark | null
-  initialNicheProfile: AccountNicheProfile
 }) {
   return (
     <div className="space-y-6">

@@ -275,7 +275,6 @@ export async function reclassifyAllPinsForUser(
   // Klassifikation pro Pin berechnen + auf alle Analytics-Zeilen
   // dieses Pins schreiben (denormalisiert für schnelle Queries).
   const klassifikationAt = new Date().toISOString()
-  let updated = 0
   const aggList = Array.from(aggregated.values())
   for (const agg of aggList) {
     const result = diagnosePinAggregated({
@@ -306,7 +305,6 @@ export async function reclassifyAllPinsForUser(
       .in('id', agg.rowIds)
       .eq('user_id', userId)
     if (upErr) return { error: upErr.message }
-    updated += agg.rowIds.length
   }
 
   return { pinsCount: aggregated.size }

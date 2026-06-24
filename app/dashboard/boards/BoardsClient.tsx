@@ -1176,7 +1176,7 @@ Board-Beschreibung: [Beschreibung]`
                     : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-100'
                 }`}
               >
-                {copied ? '✓' : '📋'}
+                {copied ? '✓' : 'Kopieren'}
               </button>
               <pre className="max-h-72 overflow-auto whitespace-pre-wrap p-4 pr-12 font-mono text-xs leading-relaxed text-gray-800">
 {generated}

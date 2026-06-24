@@ -31,7 +31,6 @@ export type EventStatus =
 export type StatusInfo = {
   status: EventStatus
   label: string
-  emoji: string
   badge: string
   countdown: string | null
   pinStart: string | null
@@ -70,15 +69,6 @@ const STATUS_LABEL: Record<EventStatus, string> = {
   jetzt_produzieren: 'Jetzt produzieren',
   noch_zeit: 'Noch Zeit',
   evergreen: 'Evergreen',
-}
-
-const STATUS_EMOJI: Record<EventStatus, string> = {
-  abgeschlossen: '✅',
-  hochphase: '🚀',
-  jetzt_pinnen: '📌',
-  jetzt_produzieren: '🎬',
-  noch_zeit: '⏳',
-  evergreen: '🌿',
 }
 
 // Saison-Status ist eine Dringlichkeits-Ampel (Pin-Fenster), die Farbe trägt
@@ -138,7 +128,6 @@ export function computeStatus(
     return {
       status: 'evergreen',
       label: STATUS_LABEL.evergreen,
-      emoji: STATUS_EMOJI.evergreen,
       badge: STATUS_BADGE.evergreen,
       countdown: null,
       pinStart: null,
@@ -189,7 +178,6 @@ export function computeStatus(
   return {
     status,
     label: STATUS_LABEL[status],
-    emoji: STATUS_EMOJI[status],
     badge: STATUS_BADGE[status],
     countdown,
     pinStart,

@@ -84,7 +84,20 @@
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: theme('fontFamily.sans');
+}
+
+/* Überschriften global auf die Serifenschrift (Lora = font-serif).
+   Größe/Gewicht/Farbe bleiben bei den einzelnen Überschriften-Klassen. */
+@layer base {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-serif;
+  }
 }
 
 @layer utilities {

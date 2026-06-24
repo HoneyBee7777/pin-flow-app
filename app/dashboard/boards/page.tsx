@@ -7,7 +7,7 @@ import BoardsClient, {
   type KeywordOption,
   type UrlOption,
 } from './BoardsClient'
-import { keywordInText } from '../analytics/utils'
+import { calcCtr, keywordInText } from '../analytics/utils'
 
 type RawBoardRow = {
   id: string
@@ -158,8 +158,7 @@ export default async function BoardsPage() {
   const pinsByBoardId: Record<string, BoardPin[]> = {}
   for (const p of pinRows) {
     const a = latestAnalyticsByPin.get(p.id) ?? null
-    const ctr =
-      a && a.impressionen > 0 ? (a.klicks / a.impressionen) * 100 : null
+    const ctr = a ? calcCtr(a.klicks, a.impressionen) : null
     const arr = pinsByBoardId[p.board_id] ?? []
     arr.push({
       id: p.id,

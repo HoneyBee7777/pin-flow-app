@@ -21,6 +21,7 @@ import type { DeletedPinEntry } from './AnalyticsClient'
 import {
   calcCtr,
   calcEngagement,
+  calcSaveRate,
   effectiveZeitraum,
   formatDateDe,
   formatNumber,
@@ -121,10 +122,7 @@ export default function PinsTab({
       }
       const latest = rows[0]
       const avgCtr = calcCtr(cumKlicks, cumImpressionen)
-      const saveRate =
-        cumImpressionen > 0
-          ? (cumSaves / cumImpressionen) * 100
-          : null
+      const saveRate = calcSaveRate(cumSaves, cumImpressionen)
       const engagementRate = calcEngagement(cumKlicks, cumSaves, cumImpressionen)
       const perioden = rows.length
       const hatDatum = !!latest.pin?.geplante_veroeffentlichung
@@ -696,14 +694,10 @@ function PinTimeline({
             const prev = history[i + 1]
             const ctr = calcCtr(row.klicks, row.impressionen)
             const prevCtr = prev ? calcCtr(prev.klicks, prev.impressionen) : null
-            const saveRate =
-              row.impressionen > 0
-                ? (row.saves / row.impressionen) * 100
-                : null
-            const prevSaveRate =
-              prev && prev.impressionen > 0
-                ? (prev.saves / prev.impressionen) * 100
-                : null
+            const saveRate = calcSaveRate(row.saves, row.impressionen)
+            const prevSaveRate = prev
+              ? calcSaveRate(prev.saves, prev.impressionen)
+              : null
             return (
               <tr key={row.id} className="text-gray-700">
                 <td className="whitespace-nowrap px-3 py-2 font-medium text-gray-900">
@@ -1067,7 +1061,7 @@ function DeletedPinsSection({
   return (
     <details className="rounded-md border border-gray-200 bg-gray-50 p-3 text-sm">
       <summary className="cursor-pointer font-medium text-gray-900">
-        🗑️ Zuletzt gelöscht ({deletedEntries.length} Eintr
+        Zuletzt gelöscht ({deletedEntries.length} Eintr
         {deletedEntries.length === 1 ? 'ag' : 'äge'})
       </summary>
       <ul className="mt-3 divide-y divide-gray-200 rounded-md border border-gray-200 bg-white">

@@ -880,8 +880,7 @@ export default async function DashboardPage() {
       impressionen: r.impressionen,
       ausgehende_klicks: r.ausgehende_klicks,
       saves: r.saves,
-      saveRate:
-        r.impressionen > 0 ? (r.saves / r.impressionen) * 100 : null,
+      saveRate: calcSaveRate(r.saves, r.impressionen),
     }))
     .reverse()
 
@@ -984,8 +983,8 @@ export default async function DashboardPage() {
   const alteSchlechtePin = actionable.filter((p) => {
     if (p.alterTage <= 365) return false
     if (p.impressionen <= 0) return false
-    const saveRate = (p.saves / p.impressionen) * 100
-    return saveRate < 0.1
+    const saveRate = calcSaveRate(p.saves, p.impressionen)
+    return saveRate !== null && saveRate < 0.1
   }).length
   const boardsOhneKategorie = Math.max(
     0,
@@ -1214,7 +1213,7 @@ export default async function DashboardPage() {
       : pipelineThresholds.minCtrGoldnugget
   const urlPotenzial: UrlPotenzialRow[] = []
   byBasis.forEach((g, basisUrl) => {
-    const ctr = g.impressionen > 0 ? (g.klicks / g.impressionen) * 100 : 0
+    const ctr = calcCtr(g.klicks, g.impressionen) ?? 0
     // Allein die CTR entscheidet: keine feste Pins-pro-URL-Grenze mehr. Eine
     // erfolgreiche URL verdient weitere Pins, unabhängig von der Anzahl; fällt
     // ihre CTR auf den Schnitt zurück, verschwindet sie von selbst.
@@ -1690,18 +1689,6 @@ export default async function DashboardPage() {
       {/* Header-Fläche = Marke Blaugrau. Kleines Orientierungs-Label oben,
           darunter die Begrüßung als H1. Rechte Hälfte bewusst Weißraum. */}
       <header className="relative overflow-hidden rounded-lg bg-marke-blaugrau px-6 py-4">
-        {/* CAMEL-AKZENT (dezent, leicht rücknehmbar): weicher radialer Ocker-
-            Schimmer rechts oben, niedrige Deckkraft (~22 %). Belebt die rechte
-            Hälfte, ohne laut zu sein. Zum Zurücknehmen: dieses <span> entfernen;
-            Stärke justierbar über die Prozentzahl im color-mix. */}
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-y-0 right-0 w-2/3"
-          style={{
-            background:
-              'radial-gradient(70% 120% at 90% 20%, color-mix(in srgb, var(--marke-ocker) 22%, transparent), transparent 65%)',
-          }}
-        />
         <div className="relative">
           <p className="text-xs font-medium uppercase tracking-[0.2em] text-white/60">
             Dashboard
@@ -2104,10 +2091,9 @@ function ProfilPerformanceKpiBar({
   latest: ProfilAnalyticsWithGrowth | null
   previous: ProfilAnalyticsWithGrowth | null
 }) {
-  const prevCtr =
-    previous && previous.impressionen > 0
-      ? (previous.ausgehende_klicks / previous.impressionen) * 100
-      : null
+  const prevCtr = previous
+    ? calcCtr(previous.ausgehende_klicks, previous.impressionen)
+    : null
   const prevEngagement =
     previous && previous.impressionen > 0
       ? ((previous.saves + previous.ausgehende_klicks) /
@@ -4161,10 +4147,9 @@ function ProfilPerformanceSection({
   previous: ProfilAnalyticsWithGrowth | null
   chartPoints: ChartPoint[]
 }) {
-  const prevCtr =
-    previous && previous.impressionen > 0
-      ? (previous.ausgehende_klicks / previous.impressionen) * 100
-      : null
+  const prevCtr = previous
+    ? calcCtr(previous.ausgehende_klicks, previous.impressionen)
+    : null
   const headingTooltip =
     'Pinterest zeigt rollierende Daten der letzten 31 Tage. Wachstum % basiert auf Vergleich zum vorherigen eingetragenen Monat.'
 

@@ -70,7 +70,7 @@ export default function BridgeTopicsPrompt({
         onClick={copy}
         className="mt-3 inline-flex items-center gap-2 rounded-md bg-marke-blaugrau px-4 py-2 text-sm font-medium text-white hover:bg-marke-blaugrau-dunkel"
       >
-        {copied ? '✓ Kopiert!' : '📋 Prompt kopieren'}
+        {copied ? '✓ Kopiert!' : 'Prompt kopieren'}
       </button>
 
       <div className="mt-5">

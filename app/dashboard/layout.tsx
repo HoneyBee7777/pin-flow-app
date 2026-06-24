@@ -34,7 +34,6 @@ export default async function DashboardLayout({
   return (
     <div className="flex h-screen bg-seite">
       <Sidebar
-        userEmail={user?.email}
         pinterestAccountUrl={pinterestAccountUrl}
         websiteUrl={websiteUrl}
         tailwindUrl={tailwindUrl}

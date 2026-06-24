@@ -32,7 +32,6 @@ export type PinDiagnose = (typeof PIN_DIAGNOSE_KEYS)[number]
 type DiagnoseMeta = {
   label: string
   handlungText: string
-  emoji: string
   badge: string
 }
 
@@ -65,55 +64,46 @@ export const PIN_DIAGNOSE_META: Record<PinDiagnose, DiagnoseMeta> = {
     label: 'Kein Datum',
     handlungText:
       'Veröffentlichungsdatum fehlt — bitte in der Pin-Datenbank ergänzen',
-    emoji: '⚠️',
     badge: 'bg-red-100 text-red-700',
   },
   noch_zu_frueh: {
     label: 'Noch zu früh',
     handlungText: 'Abwarten und beobachten',
-    emoji: '⏳',
     badge: 'bg-cyan-100 text-cyan-700',
   },
   aktiver_top_performer: {
     label: 'Aktiver Top Performer',
     handlungText: 'Variante erstellen',
-    emoji: '⭐',
     badge: 'bg-green-100 text-green-700',
   },
   eingeschlafener_gewinner: {
     label: 'Eingeschlafener Gewinner',
     handlungText: 'Neu aufsetzen mit frischem Design',
-    emoji: '♻️',
     badge: 'bg-amber-100 text-amber-800',
   },
   hidden_gem: {
     label: 'Hidden Gem',
     handlungText: 'Neuer Pin mit stärkeren Keywords',
-    emoji: '💎',
     badge: 'bg-blue-100 text-blue-700',
   },
   save_magnet: {
     label: 'Save-Magnet',
     handlungText: 'Neuer Pin mit klarem Call-to-Action',
-    emoji: '🧲',
     badge: 'bg-purple-100 text-purple-700',
   },
   reichweite_ohne_wirkung: {
     label: 'Reichweite ohne Wirkung',
     handlungText: 'Neuer Pin mit stärkerem Cover',
-    emoji: '🔧',
     badge: 'bg-orange-100 text-orange-700',
   },
   stiller_pin: {
     label: 'Stiller Pin',
     handlungText: 'Kein Handlungsbedarf',
-    emoji: '💤',
     badge: 'bg-gray-100 text-gray-700',
   },
   keine_vergleichsdaten: {
     label: 'Noch keine Vergleichsdaten',
     handlungText: 'Sammle weiter Daten',
-    emoji: '📊',
     badge: 'bg-slate-100 text-slate-600',
   },
 }
@@ -139,7 +129,6 @@ export type DiagnoseResult = {
   diagnose: PinDiagnose
   label: string
   handlung: string
-  emoji: string
   badge: string
 }
 
@@ -149,7 +138,6 @@ function asResult(diagnose: PinDiagnose): DiagnoseResult {
     diagnose,
     label: meta.label,
     handlung: meta.handlungText,
-    emoji: meta.emoji,
     badge: meta.badge,
   }
 }

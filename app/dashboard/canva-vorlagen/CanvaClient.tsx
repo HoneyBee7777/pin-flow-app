@@ -297,7 +297,7 @@ export default function CanvaClient({
                           className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800"
                           title="Diese Vorlage wurde bereits mehr als 3-mal mit derselben Ziel-URL verwendet"
                         >
-                          ⚠️ Kombination bereits häufig genutzt
+                          Kombination bereits häufig genutzt
                         </span>
                       )}
                     </div>

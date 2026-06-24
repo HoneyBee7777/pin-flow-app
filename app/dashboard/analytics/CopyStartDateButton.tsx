@@ -59,7 +59,7 @@ export default function CopyStartDateButton() {
     >
       {copied
         ? `✓ Kopiert: ${startDe}`
-        : `📋 Datum kopieren${startDe ? ` (${startDe})` : ''}`}
+        : `Datum kopieren${startDe ? ` (${startDe})` : ''}`}
     </button>
   )
 }

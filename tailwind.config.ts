@@ -64,6 +64,10 @@ const config: Config = {
         haupt: "var(--rolle-text-haupt)",
         sekundaer: "var(--rolle-text-sekundaer)",
       },
+      fontFamily: {
+        sans: ["var(--font-dm-sans)", "system-ui", "sans-serif"],
+        serif: ["var(--font-lora)", "Georgia", "serif"],
+      },
     },
   },
   plugins: [],

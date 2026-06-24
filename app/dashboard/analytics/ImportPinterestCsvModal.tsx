@@ -227,7 +227,7 @@ export default function ImportPinterestCsvModal({
               hoch. Board-Daten werden automatisch mit importiert.
             </p>
             <p className="mt-1">
-              ⚠️ Öffne die Dateien vorher NICHT in Excel oder anderen
+              Öffne die Dateien vorher NICHT in Excel oder anderen
               Programmen.
             </p>
           </div>
@@ -267,7 +267,7 @@ export default function ImportPinterestCsvModal({
 
               {slotWithBadFilename && (
                 <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-                  ⚠️ Dateiname „{slotWithBadFilename}" entspricht nicht dem
+                  Dateiname „{slotWithBadFilename}" entspricht nicht dem
                   Pinterest-Schema („Pinterest Analytics overview
                   YYYYMMDD-YYYYMMDD.csv").
                 </div>
@@ -275,7 +275,7 @@ export default function ImportPinterestCsvModal({
 
               {!slotWithBadFilename && crossFileMismatch && (
                 <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-                  ⚠️ Die hochgeladenen Dateien haben unterschiedliche
+                  Die hochgeladenen Dateien haben unterschiedliche
                   Zeiträume. Bitte nur CSVs desselben Zeitraums hochladen.
                 </div>
               )}
@@ -394,7 +394,7 @@ function FileSlotInput({
           className="mt-1 break-all text-xs text-red-700"
           title={file.name}
         >
-          ⚠️ {file.name}
+          Fehler: {file.name}
         </p>
       )}
     </div>

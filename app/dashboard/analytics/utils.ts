@@ -362,13 +362,6 @@ export const PIN_DIAGNOSE_BADGE: Record<PinDiagnose, string> =
     PIN_DIAGNOSE_KEYS.map((k) => [k, PIN_DIAGNOSE_META[k].badge])
   ) as Record<PinDiagnose, string>
 
-export const PIN_HANDLUNG: Record<PinDiagnose, string> = Object.fromEntries(
-  PIN_DIAGNOSE_KEYS.map((k) => [
-    k,
-    `${PIN_DIAGNOSE_META[k].emoji} ${PIN_DIAGNOSE_META[k].handlungText}`,
-  ])
-) as Record<PinDiagnose, string>
-
 // Pin-Klassifikation V2 — Schwellwerte werden aus den Einstellungen
 // geladen, Mediane optional aus der user_pin_benchmark-Tabelle.
 export type UserPinBenchmark = {
@@ -638,7 +631,7 @@ export type BoardAnalyticsRow = {
 // Wirkung wird über die Outbound-Click-Rate (Hauptanker) + Save-Rate (zweites
 // Signal) bestimmt, beide gegen den EIGENEN Board-Median des Nutzers,
 // größenneutral. Bewusst getrennt von der alten scoreBoardHybrid/diagnoseBoard-
-// Logik, die unverändert weiterläuft. Noch NICHT in der UI angezeigt.
+// Logik, die unverändert weiterläuft.
 // ===========================================================
 
 // Robuster Median. Leeres Array → 0. Bei gerader Anzahl: Mittel der zwei
@@ -832,8 +825,7 @@ export function matchingKeywords(
 }
 
 // ===========================================================
-// Board-Coaching: Hebel (Optimierungs-/Pflege-Hinweise) pro Board (NEU,
-// noch ohne Anzeige — Verdrahtung folgt in Häppchen 2).
+// Board-Coaching: Hebel (Optimierungs-/Pflege-Hinweise) pro Board.
 // ===========================================================
 
 export type BoardHebelTyp =

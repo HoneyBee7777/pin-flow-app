@@ -27,7 +27,6 @@ import {
   HOOK_ART_LABEL,
   HOOK_ARTEN,
   KEYWORD_TYP_BADGE,
-  KEYWORD_TYP_EMOJI,
   KEYWORD_TYP_LABEL,
   KEYWORD_TYPEN,
   PIN_FORMAT_BADGE,
@@ -1466,7 +1465,7 @@ function FilterKeyword({
               aria-label={copied ? 'Kopiert' : 'Keyword kopieren'}
               title={copied ? 'Kopiert' : 'Keyword kopieren'}
             >
-              {copied ? '✓' : '📋'}
+              {copied ? '✓' : 'Kopieren'}
             </button>
           )}
           {value && (
@@ -1847,7 +1846,6 @@ function PinForm({
                     <p
                       className={`mb-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${KEYWORD_TYP_BADGE[typ]}`}
                     >
-                      <span aria-hidden>{KEYWORD_TYP_EMOJI[typ]}</span>
                       {KEYWORD_TYP_LABEL[typ]}
                     </p>
                     {groupedKeywords[typ].length === 0 ? (
@@ -1969,7 +1967,7 @@ function PinForm({
               onClick={copyPrompt}
               className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
             >
-              {copied ? '✓ Kopiert' : '📋 Kopieren'}
+              {copied ? '✓ Kopiert' : 'Kopieren'}
             </button>
           </div>
         )}
