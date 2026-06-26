@@ -11,19 +11,9 @@ import type {
   FrequenzCheck,
   SaeulenCheck,
   StrategieCheckV2,
-  StrategieGesamtStatus,
   ZielflaecheCheckItem,
   ZielflaechenCheck,
 } from './lib'
-
-// Nur noch das Label; die Status-Farbe trägt der StatusDot (status-Tokens),
-// das Status-Wort steht einheitlich in Blaugrau (text-haupt).
-const STATUS_META: Record<StrategieGesamtStatus, { label: string }> = {
-  auf_kurs: { label: 'Auf Kurs' },
-  leicht_daneben: { label: 'Kleine Abweichung' },
-  deutlich_daneben: { label: 'Größere Abweichung' },
-  unbekannt: { label: 'Noch keine Daten' },
-}
 
 // Per-Item-Abweichung (Zielflächen): Textfarbe + Balkenfarbe über status-Tokens
 // statt lokaler green/yellow/red-Werte.
@@ -48,22 +38,6 @@ const AMPEL_TONE: Record<Ampel, StatusTone> = {
   gelb: 'achtung',
   rot: 'schlecht',
   grau: 'neutral',
-}
-
-const GESAMT_AMPEL: Record<StrategieGesamtStatus, Ampel> = {
-  auf_kurs: 'gruen',
-  leicht_daneben: 'gelb',
-  deutlich_daneben: 'rot',
-  unbekannt: 'grau',
-}
-
-// Erklärender Halbsatz hinter dem Status-Klartext in der prominenten Leiste.
-const STATUS_SATZ: Record<StrategieGesamtStatus, string> = {
-  auf_kurs: 'deine Pins folgen deiner Strategie.',
-  leicht_daneben: 'kleinere Abweichungen, schau dir die Bereiche unten an.',
-  deutlich_daneben:
-    'deine Pins weichen deutlich von deiner Strategie ab, die Bereiche unten zeigen wo.',
-  unbekannt: 'noch nicht genug Daten für eine Einschätzung.',
 }
 
 // Pin-Ziel-Verteilung: die schlimmste Einzelabweichung bestimmt die Farbe.
@@ -132,9 +106,6 @@ export default function StrategieCheckSection({
 }: {
   result: StrategieCheckV2
 }) {
-  const status = STATUS_META[result.gesamtStatus]
-  const amp = GESAMT_AMPEL[result.gesamtStatus]
-
   return (
     <section id="strategie-check" className="scroll-mt-4">
       {/* Sektions-Überschrift (v2): Hierarchie über Schrift + Weißraum, keine
@@ -146,25 +117,7 @@ export default function StrategieCheckSection({
         </h2>
         <p className="mt-1 text-sm text-gray-600">
           Vergleicht deine Pin-Arbeit der letzten {result.fensterTage} Tage mit
-          deiner festgelegten Strategie. Der Status zeigt, wie stark deine
-          tatsächliche Pin-Verteilung von deiner geplanten Strategie abweicht.
-        </p>
-      </div>
-
-      {/* Zusammenfassende Status-Kachel (weiß, hebt sich vom Creme ab). Den
-          Status trägt der StatusDot, nicht mehr eine blasse Flächen-Tönung. */}
-      <div className="mb-3 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-        <p className="text-base font-semibold text-marke-blaugrau">
-          Strategie-Status
-        </p>
-        <p className="mt-1 flex items-start gap-2 text-sm">
-          <StatusDot tone={AMPEL_TONE[amp]} />
-          <span>
-            <span className="font-semibold text-haupt">{status.label}</span>
-            <span className="text-gray-700">
-              , {STATUS_SATZ[result.gesamtStatus]}
-            </span>
-          </span>
+          deiner festgelegten Strategie.
         </p>
       </div>
 

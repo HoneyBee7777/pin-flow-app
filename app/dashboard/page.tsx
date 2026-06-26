@@ -52,7 +52,6 @@ import { loadAccountNicheProfile } from './analytics/account-niche'
 import { calculateCoachingDiagnoses } from '@/lib/account-coaching'
 import ZielgruppeCoachingBlock from './ZielgruppeCoachingBlock'
 import { getAudienceSnapshots } from '@/lib/audience-snapshot'
-import { RichtungsAmpelVertikal } from './ProfilGesundheitBlock'
 import { KpiCard } from '@/components/KpiCard'
 import { StatusDot, type StatusTone } from '@/components/StatusDot'
 import { PinKategorieIcon } from '@/components/PinKategorieIcon'
@@ -1712,12 +1711,12 @@ export default async function DashboardPage() {
           : 'neutral'
   const phase1Text =
     phase1Status === 'gut'
-      ? 'Deine Reichweite wächst.'
+      ? 'Deine Kernzahlen entwickeln sich nach oben.'
       : phase1Status === 'achtung'
-        ? 'Deine Entwicklung ist gemischt.'
+        ? 'Gemischtes Bild, eine deiner Kernzahlen lässt nach.'
         : phase1Status === 'schlecht'
-          ? 'Deine Reichweite ist rückläufig.'
-          : 'Deine ersten Zahlen erscheinen hier nach deinem ersten Monats-Update.'
+          ? 'Mehrere Kernzahlen gehen gegenüber dem Vormonat zurück.'
+          : 'Deine Richtung zeigt sich ab deinem zweiten Monats-Update.'
 
   const phase2Status: PhasenStatus = !hatStrategie
     ? 'neutral'
@@ -1733,10 +1732,10 @@ export default async function DashboardPage() {
     : phase2Status === 'gut'
       ? 'Deine Pins folgen deiner Strategie.'
       : phase2Status === 'achtung'
-        ? 'Leichte Abweichung von deiner Strategie.'
+        ? 'Kleinere Abweichungen, die Bereiche unten zeigen wo.'
         : phase2Status === 'schlecht'
-          ? 'Größere Abweichung von deiner Strategie.'
-          : 'Sobald du Pins veröffentlichst, prüfen wir sie hier gegen deinen Plan.'
+          ? 'Deine Pins weichen deutlich von deiner Strategie ab, die Bereiche unten zeigen wo.'
+          : 'Sobald du Pins veröffentlichst, prüfen wir sie gegen deinen Plan.'
 
   return (
     // Seitenhintergrund = Rolle bg-seite (hellste Blaugrau-Stufe
@@ -1905,7 +1904,7 @@ export default async function DashboardPage() {
       {/* Phasen-Header 03 (Status folgt später, jetzt neutral) */}
       <PhasenHeader
         frage="Was pinnst du als Nächstes?"
-        vorschauText="Dein Saison-Fahrplan und deine nächsten Pins stehen unten."
+        vorschauText="Der Saison-Kalender zeigt, wann welche Pins dran sind. Darunter siehst du, wie du auf Basis deiner Analytics, deiner Inhalte und ungenutzter Keywords weitere Pins planst."
         vorschauStatus="neutral"
       />
 
@@ -1948,7 +1947,7 @@ export default async function DashboardPage() {
       {/* Phasen-Header 04 (Status folgt später, jetzt neutral) */}
       <PhasenHeader
         frage="Wie gut sind deine Boards aufgestellt?"
-        vorschauText="Unten siehst du, wie aktiv und wirksam deine Boards sind."
+        vorschauText="Der Board-Status zeigt dir, welche Boards aktiv sind und welche du wiederbeleben solltest. Darunter siehst du, wie wirksam jedes Board deine Reichweite trägt."
         vorschauStatus="neutral"
       />
 
@@ -1975,11 +1974,28 @@ export default async function DashboardPage() {
         </PhaseSpur>
       </PhasenNavigation>
 
-      {/* 12. Phasen-Trenner */}
-      <PhasenTrenner title="Was steht noch an?" />
+      {/* Aufgaben-Block: gleiche zweispaltige Struktur wie die PhaseSpur (32px
+          Spur + gap), aber mit LEERER linker Spalte — keine Linie, keine Pille,
+          keine Station. So fluchtet „Was steht noch an?" exakt mit den
+          Leitfragen der Phasen darüber. Unter 900px einspaltig (keine doppelte
+          Einrückung). */}
+      <div className="grid grid-cols-1 gap-0 min-[900px]:grid-cols-[32px_1fr] min-[900px]:gap-5">
+        <div aria-hidden className="hidden min-[900px]:block" />
+        <div className="min-w-0 space-y-8">
+          {/* Header im Phasen-Stil, aber ohne Pille/Linie */}
+          <div className="mt-16">
+            <h2 className="font-serif text-3xl font-semibold leading-tight text-haupt max-[599px]:text-2xl">
+              Was steht noch an?
+            </h2>
+            <p className="mt-2 text-[15px] text-marke-blaugrau">
+              Deine offenen To-dos und Erinnerungen, die du dir selbst notierst.
+            </p>
+          </div>
 
-      {/* 14. Aufgaben & Erinnerungen — bleibt ganz unten */}
-      <AufgabenSection tasks={aufgabenSorted} today={today} />
+          {/* 14. Aufgaben & Erinnerungen — bleibt ganz unten */}
+          <AufgabenSection tasks={aufgabenSorted} today={today} />
+        </div>
+      </div>
     </div>
   )
 }
@@ -4212,26 +4228,6 @@ function HeroSection({
   )
 }
 
-// ===========================================================
-// Phasen-Trenner — Space Grotesk, Titel mittig zwischen zwei Linien
-// ===========================================================
-function PhasenTrenner({ title }: { title: string }) {
-  return (
-    <div className="mb-6 mt-12 flex items-center gap-6">
-      <span aria-hidden className="h-px flex-1 bg-marke-blaugrau-mittel" />
-      <span
-        className="text-[18px] font-semibold text-gray-900 sm:text-[20px]"
-        style={{
-          fontFamily: 'var(--font-space-grotesk)',
-          letterSpacing: '-0.3px',
-        }}
-      >
-        {title}
-      </span>
-      <span aria-hidden className="h-px flex-1 bg-marke-blaugrau-mittel" />
-    </div>
-  )
-}
 
 // Status-Punkt-Farben des Phasen-Headers. Neutral bewusst ohne Ampelfarbe
 // (blasses Blaugrau), damit ein fehlender/leerer Status nicht wie eine
@@ -4269,11 +4265,7 @@ function PhasenHeader({
         {frage}
       </h2>
       <p className="mt-2 flex items-center gap-2 text-[15px] text-marke-blaugrau">
-        <span
-          aria-hidden
-          className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
-          style={{ backgroundColor: PHASEN_STATUS_PUNKT[vorschauStatus] }}
-        />
+        <StatusDot tone={vorschauStatus} size="md" />
         {vorschauText}
       </p>
     </div>
@@ -4465,16 +4457,6 @@ function ProfilPerformanceSection({
             />
           </h3>
           <div className="mt-2 flex flex-1 flex-col gap-2">
-            {ampel.status !== 'leer' && (
-              <div className="flex flex-1 flex-col rounded-lg border border-gray-200 bg-white p-2.5 shadow-sm">
-                <p className="text-[10px] font-medium uppercase tracking-wide text-gray-500">
-                  Richtung
-                </p>
-                <div className="flex flex-1 items-center justify-center">
-                  <RichtungsAmpelVertikal status={ampel.status} />
-                </div>
-              </div>
-            )}
             <KpiCard
               className="flex-1"
               label="Ausgehende Klicks"
