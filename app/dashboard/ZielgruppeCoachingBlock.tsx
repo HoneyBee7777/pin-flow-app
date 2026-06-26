@@ -10,6 +10,7 @@ import {
 import CoachingParagraphs, {
   renderWithBold,
 } from '@/components/CoachingParagraphs'
+import { MerkenButton } from './MerkenButton'
 import { KpiCard } from '@/components/KpiCard'
 import {
   formatDateDe,
@@ -36,6 +37,7 @@ export default function ZielgruppeCoachingBlock({
   nicheProfile,
   latest,
   previous,
+  offeneQuelleIds,
 }: {
   // DESC nach Datum. Liefert den Coaching-Text.
   snapshots: AudienceSnapshot[]
@@ -43,6 +45,7 @@ export default function ZielgruppeCoachingBlock({
   // Letzter/vorheriger profil_analytics-Eintrag für die Zielgruppen-Zahlen.
   latest: ProfilAnalyticsWithGrowth | null
   previous: ProfilAnalyticsWithGrowth | null
+  offeneQuelleIds: string[]
 }) {
   const snapshot = snapshots[0]
   const coachingBlock = snapshot
@@ -138,6 +141,18 @@ export default function ZielgruppeCoachingBlock({
           konkrete Themen-Empfehlungen.
         </p>
       )}
+
+      {/* „+ To-do" dezent am Ende des Coaching-Blocks (nach der Box, vor den
+          Links), nicht mitten in der Prosa. Datum null. */}
+      <div className="mt-3">
+        <MerkenButton
+          titel="Pins zu Brücken-Themen erstellen"
+          faelligkeitsdatum={null}
+          quelle="empfehlung"
+          quelleId="bruecken-themen"
+          bereitsGemerkt={offeneQuelleIds.includes('bruecken-themen')}
+        />
+      </div>
 
       {/* Links untereinander, außerhalb der Box. Pfeil → bleibt außerhalb des
           verlinkten Bereichs — nur das Wort ist klickbar. */}

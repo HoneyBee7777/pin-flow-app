@@ -8,6 +8,7 @@ import {
   type VarianteTyp,
 } from './actions/handlungsbedarf'
 import InfoTooltip from '@/components/InfoTooltip'
+import { MerkenButton } from './MerkenButton'
 import {
   BOARD_AKTIVITAET_BADGE,
   type BoardBadgeKey,
@@ -44,16 +45,36 @@ type Metric = {
   tooltip?: string
 }
 
+// Pro Diagnose-Kategorie ein konkreter, handlungsbeschreibender Aufgabentitel
+// (nutzt den Pin-Titel). Orientiert sich am jeweiligen Hebel aus dem
+// Coaching-Text: Top-Performer → Variante, Hidden Gem → Keywords,
+// Reichweite ohne Wirkung → stärkerer Hook, Save-Magnet → Call-to-Action,
+// Eingeschlafener Gewinner → neu aufsetzen.
+const TODO_TITEL: Record<CoachingKategorie, (titel: string) => string> = {
+  aktiver_top_performer: (t) => `Variante von „${t}" erstellen`,
+  hidden_gem: (t) => `Keywords für „${t}" schärfen`,
+  reichweite_ohne_wirkung: (t) =>
+    `Variante von „${t}" mit stärkerem Hook erstellen`,
+  save_magnet: (t) => `Variante von „${t}" mit Call-to-Action erstellen`,
+  eingeschlafener_gewinner: (t) => `„${t}" neu aufsetzen`,
+}
+
 export default function HandlungsbedarfPinRow({
   pin,
   kategorie,
   metrics,
   primaryAction,
+  offeneQuelleIds,
+  zeigeTodo,
 }: {
   pin: HandlungsbedarfPin
   kategorie: string
   metrics: Metric[]
   primaryAction: ActionButton
+  offeneQuelleIds: string[]
+  // Nur die initial sichtbaren Rows (vor dem „mehr anzeigen"-Toggle) bekommen
+  // den „+ To-do"-Button — konsistent zum Keyword-Einsatz.
+  zeigeTodo: boolean
 }) {
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
@@ -91,6 +112,14 @@ export default function HandlungsbedarfPinRow({
     kategorie,
     pin,
   })
+
+  // „+ To-do": Titel je nach Diagnose-Kategorie, quelleId trägt die Kategorie
+  // mit, damit verschiedene Empfehlungen zum selben Pin unterscheidbar bleiben.
+  const todoPinTitel = pin.titel?.trim() || '(ohne Titel)'
+  const todoTitel = isCoachingKategorie(kategorie)
+    ? TODO_TITEL[kategorie](todoPinTitel)
+    : `Pin „${todoPinTitel}" überarbeiten`
+  const todoQuelleId = `pin:${pin.pin_id}:${kategorie}`
 
   // Algorithmus-Push (nur Top-Performer-Kategorie) steht ganz vorne in der
   // Metriken-Zeile (Zeile 2); die übrigen Metriken folgen mit · getrennt.
@@ -195,6 +224,15 @@ export default function HandlungsbedarfPinRow({
           >
             Zum Pin bei Pinterest ↗
           </a>
+        )}
+        {zeigeTodo && (
+          <MerkenButton
+            titel={todoTitel}
+            faelligkeitsdatum={null}
+            quelle="empfehlung"
+            quelleId={todoQuelleId}
+            bereitsGemerkt={offeneQuelleIds.includes(todoQuelleId)}
+          />
         )}
       </div>
 

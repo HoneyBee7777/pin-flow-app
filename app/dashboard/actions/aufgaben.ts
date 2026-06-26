@@ -30,6 +30,45 @@ export async function addAufgabe(
     faelligkeitsdatum,
     erledigt: false,
     prioritaet,
+    quelle: 'manuell',
+  })
+  if (error) return { error: error.message }
+
+  revalidatePath('/dashboard')
+  return {}
+}
+
+// Legt eine Aufgabe direkt aus einer Empfehlung an (Titel + Datum als
+// Argumente, nicht FormData — der Aufrufer hat bereits fertige Werte). Setzt
+// die Herkunft (quelle/quelle_id) für den dauerhaften „Gemerkt ✓"-Zustand.
+export async function addAufgabeAusEmpfehlung(
+  titel: string,
+  faelligkeitsdatum: string | null,
+  quelle: string,
+  quelleId: string
+): Promise<{ error?: string }> {
+  const supabase = createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: 'Nicht angemeldet.' }
+
+  const titelTrimmed = titel.trim()
+  if (!titelTrimmed) return { error: 'Bitte einen Titel angeben.' }
+  if (titelTrimmed.length > 200)
+    return { error: 'Titel darf maximal 200 Zeichen haben.' }
+
+  if (faelligkeitsdatum && !/^\d{4}-\d{2}-\d{2}$/.test(faelligkeitsdatum))
+    return { error: 'Datum muss im Format YYYY-MM-DD sein.' }
+
+  const { error } = await supabase.from('aufgaben').insert({
+    user_id: user.id,
+    titel: titelTrimmed,
+    faelligkeitsdatum: faelligkeitsdatum || null,
+    erledigt: false,
+    prioritaet: false,
+    quelle,
+    quelle_id: quelleId,
   })
   if (error) return { error: error.message }
 

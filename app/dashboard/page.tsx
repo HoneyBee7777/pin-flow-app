@@ -74,8 +74,10 @@ import HandlungsbedarfPinRow, {
 import BearbeitetRow, { type BearbeitetRowData } from './BearbeitetRow'
 import StrategieCheckSection from './strategie-check/StrategieCheckSection'
 import BriefingSection from './briefing/BriefingSection'
+import { MerkenButton } from './MerkenButton'
 import {
   buildNextStepsItems,
+  plusTageIso,
   type BriefingItem,
 } from './briefing/lib'
 import {
@@ -543,7 +545,7 @@ export default async function DashboardPage() {
     supabase
       .from('aufgaben')
       .select(
-        'id, titel, faelligkeitsdatum, erledigt, prioritaet, created_at'
+        'id, titel, faelligkeitsdatum, erledigt, prioritaet, created_at, quelle, quelle_id'
       )
       .eq('user_id', user.id),
     supabase
@@ -1403,6 +1405,15 @@ export default async function DashboardPage() {
 
   // ===== Aufgaben (Priorität → Datum → erledigt unten) =====
   const aufgabenAll = (aufgabenRes.data ?? []) as Aufgabe[]
+  // Offene Herkünfte: quelle_id offener (nicht erledigter) Aufgaben — speist
+  // den dauerhaften „Gemerkt ✓"-Zustand der Empfehlungs-Buttons.
+  const offeneQuelleIds = Array.from(
+    new Set(
+      aufgabenAll
+        .filter((a) => !a.erledigt && a.quelle_id)
+        .map((a) => a.quelle_id as string)
+    )
+  )
   const aufgabenSorted = [...aufgabenAll].sort((a, b) => {
     // 1. Erledigte ganz unten
     if (a.erledigt !== b.erledigt) return a.erledigt ? 1 : -1
@@ -1443,7 +1454,11 @@ export default async function DashboardPage() {
       (acc, e) => (e.countdownDays < acc.countdownDays ? e : acc),
       evs[0]
     )
-    return { name: closest.event_name, daysToStart: closest.countdownDays }
+    return {
+      id: closest.id,
+      name: closest.event_name,
+      daysToStart: closest.countdownDays,
+    }
   })()
   const nextStepTopPerformer = (() => {
     const list = groupedActions.get('aktiver_top_performer') ?? []
@@ -1458,6 +1473,7 @@ export default async function DashboardPage() {
     )
     if (remaining <= 0) return null
     return {
+      id: best.pin_id,
       titel: best.titel ?? '(ohne Titel)',
       remainingPushDays: remaining,
     }
@@ -1466,6 +1482,8 @@ export default async function DashboardPage() {
     nextEvent: nextStepEvent,
     topPerformerPin: nextStepTopPerformer,
     hiddenGemCount: groupedActions.get('hidden_gem')?.length ?? 0,
+    todayIso: today,
+    offeneQuelleIds,
   })
 
   // ===== Keywords & SEO Sektion =====
@@ -1884,7 +1902,10 @@ export default async function DashboardPage() {
       {!hatStrategie ? (
         <StrategieCheckEmptyKeineStrategie />
       ) : (
-        <StrategieCheckSection result={strategieCheckResult} />
+        <StrategieCheckSection
+          result={strategieCheckResult}
+          offeneQuelleIds={offeneQuelleIds}
+        />
       )}
 
       {/* Zielgruppe-Coaching, aus der Profil-Performance herausgelöst. Eigener
@@ -1895,6 +1916,7 @@ export default async function DashboardPage() {
         nicheProfile={nicheProfile}
         latest={latest}
         previous={previous}
+        offeneQuelleIds={offeneQuelleIds}
       />
 
         </PhaseSpur>
@@ -1912,18 +1934,22 @@ export default async function DashboardPage() {
       <SaisonKalenderSection
         columns={saisonKanban}
         pinsBySaisonEvent={pinsBySaisonEvent}
+        offeneQuelleIds={offeneQuelleIds}
+        today={today}
       />
 
       {/* 8. Content Pipeline */}
       <PinPipelineSection
         inhaltePinBedarf={inhaltePinBedarf}
         urlPotenzial={urlPotenzial}
+        offeneQuelleIds={offeneQuelleIds}
       />
 
       {/* 8b. Keywords & SEO */}
       <KeywordsSeoSection
         buckets={keywordsBuckets}
         hasAnyKeywords={keywordRows.length > 0}
+        offeneQuelleIds={offeneQuelleIds}
       />
 
       {/* 9. Pin-Handlungsbedarf.
@@ -1935,6 +1961,7 @@ export default async function DashboardPage() {
           bearbeitet={bearbeitet}
           today={today}
           thresholds={thresholds}
+          offeneQuelleIds={offeneQuelleIds}
         />
       ) : (
         <HandlungsbedarfEmpty />
@@ -1968,6 +1995,7 @@ export default async function DashboardPage() {
           restBoards={restBoards}
           accountHinweise={accountHinweise}
           boardsOhneAnalyticsCount={boardsOhneAnalyticsCount}
+          offeneQuelleIds={offeneQuelleIds}
         />
       )}
 
@@ -2459,12 +2487,14 @@ function HandlungsbedarfSection({
   bearbeitet,
   today,
   thresholds,
+  offeneQuelleIds,
 }: {
   grouped: Map<PinDiagnose, ActionablePin[]>
   hasAnyAnalytics: boolean
   bearbeitet: BearbeitetRowData[]
   today: string
   thresholds: PinAnalyticsThresholds
+  offeneQuelleIds: string[]
 }) {
   const heading = (
     <div className="mb-4">
@@ -2521,6 +2551,7 @@ function HandlungsbedarfSection({
             cat={cat}
             pins={grouped.get(cat.diagnose) ?? []}
             thresholds={thresholds}
+            offeneQuelleIds={offeneQuelleIds}
           />
         ))}
 
@@ -2612,10 +2643,12 @@ function HandlungsbedarfKategorieCard({
   cat,
   pins,
   thresholds,
+  offeneQuelleIds,
 }: {
   cat: HandlungsCategory
   pins: ActionablePin[]
   thresholds: PinAnalyticsThresholds
+  offeneQuelleIds: string[]
 }) {
   const visiblePins = pins.slice(0, 3)
   const remaining = pins.length - visiblePins.length
@@ -2667,6 +2700,8 @@ function HandlungsbedarfKategorieCard({
                   kategorie={cat.diagnose}
                   metrics={buildMetrics(cat, pinData, thresholds)}
                   primaryAction={cat.primaryAction}
+                  offeneQuelleIds={offeneQuelleIds}
+                  zeigeTodo={true}
                 />
               )
             })}
@@ -2686,6 +2721,8 @@ function HandlungsbedarfKategorieCard({
                       kategorie={cat.diagnose}
                       metrics={buildMetrics(cat, pinData, thresholds)}
                       primaryAction={cat.primaryAction}
+                      offeneQuelleIds={offeneQuelleIds}
+                      zeigeTodo={false}
                     />
                   )
                 })}
@@ -2728,10 +2765,14 @@ function buildSuchstartTooltip(event: KanbanEvent): string {
 function SaisonKalenderSection({
   columns,
   pinsBySaisonEvent,
+  offeneQuelleIds,
+  today,
 }: {
   columns: SaisonKanbanColumns
   // Entwurf/Geplant-Pin-Bestand je Saison-Event (aus page.tsx-Aggregation).
   pinsBySaisonEvent: Map<string, { entwurf: number; geplant: number }>
+  offeneQuelleIds: string[]
+  today: string
 }) {
   return (
     <section id="saison-kalender" className="scroll-mt-4">
@@ -2759,6 +2800,9 @@ function SaisonKalenderSection({
           actionButton={{ label: 'Pins erstellen' }}
           emptyText="Gerade nichts in dieser Phase."
           zeigeWeitereNamen
+          offeneQuelleIds={offeneQuelleIds}
+          today={today}
+          todoKind="produzieren"
         />
         <SaisonColumn
           icon="pin"
@@ -2770,6 +2814,9 @@ function SaisonKalenderSection({
           countdownPrefix=""
           emptyText="Gerade nichts in dieser Phase."
           zeigeWeitereNamen
+          offeneQuelleIds={offeneQuelleIds}
+          today={today}
+          todoKind="pinnen"
         />
         <SaisonColumn
           icon="flame"
@@ -2781,6 +2828,8 @@ function SaisonKalenderSection({
           countdownPrefix=""
           emptyText="Gerade nichts in der Hochphase."
           zeigeWeitereNamen
+          offeneQuelleIds={offeneQuelleIds}
+          today={today}
         />
         <SaisonColumn
           icon="hourglass"
@@ -2792,6 +2841,8 @@ function SaisonKalenderSection({
           countdownPrefix="Produktionsstart"
           actionButton={{ label: 'Pin-Idee speichern' }}
           emptyText="Nichts weiter vorgemerkt."
+          offeneQuelleIds={offeneQuelleIds}
+          today={today}
         />
       </div>
 
@@ -2828,6 +2879,9 @@ function SaisonColumn({
   actionButton,
   emptyText,
   zeigeWeitereNamen = false,
+  offeneQuelleIds,
+  today,
+  todoKind,
 }: {
   icon: string
   tone: StatusTone
@@ -2841,6 +2895,11 @@ function SaisonColumn({
   // true → Toggle-Auslöser listet die Namen der weiteren Events auf;
   // false (z. B. „Noch Zeit") → nur die nackte Zahl „X weitere".
   zeigeWeitereNamen?: boolean
+  offeneQuelleIds: string[]
+  today: string
+  // gesetzt → SaisonCard zeigt zusätzlich einen „+ To-do"-Button für diesen
+  // Status; undefined (Hochphase/Noch Zeit) → kein To-do-Button.
+  todoKind?: 'produzieren' | 'pinnen'
 }) {
   const visible = events.slice(0, 1)
   const hidden = events.slice(1)
@@ -2878,6 +2937,9 @@ function SaisonColumn({
                 countdownClassName="text-sekundaer"
                 actionButton={actionButton}
                 prepared={pinsBySaisonEvent.get(e.id) ?? null}
+                offeneQuelleIds={offeneQuelleIds}
+                today={today}
+                todoKind={todoKind}
               />
             ))}
             {hidden.length > 0 && (
@@ -2909,6 +2971,9 @@ function SaisonColumn({
                       countdownClassName="text-sekundaer"
                       actionButton={actionButton}
                       prepared={pinsBySaisonEvent.get(e.id) ?? null}
+                      offeneQuelleIds={offeneQuelleIds}
+                      today={today}
+                      todoKind={todoKind}
                     />
                   ))}
                 </div>
@@ -2928,6 +2993,9 @@ function SaisonCard({
   countdownClassName,
   actionButton,
   prepared,
+  offeneQuelleIds,
+  today,
+  todoKind,
 }: {
   event: KanbanEvent
   tone: StatusTone
@@ -2936,6 +3004,9 @@ function SaisonCard({
   actionButton?: SaisonAction
   // Entwurf/Geplant-Pin-Bestand zu diesem Event; null = keine getaggten Pins.
   prepared: { entwurf: number; geplant: number } | null
+  offeneQuelleIds: string[]
+  today: string
+  todoKind?: 'produzieren' | 'pinnen'
 }) {
   // „Heute" ist der dringlichste Fall → hervorgehoben; normale Tageszahlen und
   // der „läuft noch bis …"-Text bleiben dezent.
@@ -2945,60 +3016,94 @@ function SaisonCard({
     prepared && (prepared.entwurf > 0 || prepared.geplant > 0)
       ? prepared
       : null
+  // To-do-Daten je nach Status; pinStart/pinEnd/event_datum sind ISO-Daten.
+  const todo =
+    todoKind === 'produzieren'
+      ? {
+          titel: `Pins für „${event.event_name}" produzieren`,
+          faelligkeitsdatum:
+            event.pinStart || plusTageIso(today, event.countdownDays),
+          quelleId: `saison:${event.id}:produzieren`,
+        }
+      : todoKind === 'pinnen'
+        ? {
+            titel: `„${event.event_name}"-Pins veröffentlichen`,
+            faelligkeitsdatum: event.pinEnd || event.event_datum || today,
+            quelleId: `saison:${event.id}:pinnen`,
+          }
+        : null
   return (
-    <div className="flex min-h-[170px] flex-col justify-between rounded-md border border-karte-rand bg-white p-3 shadow-sm">
-      <div>
-        <div className="flex items-center text-sm font-semibold text-gray-900">
-          <span>{event.event_name}</span>
-          <InfoTooltip text={buildSuchstartTooltip(event)} />
+    <div>
+      {/* Karten-Container (Kachel): inneres Layout exakt wie vor Welle 1 — der
+          „+ To-do"-Button sitzt NICHT mehr hier drin, sondern unter der Kachel. */}
+      <div className="flex min-h-[170px] flex-col justify-between rounded-md border border-karte-rand bg-white p-3 shadow-sm">
+        <div>
+          <div className="flex items-center text-sm font-semibold text-gray-900">
+            <span>{event.event_name}</span>
+            <InfoTooltip text={buildSuchstartTooltip(event)} />
+          </div>
+          <div className="mt-0.5 text-xs text-gray-500">
+            {formatDateDe(event.event_datum)}
+          </div>
+          {/* StatusDot (Ampel) direkt vor der Pin-Fenster-Zeile: er bezieht sich
+              auf das Pin-Fenster genau dieses Events. */}
+          <div className="mt-2 flex items-center gap-1.5 border-t border-gray-100 pt-2 text-xs text-gray-600">
+            <StatusDot tone={tone} />
+            <span>
+              Pin-Fenster: {formatDateDe(event.pinStart)} –{' '}
+              {formatDateDe(event.pinEnd)}
+            </span>
+          </div>
+          <div
+            className={`mt-2 text-xs ${
+              istHeute ? 'font-semibold text-haupt' : `font-medium ${countdownClassName}`
+            }`}
+          >
+            {countdownLabel}
+          </div>
         </div>
-        <div className="mt-0.5 text-xs text-gray-500">
-          {formatDateDe(event.event_datum)}
-        </div>
-        {/* StatusDot (Ampel) direkt vor der Pin-Fenster-Zeile: er bezieht sich
-            auf das Pin-Fenster genau dieses Events. */}
-        <div className="mt-2 flex items-center gap-1.5 border-t border-gray-100 pt-2 text-xs text-gray-600">
-          <StatusDot tone={tone} />
-          <span>
-            Pin-Fenster: {formatDateDe(event.pinStart)} –{' '}
-            {formatDateDe(event.pinEnd)}
-          </span>
-        </div>
-        <div
-          className={`mt-2 text-xs ${
-            istHeute ? 'font-semibold text-haupt' : `font-medium ${countdownClassName}`
-          }`}
-        >
-          {countdownLabel}
-        </div>
+        {/* Bodenbündiger Aktionsblock mit EINER gemeinsamen Sichtkante (border-t):
+            Button oben, Entwurf-Hinweis darunter. Bei „nichts" hält ein
+            unsichtbarer Platzhalter (transparente Kante) dieselbe Höhe, damit die
+            Linie über die Karten auf einer Höhe sitzt. */}
+        {actionButton || preparedActive ? (
+          <div className="mt-2 flex flex-col gap-2 border-t border-gray-100 pt-2">
+            {actionButton && (
+              <Link
+                href={`/dashboard/pin-produktion?open=new&saison_event_id=${event.id}`}
+                className="inline-flex items-center justify-center self-start rounded-md bg-marke-blaugrau px-3 py-1.5 text-xs font-medium text-white hover:bg-marke-blaugrau-dunkel"
+              >
+                {actionButton.label}
+              </Link>
+            )}
+            {preparedActive && (
+              <PreparedPinsHinweis
+                basis={`/dashboard/pin-produktion?filter[saison_event]=${event.id}`}
+                prepared={preparedActive}
+                flush
+              />
+            )}
+          </div>
+        ) : (
+          <div aria-hidden className="mt-2 border-t border-transparent pt-2">
+            <span className="invisible inline-flex items-center justify-center rounded-md px-3 py-1.5 text-xs font-medium">
+              &nbsp;
+            </span>
+          </div>
+        )}
       </div>
-      {/* Bodenbündiger Aktionsblock mit EINER gemeinsamen Sichtkante (border-t):
-          Button oben, Entwurf-Hinweis darunter. Bei „nichts" hält ein
-          unsichtbarer Platzhalter (transparente Kante) dieselbe Höhe, damit die
-          Linie über die Karten auf einer Höhe sitzt. */}
-      {actionButton || preparedActive ? (
-        <div className="mt-2 flex flex-col gap-2 border-t border-gray-100 pt-2">
-          {actionButton && (
-            <Link
-              href={`/dashboard/pin-produktion?open=new&saison_event_id=${event.id}`}
-              className="inline-flex items-center justify-center self-start rounded-md bg-marke-blaugrau px-3 py-1.5 text-xs font-medium text-white hover:bg-marke-blaugrau-dunkel"
-            >
-              {actionButton.label}
-            </Link>
-          )}
-          {preparedActive && (
-            <PreparedPinsHinweis
-              basis={`/dashboard/pin-produktion?filter[saison_event]=${event.id}`}
-              prepared={preparedActive}
-              flush
-            />
-          )}
-        </div>
-      ) : (
-        <div aria-hidden className="mt-2 border-t border-transparent pt-2">
-          <span className="invisible inline-flex items-center justify-center rounded-md px-3 py-1.5 text-xs font-medium">
-            &nbsp;
-          </span>
+      {/* „+ To-do" UNTERHALB der Kachel (außerhalb des Karten-Containers),
+          linksbündig mit etwas Abstand. Funktion identisch (gleicher
+          MerkenButton, gleiche Props), nur die Platzierung ändert sich. */}
+      {todo && (
+        <div className="mt-2">
+          <MerkenButton
+            titel={todo.titel}
+            faelligkeitsdatum={todo.faelligkeitsdatum}
+            quelle="empfehlung"
+            quelleId={todo.quelleId}
+            bereitsGemerkt={offeneQuelleIds.includes(todo.quelleId)}
+          />
         </div>
       )}
     </div>
@@ -3069,9 +3174,11 @@ function PreparedPinsHinweis({
 function PinPipelineSection({
   inhaltePinBedarf,
   urlPotenzial,
+  offeneQuelleIds,
 }: {
   inhaltePinBedarf: PinPipelineInhaltMitGrund[]
   urlPotenzial: UrlPotenzialRow[]
+  offeneQuelleIds: string[]
 }) {
   const cat1Count = inhaltePinBedarf.length
   return (
@@ -3095,8 +3202,12 @@ function PinPipelineSection({
           <PinPipelineInhalteCard
             items={inhaltePinBedarf}
             totalCount={cat1Count}
+            offeneQuelleIds={offeneQuelleIds}
           />
-          <PinPipelineUrlsCard urls={urlPotenzial} />
+          <PinPipelineUrlsCard
+            urls={urlPotenzial}
+            offeneQuelleIds={offeneQuelleIds}
+          />
         </div>
       </div>
     </section>
@@ -3144,9 +3255,11 @@ function buildKeywordPinHref(keyword: string): string {
 function KeywordsSeoSection({
   buckets,
   hasAnyKeywords,
+  offeneQuelleIds,
 }: {
   buckets: KeywordsSeoBuckets
   hasAnyKeywords: boolean
+  offeneQuelleIds: string[]
 }) {
   const heading = (
     <div className="mb-4">
@@ -3193,8 +3306,13 @@ function KeywordsSeoSection({
             subtitle="Diese Keywords stecken noch in keinem Pin."
             entries={buckets.unused}
             emptyText="Alle Keywords sind bereits in Pins eingesetzt."
-            renderEntry={(kw) => (
-              <KeywordRowUnused key={kw.id} kw={kw} />
+            renderEntry={(kw, zeigeTodo) => (
+              <KeywordRowUnused
+                key={kw.id}
+                kw={kw}
+                zeigeTodo={zeigeTodo}
+                offeneQuelleIds={offeneQuelleIds}
+              />
             )}
           />
         </div>
@@ -3223,8 +3341,11 @@ function KeywordsSeoCard({
   subtitle: string
   entries: KeywordSeoEntry[]
   emptyText: string
-  renderEntry: (kw: KeywordSeoEntry) => JSX.Element
+  renderEntry: (kw: KeywordSeoEntry, zeigeTodo: boolean) => JSX.Element
 }) {
+  // „sichtbar" = die ersten 3 Einträge, die ohne Aufklappen gerendert werden;
+  // der Rest steckt hinter dem nativen „mehr anzeigen"-<details>-Toggle und
+  // bekommt keinen „+ To-do"-Button.
   const visible = entries.slice(0, 3)
   const hidden = entries.slice(3)
   return (
@@ -3257,7 +3378,7 @@ function KeywordsSeoCard({
         ) : (
           <>
             <ul className="divide-y divide-gray-100">
-              {visible.map((kw) => renderEntry(kw))}
+              {visible.map((kw) => renderEntry(kw, true))}
             </ul>
             {hidden.length > 0 && (
               // Rest hinter nativem Toggle (Server-Komponente → kein useState);
@@ -3273,7 +3394,7 @@ function KeywordsSeoCard({
                   </span>
                 </summary>
                 <ul className="divide-y divide-gray-100">
-                  {hidden.map((kw) => renderEntry(kw))}
+                  {hidden.map((kw) => renderEntry(kw, false))}
                 </ul>
               </details>
             )}
@@ -3284,7 +3405,16 @@ function KeywordsSeoCard({
   )
 }
 
-function KeywordRowUnused({ kw }: { kw: KeywordSeoEntry }) {
+function KeywordRowUnused({
+  kw,
+  zeigeTodo,
+  offeneQuelleIds,
+}: {
+  kw: KeywordSeoEntry
+  zeigeTodo: boolean
+  offeneQuelleIds: string[]
+}) {
+  const quelleId = `keyword:${kw.keyword.trim().toLowerCase()}`
   return (
     <li className="px-1 py-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -3303,12 +3433,23 @@ function KeywordRowUnused({ kw }: { kw: KeywordSeoEntry }) {
             0 Pins, noch in keinem Pin verwendet
           </div>
         </div>
-        <Link
-          href={buildKeywordPinHref(kw.keyword)}
-          className="inline-flex shrink-0 items-center justify-center rounded-md bg-marke-blaugrau px-3 py-1 text-xs font-medium text-white hover:bg-marke-blaugrau-dunkel"
-        >
-          Pin erstellen
-        </Link>
+        <div className="flex shrink-0 items-center gap-2">
+          <Link
+            href={buildKeywordPinHref(kw.keyword)}
+            className="inline-flex items-center justify-center rounded-md bg-marke-blaugrau px-3 py-1 text-xs font-medium text-white hover:bg-marke-blaugrau-dunkel"
+          >
+            Pin erstellen
+          </Link>
+          {zeigeTodo && (
+            <MerkenButton
+              titel={`Keyword „${kw.keyword}" in Pins einsetzen`}
+              faelligkeitsdatum={null}
+              quelle="empfehlung"
+              quelleId={quelleId}
+              bereitsGemerkt={offeneQuelleIds.includes(quelleId)}
+            />
+          )}
+        </div>
       </div>
     </li>
   )
@@ -3317,9 +3458,11 @@ function KeywordRowUnused({ kw }: { kw: KeywordSeoEntry }) {
 function PinPipelineInhalteCard({
   items,
   totalCount,
+  offeneQuelleIds,
 }: {
   items: PinPipelineInhaltMitGrund[]
   totalCount: number
+  offeneQuelleIds: string[]
 }) {
   const visibleLimit = 3
   const visible = items.slice(0, visibleLimit)
@@ -3368,7 +3511,12 @@ function PinPipelineInhalteCard({
           <div className="border-t border-gray-100">
             <ul className="space-y-2 p-3">
               {visible.map((c) => (
-                <PinPipelineInhaltRow key={c.id} item={c} kind={c.kind} />
+                <PinPipelineInhaltRow
+                  key={c.id}
+                  item={c}
+                  kind={c.kind}
+                  offeneQuelleIds={offeneQuelleIds}
+                />
               ))}
             </ul>
             {remaining > 0 && (
@@ -3383,7 +3531,12 @@ function PinPipelineInhalteCard({
                 </summary>
                 <ul className="space-y-2 p-3">
                   {items.slice(visibleLimit).map((c) => (
-                    <PinPipelineInhaltRow key={c.id} item={c} kind={c.kind} />
+                    <PinPipelineInhaltRow
+                  key={c.id}
+                  item={c}
+                  kind={c.kind}
+                  offeneQuelleIds={offeneQuelleIds}
+                />
                   ))}
                 </ul>
               </details>
@@ -3411,10 +3564,13 @@ function PinPipelineInhalteCard({
 function PinPipelineInhaltRow({
   item,
   kind,
+  offeneQuelleIds,
 }: {
   item: PinPipelineInhalt
   kind: 'few_pins' | 'stale'
+  offeneQuelleIds: string[]
 }) {
+  const quelleId = `inhalt:${item.id}`
   // Ampel + knapper Grund: rot = noch gar kein Pin (größter Hebel),
   // sonst amber (zu wenige bzw. alte Pins). Der StatusDot trägt den Status,
   // daher kein Warn-Symbol im Text. Trägt auch die Pin-Anzahl, daher keine
@@ -3465,12 +3621,25 @@ function PinPipelineInhaltRow({
             Zur Ziel-URL ↗
           </a>
         )}
+        <MerkenButton
+          titel={`Pins für „${item.titel}" erstellen`}
+          faelligkeitsdatum={null}
+          quelle="empfehlung"
+          quelleId={quelleId}
+          bereitsGemerkt={offeneQuelleIds.includes(quelleId)}
+        />
       </div>
     </li>
   )
 }
 
-function PinPipelineUrlsCard({ urls }: { urls: UrlPotenzialRow[] }) {
+function PinPipelineUrlsCard({
+  urls,
+  offeneQuelleIds,
+}: {
+  urls: UrlPotenzialRow[]
+  offeneQuelleIds: string[]
+}) {
   const visibleLimit = 3
   const visible = urls.slice(0, visibleLimit)
   const remaining = urls.length - visible.length
@@ -3517,7 +3686,11 @@ function PinPipelineUrlsCard({ urls }: { urls: UrlPotenzialRow[] }) {
         <div className="border-t border-gray-200">
           <ul className="space-y-2 p-3">
             {visible.map((u) => (
-              <PinPipelineUrlRow key={u.basisUrl} url={u} />
+              <PinPipelineUrlRow
+                key={u.basisUrl}
+                url={u}
+                offeneQuelleIds={offeneQuelleIds}
+              />
             ))}
           </ul>
           {remaining > 0 && (
@@ -3532,7 +3705,11 @@ function PinPipelineUrlsCard({ urls }: { urls: UrlPotenzialRow[] }) {
               </summary>
               <ul className="space-y-2 p-3">
                 {urls.slice(visibleLimit).map((u) => (
-                  <PinPipelineUrlRow key={u.basisUrl} url={u} />
+                  <PinPipelineUrlRow
+                key={u.basisUrl}
+                url={u}
+                offeneQuelleIds={offeneQuelleIds}
+              />
                 ))}
               </ul>
             </details>
@@ -3565,11 +3742,18 @@ function shortenUrl(url: string): string {
   }
 }
 
-function PinPipelineUrlRow({ url }: { url: UrlPotenzialRow }) {
+function PinPipelineUrlRow({
+  url,
+  offeneQuelleIds,
+}: {
+  url: UrlPotenzialRow
+  offeneQuelleIds: string[]
+}) {
   const display =
     url.displayTitle && url.displayTitle.trim() !== ''
       ? url.displayTitle
       : shortenUrl(url.basisUrl)
+  const quelleId = `url:${url.basisUrl}`
   const ctrText = url.ctr.toFixed(1).replace('.', ',')
   const boardLabel = url.boardNames.length === 1 ? 'Board:' : 'Boards:'
   return (
@@ -3613,6 +3797,13 @@ function PinPipelineUrlRow({ url }: { url: UrlPotenzialRow }) {
         >
           URL öffnen ↗
         </a>
+        <MerkenButton
+          titel={`Mehr Pins auf „${display}" lenken`}
+          faelligkeitsdatum={null}
+          quelle="empfehlung"
+          quelleId={quelleId}
+          bereitsGemerkt={offeneQuelleIds.includes(quelleId)}
+        />
       </div>
     </li>
   )
@@ -3627,6 +3818,7 @@ function BoardGesundheitDashboardSection({
   restBoards,
   accountHinweise,
   boardsOhneAnalyticsCount,
+  offeneQuelleIds,
 }: {
   kpis: {
     boardsTotal: number
@@ -3645,6 +3837,7 @@ function BoardGesundheitDashboardSection({
     staerkstesBoardAnteil: number
   }
   boardsOhneAnalyticsCount: number
+  offeneQuelleIds: string[]
 }) {
   const headingTooltip =
     'Pinterest ist eine Suchmaschine. Keywords bestimmen wer dich findet, Boards bestimmen ob Pinterest dir vertraut. Inaktive Boards bremsen alle Pins darauf und schaden deiner thematischen Autorität. Top Boards signalisieren thematische Expertise und geben neuen Pins automatisch mehr Reichweite.'
@@ -3776,7 +3969,11 @@ function BoardGesundheitDashboardSection({
             {topKarten.length > 0 && (
               <ul className="space-y-2 p-3">
                 {topKarten.map((karte) => (
-                  <CoachingKarteRow key={karte.boardId} karte={karte} />
+                  <CoachingKarteRow
+                    key={karte.boardId}
+                    karte={karte}
+                    offeneQuelleIds={offeneQuelleIds}
+                  />
                 ))}
               </ul>
             )}
@@ -3885,10 +4082,48 @@ function CoachingButtons({
   )
 }
 
+// Pro Board-Hebel-Typ ein konkreter, handlungsbeschreibender Aufgabentitel mit
+// dem Board-Namen. Die quelleId trägt den Hebeltyp mit, daher sind mehrere
+// Hebel-To-dos pro Board unterscheidbar.
+const BOARD_HEBEL_TODO_TITEL: Record<BoardHebelTyp, (name: string) => string> = {
+  eingeschlafen: (n) => `Board „${n}" wieder regelmäßig bepinnen`,
+  nie_gestartet: (n) => `Board „${n}" mit ersten Pins starten`,
+  beschreibung_fehlt: (n) => `Beschreibung für Board „${n}" schreiben`,
+  name_ohne_keyword: (n) => `Keywords in Namen von Board „${n}" aufnehmen`,
+  beschreibung_zu_duenn: (n) =>
+    `Beschreibung von Board „${n}" ausführlicher schreiben`,
+  beschreibung_ohne_keyword: (n) =>
+    `Keywords in Beschreibung von Board „${n}" übernehmen`,
+  wirkung_schwach: (n) => `Themen-Fokus von Board „${n}" schärfen`,
+  wenig_aktiv: (n) => `Board „${n}" wieder regelmäßig bepinnen`,
+  name_zu_lang: (n) => `Namen von Board „${n}" kürzen`,
+}
+
+// Kurz-Label je Hebeltyp für die „+ To-do"-Buttons an den Board-Karten, damit
+// mehrere Buttons untereinander der jeweiligen Diagnose zuordenbar sind. Der
+// vollständige Aufgabentitel bleibt in BOARD_HEBEL_TODO_TITEL.
+const BOARD_HEBEL_TODO_LABEL: Record<BoardHebelTyp, string> = {
+  eingeschlafen: '+ Wieder bepinnen',
+  nie_gestartet: '+ Erste Pins',
+  beschreibung_fehlt: '+ Beschreibung',
+  name_ohne_keyword: '+ Keywords im Namen',
+  beschreibung_zu_duenn: '+ Beschreibung ausbauen',
+  beschreibung_ohne_keyword: '+ Keywords in Beschreibung',
+  wirkung_schwach: '+ Themen-Fokus',
+  wenig_aktiv: '+ Öfter bepinnen',
+  name_zu_lang: '+ Namen kürzen',
+}
+
 // Eine der bis zu drei priorisierten Handlungskarten. Hat das Board vorbereitete
 // Pins, erscheint die grüne Box auch hier (im einklappbaren Bereich wird sie für
 // dieses Board dann ausgelassen, damit jede Info nur einmal steht).
-function CoachingKarteRow({ karte }: { karte: CoachingKarte }) {
+function CoachingKarteRow({
+  karte,
+  offeneQuelleIds,
+}: {
+  karte: CoachingKarte
+  offeneQuelleIds: string[]
+}) {
   const hl = boardHighlight(karte.hebelTypen)
   return (
     <li className="space-y-2.5 rounded-lg border border-gray-200 bg-marke-kachel p-3 text-sm hover:bg-marke-kachel-hover">
@@ -3944,6 +4179,27 @@ function CoachingKarteRow({ karte }: { karte: CoachingKarte }) {
         pinterestUrl={karte.pinterestUrl}
         highlight={hl}
       />
+      {/* e. „+ To-do" je aktivem Hebel — bewusst als EIGENE Zeile unter den
+          Aktions-Buttons, damit die Karte ruhig bleibt und mehrere Hebel-Buttons
+          sauber umbrechen statt das Layout zu drücken. */}
+      {karte.hebelTypen.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          {karte.hebelTypen.map((typ) => {
+            const quelleId = `board:${karte.boardId}:${typ}`
+            return (
+              <MerkenButton
+                key={typ}
+                titel={BOARD_HEBEL_TODO_TITEL[typ](karte.boardName)}
+                label={BOARD_HEBEL_TODO_LABEL[typ]}
+                faelligkeitsdatum={null}
+                quelle="empfehlung"
+                quelleId={quelleId}
+                bereitsGemerkt={offeneQuelleIds.includes(quelleId)}
+              />
+            )
+          })}
+        </div>
+      )}
     </li>
   )
 }

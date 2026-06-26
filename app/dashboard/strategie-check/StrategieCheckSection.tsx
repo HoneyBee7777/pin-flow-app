@@ -5,6 +5,7 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { StatusDot, type StatusTone } from '@/components/StatusDot'
+import { MerkenButton } from '../MerkenButton'
 import { PINNING_FREQUENZ_OPTIONS } from '../strategie/lib'
 import type {
   AbweichungStatus,
@@ -103,8 +104,10 @@ function abweichungText(item: ZielflaecheCheckItem): string {
 
 export default function StrategieCheckSection({
   result,
+  offeneQuelleIds,
 }: {
   result: StrategieCheckV2
+  offeneQuelleIds: string[]
 }) {
   return (
     <section id="strategie-check" className="scroll-mt-4">
@@ -128,9 +131,9 @@ export default function StrategieCheckSection({
         </div>
       ) : (
         <div className="space-y-3">
-          <ZielflaechenCard result={result} />
+          <ZielflaechenCard result={result} offeneQuelleIds={offeneQuelleIds} />
           <FrequenzCard result={result} />
-          <SaeulenCard result={result} />
+          <SaeulenCard result={result} offeneQuelleIds={offeneQuelleIds} />
         </div>
       )}
     </section>
@@ -140,9 +143,20 @@ export default function StrategieCheckSection({
 // =====================================================
 // Bereich 1: Zielflächen-Vergleich
 // =====================================================
-function ZielflaechenCard({ result }: { result: StrategieCheckV2 }) {
+function ZielflaechenCard({
+  result,
+  offeneQuelleIds,
+}: {
+  result: StrategieCheckV2
+  offeneQuelleIds: string[]
+}) {
   const z = result.zielflaechen
   const amp = zielflaechenAmpel(z)
+  // Handlungsbedarf = es gibt Daten und mindestens eine Fläche weicht ab.
+  // zielflaechenAmpel liefert nur dann gelb/rot (grau bei fehlendem Soll/Daten,
+  // grün wenn alles im Plan) — also ist gelb/rot der saubere Trigger.
+  const zielHandlungsbedarf = amp === 'gelb' || amp === 'rot'
+  const zielQuelleId = 'zielflaechen:zuordnen'
   return (
     <Card
       title="Pin-Ziel-Verteilung"
@@ -171,6 +185,15 @@ function ZielflaechenCard({ result }: { result: StrategieCheckV2 }) {
               ? 'Im Plan. Deine Pins verteilen sich wie geplant auf deine Pin-Ziele.'
               : 'Abweichung vom Plan. Einige Pin-Ziele bekommen mehr oder weniger Pins als geplant. Prüfe die markierten Flächen unten.'}
           </StatusSatz>
+          {zielHandlungsbedarf && (
+            <MerkenButton
+              titel="Pins ihren Zielen zuordnen"
+              faelligkeitsdatum={null}
+              quelle="empfehlung"
+              quelleId={zielQuelleId}
+              bereitsGemerkt={offeneQuelleIds.includes(zielQuelleId)}
+            />
+          )}
           {z.items.map((item) => (
             <div key={item.flaeche}>
               <div className="flex flex-wrap items-baseline justify-between gap-x-3 text-sm">
@@ -314,7 +337,13 @@ function FrequenzCard({ result }: { result: StrategieCheckV2 }) {
 // =====================================================
 // Bereich 3: Content-Säulen
 // =====================================================
-function SaeulenCard({ result }: { result: StrategieCheckV2 }) {
+function SaeulenCard({
+  result,
+  offeneQuelleIds,
+}: {
+  result: StrategieCheckV2
+  offeneQuelleIds: string[]
+}) {
   const s = result.saeulen
   const amp = saeulenAmpel(s)
   const gesamt = s.aktiveAnzahl + s.vernachlaessigtAnzahl
@@ -343,7 +372,9 @@ function SaeulenCard({ result }: { result: StrategieCheckV2 }) {
               : `${s.aktiveAnzahl} von ${gesamt} Schwerpunkten bekommen neue Pins. Bespiele auch die übrigen, damit Pinterest dein Profil klar einordnet.`}
           </StatusSatz>
           <ul className="space-y-2 text-sm">
-          {s.items.map((item) => (
+          {s.items.map((item) => {
+            const quelleId = `saeule:${item.saeule.trim().toLowerCase()}`
+            return (
             <li key={item.saeule} className="flex items-center gap-3">
               <StatusDot tone={item.aktiv ? 'gut' : 'neutral'} />
               <span className="flex-1 text-gray-900">{item.saeule}</span>
@@ -356,8 +387,18 @@ function SaeulenCard({ result }: { result: StrategieCheckV2 }) {
                   ? `${item.pins} ${item.pins === 1 ? 'neuer Pin' : 'neue Pins'}`
                   : 'keine neuen Pins'}
               </span>
+              {!item.aktiv && (
+                <MerkenButton
+                  titel={`Pins für Säule „${item.saeule}" erstellen`}
+                  faelligkeitsdatum={null}
+                  quelle="empfehlung"
+                  quelleId={quelleId}
+                  bereitsGemerkt={offeneQuelleIds.includes(quelleId)}
+                />
+              )}
             </li>
-          ))}
+            )
+          })}
           </ul>
         </div>
       )}

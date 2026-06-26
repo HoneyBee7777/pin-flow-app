@@ -7,6 +7,7 @@
 
 import { useCallback } from 'react'
 import type { BriefingItem } from './lib'
+import { MerkenButton } from '../MerkenButton'
 
 // 3px Border-Left als dezenter Akzent in Camel (Marke Ocker), konsistent zum
 // Coaching-Streifen-Muster (Coaching = Camel-Streifen).
@@ -70,6 +71,17 @@ export default function BriefingSection({
                   → {item.sectionLabel}
                 </button>
               </>
+            )}
+            {item.todo && (
+              <div className="mt-2">
+                <MerkenButton
+                  titel={item.todo.titel}
+                  faelligkeitsdatum={item.todo.faelligkeitsdatum}
+                  quelle={item.todo.quelle}
+                  quelleId={item.todo.quelleId}
+                  bereitsGemerkt={item.todo.bereitsGemerkt}
+                />
+              </div>
             )}
           </li>
         ))}

@@ -42,6 +42,10 @@ export type Aufgabe = {
   erledigt: boolean
   prioritaet: boolean
   created_at: string
+  // Herkunft: 'manuell' (Default) oder 'empfehlung'; quelle_id kennzeichnet die
+  // konkrete Empfehlung (für den Doppelungsschutz der „+ To-do"-Buttons).
+  quelle: string | null
+  quelle_id: string | null
 }
 
 export default function AufgabenSection({
