@@ -1819,6 +1819,7 @@ export default async function DashboardPage() {
           { ziffer: '02', frage: 'Pinnst du das Richtige?' },
           { ziffer: '03', frage: 'Was pinnst du als Nächstes?' },
           { ziffer: '04', frage: 'Wie gut sind deine Boards aufgestellt?' },
+          { ziffer: '05', frage: 'Was setzt du als Nächstes um?' },
         ]}
       >
         {/* Phase 01 */}
@@ -1970,7 +1971,7 @@ export default async function DashboardPage() {
         </PhaseSpur>
 
         {/* Phase 04 */}
-        <PhaseSpur nummer={4} position="letzte">
+        <PhaseSpur nummer={4} position="mitte">
       {/* Phasen-Header 04 (Status folgt später, jetzt neutral) */}
       <PhasenHeader
         frage="Wie gut sind deine Boards aufgestellt?"
@@ -2000,30 +2001,24 @@ export default async function DashboardPage() {
       )}
 
         </PhaseSpur>
-      </PhasenNavigation>
 
-      {/* Aufgaben-Block: gleiche zweispaltige Struktur wie die PhaseSpur (32px
-          Spur + gap), aber mit LEERER linker Spalte — keine Linie, keine Pille,
-          keine Station. So fluchtet „Was steht noch an?" exakt mit den
-          Leitfragen der Phasen darüber. Unter 900px einspaltig (keine doppelte
-          Einrückung). */}
-      <div className="grid grid-cols-1 gap-0 min-[900px]:grid-cols-[32px_1fr] min-[900px]:gap-5">
-        <div aria-hidden className="hidden min-[900px]:block" />
-        <div className="min-w-0 space-y-8">
-          {/* Header im Phasen-Stil, aber ohne Pille/Linie */}
-          <div className="mt-16">
-            <h2 className="font-serif text-3xl font-semibold leading-tight text-haupt max-[599px]:text-2xl">
-              Was steht noch an?
-            </h2>
-            <p className="mt-2 text-[15px] text-marke-blaugrau">
-              Deine offenen To-dos und Erinnerungen, die du dir selbst notierst.
-            </p>
-          </div>
-
-          {/* 14. Aufgaben & Erinnerungen — bleibt ganz unten */}
-          <AufgabenSection tasks={aufgabenSorted} today={today} />
-        </div>
+        {/* Phase 05 — Aufgaben als fünfte Station. Neutral: schlichter Header
+            (h2 + erklärende Zeile), KEIN Status-Punkt wie bei Phase 1+2; Pille
+            „PHASE 05", Linie und Anker #phase-5 kommen aus PhaseSpur. */}
+        <PhaseSpur nummer={5} position="letzte">
+      <div>
+        <h2 className="font-serif text-3xl font-semibold leading-tight text-haupt max-[599px]:text-2xl">
+          Was setzt du als Nächstes um?
+        </h2>
+        <p className="mt-2 text-[15px] text-marke-blaugrau">
+          Deine offenen To-dos und Erinnerungen, die du dir selbst notierst.
+        </p>
       </div>
+
+      {/* 14. Aufgaben & Erinnerungen — bleibt ganz unten */}
+      <AufgabenSection tasks={aufgabenSorted} today={today} />
+        </PhaseSpur>
+      </PhasenNavigation>
     </div>
   )
 }

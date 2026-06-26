@@ -54,6 +54,11 @@ export function PhasenNavigation({
   const [aktiv, setAktiv] = useState(1)
   const [leisteSichtbar, setLeisteSichtbar] = useState(false)
 
+  // Anzahl Phasen als stabile Zahl für die Spy-Schleife. Außerhalb des Effekts
+  // gelesen, damit die Dependency eine primitive Zahl ist (kein Array-Identity-
+  // Problem) und exhaustive-deps sauber bleibt.
+  const anzahlPhasen = phasen.length
+
   useEffect(() => {
     const wrapper = wrapperRef.current
     if (!wrapper) return
@@ -66,7 +71,7 @@ export function PhasenNavigation({
       const rootTop = scrollRoot.getBoundingClientRect().top
       const schwelle = rootTop + scrollRoot.clientHeight * SPY_SCHWELLE_ANTEIL
       let current = 1
-      for (let n = 1; n <= 4; n++) {
+      for (let n = 1; n <= anzahlPhasen; n++) {
         const el = document.getElementById(`phase-${n}`)
         if (!el) continue
         if (el.getBoundingClientRect().top <= schwelle) current = n
@@ -89,7 +94,7 @@ export function PhasenNavigation({
       scrollRoot.removeEventListener('scroll', onScroll)
       window.removeEventListener('resize', onScroll)
     }
-  }, [])
+  }, [anzahlPhasen])
 
   const aktivePhase = phasen[aktiv - 1]
 

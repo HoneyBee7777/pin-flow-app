@@ -48,6 +48,30 @@ export type Aufgabe = {
   quelle_id: string | null
 }
 
+// Herkunft eines „+ To-do": Präfix der quelle_id (Teil vor dem ersten ":") →
+// lesbarer Name der Empfehlungs-Sektion. „bruecken-themen" hat kein ":" — dann
+// liefert split(':')[0] den ganzen String, der hier als eigener Key steht.
+const HERKUNFT_LABEL: Record<string, string> = {
+  saison: 'Saisonkalender',
+  board: 'Boards',
+  saeule: 'Content-Säulen',
+  inhalt: 'Inhalte',
+  url: 'URLs',
+  keyword: 'Keywords',
+  pin: 'Pin-Diagnose',
+  zielflaechen: 'Pin-Ziele',
+  'bruecken-themen': 'Zielgruppe',
+}
+
+// Liefert den Herkunfts-Namen für die Chip-Anzeige — oder null (kein Chip), wenn
+// die Aufgabe nicht aus einer Empfehlung stammt, keine quelle_id hat oder das
+// Präfix unbekannt ist.
+function herkunftName(task: Aufgabe): string | null {
+  if (task.quelle !== 'empfehlung' || !task.quelle_id) return null
+  const praefix = task.quelle_id.split(':')[0]
+  return HERKUNFT_LABEL[praefix] ?? null
+}
+
 export default function AufgabenSection({
   tasks,
   today,
@@ -147,6 +171,7 @@ function TaskRow({ task, today }: { task: Aufgabe; today: string }) {
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const [isEditing, setIsEditing] = useState(false)
+  const herkunft = herkunftName(task)
 
   const isOverdue =
     !task.erledigt &&
@@ -212,6 +237,13 @@ function TaskRow({ task, today }: { task: Aufgabe; today: string }) {
           </span>
         )}
         {task.titel}
+        {herkunft && (
+          // Herkunfts-Chip: dezent grau-kühl (kein Status/keine Ampelfarbe),
+          // nur bei Empfehlungs-Aufgaben mit bekanntem Präfix.
+          <span className="ml-2 inline-flex items-center rounded-full bg-marke-blaugrau-xhell px-2 py-0.5 text-xs font-medium text-marke-blaugrau-mittel align-middle">
+            aus: {herkunft}
+          </span>
+        )}
       </span>
       {task.faelligkeitsdatum && (
         <span
