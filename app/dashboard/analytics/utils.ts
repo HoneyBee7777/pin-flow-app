@@ -403,25 +403,11 @@ export const PIN_ANALYTICS_THRESHOLD_DEFAULTS = {
   fallbackMindestCtr: 1.5,
 } as const
 
-export type EinstellungenSchwellwerte = {
-  schwellwert_beobachtung: number | null
-  schwellwert_ctr: number | string | null
-  schwellwert_min_klicks: number | null
-  schwellwert_min_imp_ctr_urteil: number | null
-  schwellwert_min_imp_reichweite_stark: number | null
-  schwellwert_min_klicks_nutzer_signal: number | null
-  schwellwert_top_performer_max_alter: number | null
-  schwellwert_schlafender_gewinner_alter: number | null
-  schwellwert_ctr_boost_faktor: number | string | null
-}
-
 // Die 9 Pin-Schwellwerte sind fest im Code verdrahtet (PIN_ANALYTICS_THRESHOLD_
-// DEFAULTS) und NICHT mehr aus den Einstellungen überschreibbar. Der `settings`-
-// Parameter wird bewusst ignoriert (positional belassen, damit `benchmark` als
-// zweites Argument nicht verrutscht); die DB-Spalten schwellwert_* liegen
-// vorerst ungenutzt brach (späterer DB-Cleanup).
+// DEFAULTS) und NICHT aus den Einstellungen überschreibbar. Nur die Benchmark-
+// Mediane fließen ein. (Die DB-Spalten schwellwert_* liegen weiterhin ungenutzt
+// brach — späterer DB-Cleanup.)
 export function thresholdsFromSettings(
-  settings: Partial<EinstellungenSchwellwerte> | null | undefined,
   benchmark: UserPinBenchmark | null = null
 ): PinAnalyticsThresholds {
   const D = PIN_ANALYTICS_THRESHOLD_DEFAULTS

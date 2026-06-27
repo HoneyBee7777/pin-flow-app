@@ -4,7 +4,6 @@ import { STRATEGIE_SELECT, type StrategieRow } from './lib'
 import { loadUserBenchmark } from '../analytics/benchmark'
 import {
   thresholdsFromSettings,
-  type EinstellungenSchwellwerte,
   type PinAnalyticsThresholds,
 } from '../analytics/utils'
 
@@ -17,30 +16,17 @@ export default async function StrategiePage() {
   let row: StrategieRow | null = null
   // Default-Thresholds für den Logged-out- und Fallback-Fall, damit die
   // Texte in „Analytics & Boards" auch ohne User-Settings sinnvolle Werte zeigen.
-  let thresholds: PinAnalyticsThresholds = thresholdsFromSettings(null, null)
+  let thresholds: PinAnalyticsThresholds = thresholdsFromSettings(null)
   // Für das Strategie-Setup (Phase B): Board-Kategorien (Baustein 3,
   // Content-Säulen) und Anzahl Ziel-URLs (Baustein 4, Frequenz-Vorschlag).
   let boardKategorien: string[] = []
   let urlCount = 0
   if (user) {
-    const [strategieRes, settingsRes, benchmark, boardsRes, urlsCountRes] =
+    const [strategieRes, benchmark, boardsRes, urlsCountRes] =
       await Promise.all([
         supabase
           .from('einstellungen')
           .select(STRATEGIE_SELECT)
-          .eq('user_id', user.id)
-          .maybeSingle(),
-        supabase
-          .from('einstellungen')
-          .select(
-            `schwellwert_beobachtung, schwellwert_min_klicks,
-           schwellwert_ctr,
-           schwellwert_min_imp_ctr_urteil, schwellwert_min_imp_reichweite_stark,
-           schwellwert_min_klicks_nutzer_signal,
-           schwellwert_top_performer_max_alter,
-           schwellwert_schlafender_gewinner_alter,
-           schwellwert_ctr_boost_faktor`
-          )
           .eq('user_id', user.id)
           .maybeSingle(),
         loadUserBenchmark(user.id),
@@ -50,10 +36,7 @@ export default async function StrategiePage() {
           .select('id', { count: 'exact', head: true }),
       ])
     row = (strategieRes.data ?? null) as StrategieRow | null
-    thresholds = thresholdsFromSettings(
-      settingsRes.data as Partial<EinstellungenSchwellwerte> | null,
-      benchmark
-    )
+    thresholds = thresholdsFromSettings(benchmark)
     const kategorienRaw = (boardsRes.data ?? []) as Array<{
       kategorie: string | null
     }>

@@ -36,7 +36,6 @@ import {
   todayIso,
   withGrowth,
   type BoardStatus,
-  type EinstellungenSchwellwerte,
   type PinDiagnose,
   type PinOption,
   type ProfilAnalytics,
@@ -630,10 +629,7 @@ export default async function DashboardPage() {
   //   - Gemeinsame Funktion diagnosePinAggregated() mit kumulierten Werten.
   // Damit zeigen Dashboard und Analytics-Tab dieselben Pins in
   // denselben Kategorien.
-  const thresholds = thresholdsFromSettings(
-    settingsRes.data as Partial<EinstellungenSchwellwerte> | null,
-    benchmark
-  )
+  const thresholds = thresholdsFromSettings(benchmark)
 
   // Feste Pinterest-Methodik (siehe PIPELINE_THRESHOLDS oben), keine DB-Quelle.
   const pipelineThresholds: PipelineThresholds = PIPELINE_THRESHOLDS

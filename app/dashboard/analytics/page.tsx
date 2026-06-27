@@ -17,7 +17,6 @@ import {
   type BoardAnalyticsEntry,
   type BoardAnalyticsRow,
   type BoardOption,
-  type EinstellungenSchwellwerte,
   type PinAnalyticsRow,
   type PinOption,
   type ProfilAnalytics,
@@ -137,10 +136,7 @@ export default async function AnalyticsPage() {
     loadUserBenchmark(user.id),
     getAudienceSnapshots(),
   ])
-  const thresholds = thresholdsFromSettings(
-    settingsRes.data as Partial<EinstellungenSchwellwerte> | null,
-    benchmark
-  )
+  const thresholds = thresholdsFromSettings(benchmark)
   const rawPinAnalytics =
     (pinAnalyticsRes.data ?? []) as unknown as RawPinAnalyticsRow[]
   const pinAnalytics: PinAnalyticsRow[] = rawPinAnalytics.map((row) => {

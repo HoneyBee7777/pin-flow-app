@@ -1,12 +1,9 @@
 'use server'
 
 import { createClient } from '@/lib/supabase-server'
-import { diagnosePinAggregated } from './diagnosePinAggregated'
 import {
   diffDays,
-  thresholdsFromSettings,
   todayIso,
-  type EinstellungenSchwellwerte,
   type UserPinBenchmark,
 } from './utils'
 
@@ -182,130 +179,16 @@ export async function loadUserBenchmark(
   }
 }
 
-// Re-Klassifikation aller Pins eines Users: Benchmark neu berechnen,
-// dann Klassifikation für jeden Pin schreiben.
-export async function reclassifyAllPinsForUser(
+// Re-Berechnung der User-Benchmark (median_ctr/median_save_rate/…), die im
+// Dashboard + Analytics-Tab gelesen wird (loadUserBenchmark).
+// Hinweis: Die frühere denormalisierte Pro-Pin-Klassifikation wurde entfernt —
+// die Spalten klassifikation/klassifikation_at/save_rate/engagement_rate in
+// pins_analytics wurden nirgends gelesen (Diagnosen werden live berechnet),
+// und die geladenen Einstellungs-Schwellwerte wurden ohnehin ignoriert.
+export async function refreshUserBenchmark(
   userId: string
-): Promise<{ error?: string; pinsCount?: number }> {
-  const supabase = createClient()
-
+): Promise<{ error?: string }> {
   const benchmarkResult = await calculateUserBenchmark(userId)
   if (benchmarkResult.error) return { error: benchmarkResult.error }
-  const benchmark = benchmarkResult.benchmark ?? null
-
-  // Schwellwerte aus den Einstellungen laden
-  const { data: settingsData } = await supabase
-    .from('einstellungen')
-    .select(
-      `schwellwert_beobachtung, schwellwert_ctr, schwellwert_min_klicks,
-       schwellwert_min_imp_ctr_urteil, schwellwert_min_imp_reichweite_stark,
-       schwellwert_min_klicks_nutzer_signal, schwellwert_top_performer_max_alter,
-       schwellwert_schlafender_gewinner_alter, schwellwert_ctr_boost_faktor`
-    )
-    .eq('user_id', userId)
-    .maybeSingle()
-
-  const thresholds = thresholdsFromSettings(
-    settingsData as Partial<EinstellungenSchwellwerte> | null,
-    benchmark
-  )
-
-  // Alle Analytics-Zeilen + Pin-Datum laden, pro pin_id aggregieren
-  const { data: analyticsRows, error: aErr } = await supabase
-    .from('pins_analytics')
-    .select(
-      `id, pin_id, impressionen, klicks, saves,
-       pins ( geplante_veroeffentlichung, created_at )`
-    )
-    .eq('user_id', userId)
-    .is('deleted_at', null)
-  if (aErr) return { error: aErr.message }
-
-  type Row = {
-    id: string
-    pin_id: string
-    impressionen: number
-    klicks: number
-    saves: number
-    pins: {
-      geplante_veroeffentlichung: string | null
-      created_at: string | null
-    } | null
-  }
-  const rows = (analyticsRows ?? []) as unknown as Row[]
-  const today = todayIso()
-
-  type Agg = {
-    cumKlicks: number
-    cumImpressionen: number
-    cumSaves: number
-    pinAlterTage: number | null
-    hatDatum: boolean
-    rowIds: string[]
-  }
-  const aggregated = new Map<string, Agg>()
-  for (const row of rows) {
-    const hatDatum = !!row.pins?.geplante_veroeffentlichung
-    const refDate =
-      row.pins?.geplante_veroeffentlichung ??
-      row.pins?.created_at?.slice(0, 10) ??
-      null
-    const pinAlterTage = refDate
-      ? Math.max(0, diffDays(refDate, today))
-      : null
-
-    const existing = aggregated.get(row.pin_id)
-    if (existing) {
-      existing.cumKlicks += row.klicks
-      existing.cumImpressionen += row.impressionen
-      existing.cumSaves += row.saves
-      existing.rowIds.push(row.id)
-    } else {
-      aggregated.set(row.pin_id, {
-        cumKlicks: row.klicks,
-        cumImpressionen: row.impressionen,
-        cumSaves: row.saves,
-        pinAlterTage,
-        hatDatum,
-        rowIds: [row.id],
-      })
-    }
-  }
-
-  // Klassifikation pro Pin berechnen + auf alle Analytics-Zeilen
-  // dieses Pins schreiben (denormalisiert für schnelle Queries).
-  const klassifikationAt = new Date().toISOString()
-  const aggList = Array.from(aggregated.values())
-  for (const agg of aggList) {
-    const result = diagnosePinAggregated({
-      cumKlicks: agg.cumKlicks,
-      cumImpressionen: agg.cumImpressionen,
-      cumSaves: agg.cumSaves,
-      perioden: agg.rowIds.length,
-      pinAlter: agg.hatDatum ? agg.pinAlterTage : null,
-      hatDatum: agg.hatDatum,
-      thresholds,
-    })
-    const saveRate =
-      agg.cumImpressionen > 0
-        ? (agg.cumSaves / agg.cumImpressionen) * 100
-        : 0
-    const engagementRate =
-      agg.cumImpressionen > 0
-        ? ((agg.cumKlicks + agg.cumSaves) / agg.cumImpressionen) * 100
-        : 0
-    const { error: upErr } = await supabase
-      .from('pins_analytics')
-      .update({
-        klassifikation: result.diagnose,
-        klassifikation_at: klassifikationAt,
-        save_rate: Number(saveRate.toFixed(3)),
-        engagement_rate: Number(engagementRate.toFixed(3)),
-      })
-      .in('id', agg.rowIds)
-      .eq('user_id', userId)
-    if (upErr) return { error: upErr.message }
-  }
-
-  return { pinsCount: aggregated.size }
+  return {}
 }

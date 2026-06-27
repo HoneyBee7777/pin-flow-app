@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase-server'
-import { reclassifyAllPinsForUser } from '../analytics/benchmark'
+import { refreshUserBenchmark } from '../analytics/benchmark'
 
 export async function saveEinstellungen(
   formData: FormData
@@ -162,7 +162,7 @@ export async function saveEinstellungen(
     pinThresholdKeys.has(k)
   )
   if (pinThresholdsTouched) {
-    await reclassifyAllPinsForUser(user.id)
+    await refreshUserBenchmark(user.id)
   }
 
   revalidatePath('/dashboard/einstellungen')
