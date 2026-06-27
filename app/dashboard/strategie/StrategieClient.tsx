@@ -358,14 +358,6 @@ function WissenTabelle({
   )
 }
 
-function CodeBlock({ children }: { children: ReactNode }) {
-  return (
-    <pre className="overflow-x-auto rounded-md border border-gray-200 bg-gray-50 p-3 font-mono text-xs leading-relaxed text-gray-800">
-      {children}
-    </pre>
-  )
-}
-
 // ===========================================================
 // Tab 1 — So funktioniert Pinterest
 // ===========================================================
@@ -3745,7 +3737,7 @@ function TabAnalytics() {
               'stark',
               'egal',
               'Läuft rundum, dein Blueprint',
-              <span className="inline-flex items-center gap-1.5">
+              <span key="aktiver_top_performer" className="inline-flex items-center gap-1.5">
                 <PinKategorieIcon
                   name="aktiver_top_performer"
                   className="h-4 w-4 shrink-0 text-marke-blaugrau"
@@ -3758,7 +3750,7 @@ function TabAnalytics() {
               'schwach',
               'stark',
               'Cover zieht, Klick fehlt',
-              <span className="inline-flex items-center gap-1.5">
+              <span key="save_magnet" className="inline-flex items-center gap-1.5">
                 <PinKategorieIcon
                   name="save_magnet"
                   className="h-4 w-4 shrink-0 text-marke-blaugrau"
@@ -3771,7 +3763,7 @@ function TabAnalytics() {
               'schwach',
               'schwach',
               'Wird gesehen, keiner reagiert',
-              <span className="inline-flex items-center gap-1.5">
+              <span key="reichweite_ohne_wirkung" className="inline-flex items-center gap-1.5">
                 <PinKategorieIcon
                   name="reichweite_ohne_wirkung"
                   className="h-4 w-4 shrink-0 text-marke-blaugrau"
@@ -3784,7 +3776,7 @@ function TabAnalytics() {
               'eins davon stark*',
               'eins davon stark*',
               'Gut, aber kaum sichtbar',
-              <span className="inline-flex items-center gap-1.5">
+              <span key="hidden_gem" className="inline-flex items-center gap-1.5">
                 <PinKategorieIcon
                   name="hidden_gem"
                   className="h-4 w-4 shrink-0 text-marke-blaugrau"
@@ -3797,7 +3789,7 @@ function TabAnalytics() {
               'schwach',
               'schwach',
               'Hatte Zeit, kam nicht an',
-              <span className="inline-flex items-center gap-1.5">
+              <span key="stiller_pin" className="inline-flex items-center gap-1.5">
                 <PinKategorieIcon
                   name="stiller_pin"
                   className="h-4 w-4 shrink-0 text-marke-blaugrau"

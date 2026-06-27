@@ -230,10 +230,10 @@ function TaskRow({ task, today }: { task: Aufgabe; today: string }) {
         {task.prioritaet && !task.erledigt && (
           <span
             className="mr-1.5 inline-flex align-middle"
-            aria-label="Hohe Priorität"
-            title="Hohe Priorität"
+            aria-label="Priorität"
+            title="Priorität"
           >
-            <StatusDot tone="gut" />
+            <PinKategorieIcon name="pin" className="h-4 w-4 text-marke-blaugrau" />
           </span>
         )}
         {task.titel}
@@ -353,15 +353,23 @@ function EditForm({
           className="mt-1 block rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
         />
       </div>
-      <label className="flex items-center gap-2 pb-2 text-sm text-gray-700">
-        <input
-          type="checkbox"
-          checked={prioritaet}
-          onChange={(e) => setPrioritaet(e.target.checked)}
-          className="h-4 w-4 cursor-pointer rounded border-gray-300 accent-[var(--marke-blaugrau)]"
-        />
-        Hohe Priorität
-      </label>
+      <div>
+        {/* Feld-Beschriftung im selben Stil wie „Aufgabe" / „Fälligkeit". */}
+        <span className="block text-xs font-medium text-gray-500">
+          Priorität
+        </span>
+        {/* Darunter: Checkbox links, Stecknadel (Petrol) rechts daneben. Das
+            <label> umschließt beide → Klick auf Checkbox oder Icon togglet. */}
+        <label className="mt-1 flex items-center gap-2 pb-2">
+          <input
+            type="checkbox"
+            checked={prioritaet}
+            onChange={(e) => setPrioritaet(e.target.checked)}
+            className="h-4 w-4 cursor-pointer rounded border-gray-300 accent-[var(--marke-blaugrau)]"
+          />
+          <PinKategorieIcon name="pin" className="h-4 w-4 text-marke-blaugrau" />
+        </label>
+      </div>
       {/* Token-System: button-primaer = Marke Blaugrau + weißer Text. */}
       <button
         type="submit"
@@ -449,15 +457,23 @@ function AddForm() {
           className="mt-1 block rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-marke-blaugrau focus:outline-none focus:ring-1 focus:ring-marke-blaugrau"
         />
       </div>
-      <label className="flex items-center gap-2 pb-2 text-sm text-gray-700">
-        <input
-          type="checkbox"
-          checked={prioritaet}
-          onChange={(e) => setPrioritaet(e.target.checked)}
-          className="h-4 w-4 cursor-pointer rounded border-gray-300 accent-[var(--marke-blaugrau)]"
-        />
-        Hohe Priorität
-      </label>
+      <div>
+        {/* Feld-Beschriftung im selben Stil wie „Aufgabe" / „Fälligkeit". */}
+        <span className="block text-xs font-medium text-gray-500">
+          Priorität
+        </span>
+        {/* Darunter: Checkbox links, Stecknadel (Petrol) rechts daneben. Das
+            <label> umschließt beide → Klick auf Checkbox oder Icon togglet. */}
+        <label className="mt-1 flex items-center gap-2 pb-2">
+          <input
+            type="checkbox"
+            checked={prioritaet}
+            onChange={(e) => setPrioritaet(e.target.checked)}
+            className="h-4 w-4 cursor-pointer rounded border-gray-300 accent-[var(--marke-blaugrau)]"
+          />
+          <PinKategorieIcon name="pin" className="h-4 w-4 text-marke-blaugrau" />
+        </label>
+      </div>
       {/* Token-System: button-primaer = Marke Blaugrau + weißer Text. */}
       <button
         type="submit"

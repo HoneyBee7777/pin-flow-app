@@ -1,7 +1,7 @@
 // Briefing-Logik für die Dashboard-Sektion „Deine nächsten Schritte".
 // Reine Funktionen — kein React, kein Supabase. Wird serverseitig in
-// page.tsx aufgerufen, das Ergebnis (serialisierbar) wird an die
-// Client-Komponente <BriefingSection /> übergeben.
+// page.tsx aufgerufen; das dringendste Ergebnis-Item speist die
+// „Jetzt wichtig"-Zeile im Banner (DringendsterSchritt).
 
 export type BriefingPart = { kind: 'text' | 'bold'; value: string }
 

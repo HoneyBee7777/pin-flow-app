@@ -165,7 +165,12 @@
       "PowerShell(npm run *)",
       "PowerShell(Get-Content .env.local | Where-Object { $_ -match '^NEXT_PUBLIC_SUPABASE_ANON_KEY=' })",
       "Bash(node *)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Read(//c/Users/JanaB/AppData/Local/Temp/**)",
+      "Bash(grep -E \"^[A-Za-z]:\\\\\\\\\\\\\\\\\")",
+      "Bash(grep -oE \"[a-z-]+/[a-z-]+$|prefer-const$\")",
+      "Bash(cp app/dashboard/page.tsx /tmp/page.bak.tsx)",
+      "Bash(sed -i -e '4361,4399d' -e '2265,2482d' app/dashboard/page.tsx)"
     ]
   }
 }

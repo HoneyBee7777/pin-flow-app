@@ -73,13 +73,9 @@ import HandlungsbedarfPinRow, {
 } from './HandlungsbedarfPinRow'
 import BearbeitetRow, { type BearbeitetRowData } from './BearbeitetRow'
 import StrategieCheckSection from './strategie-check/StrategieCheckSection'
-import BriefingSection from './briefing/BriefingSection'
+import DringendsterSchritt from './briefing/DringendsterSchritt'
 import { MerkenButton } from './MerkenButton'
-import {
-  buildNextStepsItems,
-  plusTageIso,
-  type BriefingItem,
-} from './briefing/lib'
+import { buildNextStepsItems, plusTageIso } from './briefing/lib'
 import {
   computeStrategieCheckV2,
   type StrategieCheckV2,
@@ -1485,6 +1481,10 @@ export default async function DashboardPage() {
     todayIso: today,
     offeneQuelleIds,
   })
+  // Dringendstes Item für die Banner-Zeile: das erste echte Empfehlungs-Item
+  // (mit sectionId = Sprungziel). Die Default-/Leer-Zeile „Alles im grünen
+  // Bereich" hat keine sectionId und zählt nicht als dringend → dann kein Item.
+  const dringendsterSchritt = nextStepsItems.find((it) => it.sectionId)
 
   // ===== Keywords & SEO Sektion =====
   // Nur noch der „ungenutzte Keywords"-Bucket (Keyword in keinem Pin). Die
@@ -1755,6 +1755,27 @@ export default async function DashboardPage() {
           ? 'Deine Pins weichen deutlich von deiner Strategie ab, die Bereiche unten zeigen wo.'
           : 'Sobald du Pins veröffentlichst, prüfen wir sie gegen deinen Plan.'
 
+  // Phase 4 (Board-Gesundheit): EIN Signal — die Board-Aktivitätsrate. Nutzt
+  // dieselbe Schwellen-Logik wie die Aktivitätsraten-Ampel in der Sektion
+  // (aktivitaetAccent: >=70 grün, >=40 gelb, sonst rot). Ohne Boards → neutral.
+  const phase4AktivAccent = aktivitaetAccent(boardKpis.aktivitaetsratePct)
+  const phase4Status: PhasenStatus =
+    boardKpis.boardsTotal === 0
+      ? 'neutral'
+      : phase4AktivAccent === 'green'
+        ? 'gut'
+        : phase4AktivAccent === 'yellow'
+          ? 'achtung'
+          : 'schlecht'
+  const phase4Text =
+    boardKpis.boardsTotal === 0
+      ? 'Der Board-Status erscheint, sobald du Boards angelegt hast.'
+      : phase4Status === 'gut'
+        ? 'Deine Boards sind aktiv bepinnt.'
+        : phase4Status === 'achtung'
+          ? 'Einige Boards schlafen, die Übersicht zeigt welche.'
+          : 'Viele Boards sind zu lange ungepinnt geblieben.'
+
   return (
     // Seitenhintergrund = Rolle bg-seite (hellste Blaugrau-Stufe
     // marke-blaugrau-xhell #EEF1F3), Haupt-Textfarbe = text-haupt (Marke Tanne).
@@ -1778,30 +1799,50 @@ export default async function DashboardPage() {
               'Willkommen zurück'
             )}
           </h1>
+          {/* „Dein dringendster Schritt" — schlanke Zeile, nur mit Analytics
+              UND echtem dringenden Item. Sprung-Link (kein Merken-Button). */}
+          {hatAnalytics && dringendsterSchritt && (
+            <DringendsterSchritt item={dringendsterSchritt} />
+          )}
         </div>
       </header>
 
-      {/* Einleitung: warum dieses Cockpit zahlenbasiert ist. Ruhiger,
-          gedämpfter Ton, etwas schmaler gesetzt für gute Lesbarkeit. */}
-      <div className="space-y-3 text-sm leading-relaxed text-gray-600">
-        <p>
-          Wer nach Gefühl optimiert, kümmert sich meist um das, was sich am
-          lautesten anfühlt,{' '}
-          <strong>nicht um das, was den größten Effekt hätte</strong>. Zahlen
-          drehen das um: Sie zeigen, wo du wirklich stehst, und erst daraus
-          werden Prioritäten.
+      {/* Einleitung als Leitsatz-/Manifest-Block: schmale Lesespalte (max-w-prose,
+          ~65ch), linksbündig, vertikaler Camel-Akzentstrich links (wie die
+          Coaching-Streifen). Erster Satz als größerer Leitsatz (Spitze), Rest
+          normaler Fließtext. Bewusst sparsame Fettungen (nur zwei). */}
+      <div className="max-w-prose border-l-[3px] border-l-marke-ocker pl-5 leading-relaxed">
+        {/* Leitsatz: größer + kräftiger, trägt die Betonung selbst (keine
+            Fettungen mehr darin). Etwas mehr Abstand nach unten zum Fließtext. */}
+        <p className="text-lg text-gray-800">
+          Die einen pinnen nach Gefühl und hoffen, dass es wirkt. Die anderen
+          haben eine Strategie, gleichen sie mit ihren Zahlen ab und wissen, was
+          wirkt.
         </p>
-        <p>
-          Dieses Cockpit nimmt dir nicht ab, alle Zahlen zu kennen. Es zeigt dir{' '}
-          <strong>die wenigen, die zählen</strong>, und was sie für deinen
-          nächsten Schritt bedeuten: Welche Pins bringen Menschen auf deine
-          Seite? Wo lohnt sich dein Einsatz, wo nicht?
-        </p>
-        <p>
-          Auf dieser Basis entscheidest du, welche Pins als Nächstes{' '}
-          <strong>wirklich lohnen</strong>, und wirst Monat für Monat{' '}
-          <strong>treffsicherer</strong>.
-        </p>
+        <div className="mt-4 space-y-3 text-sm text-gray-600">
+          <p>
+            Zahlen gehen nicht nach Bauchgefühl, sie zeigen, wo du wirklich
+            stehst und was den größten Effekt hat.
+          </p>
+          <p>
+            Genau das macht dieses Cockpit. Es zeigt dir{' '}
+            <strong className="font-semibold text-gray-800">
+              die wenigen Zahlen, die zählen
+            </strong>
+            , gleicht sie mit deiner Strategie ab und sagt dir, was daraus
+            folgt. Der Saisonkalender plant dir die kommenden Wochen vor,
+            während andere ohne Plan ins Blaue pinnen.
+          </p>
+          <p>
+            Pinterest ist ein Marathon, kein Sprint. Mit jeder Auswertung
+            schärfst du deinen Blick, triffst die nächste Entscheidung sicherer
+            und wirst{' '}
+            <strong className="font-semibold text-gray-800">
+              Monat für Monat besser
+            </strong>
+            .
+          </p>
+        </div>
       </div>
 
       {/* 1. Hero-Section: schmaler Analytics-Status-Banner */}
@@ -1872,12 +1913,10 @@ export default async function DashboardPage() {
         </section>
       )}
 
-      {/* Briefing-Block: Deine Prioritäten + nächste Schritte. Bewusst NACH
-            dem Wo-stehst-du-Überblick — erst der Stand, dann die Prioritäten.
-            Ohne Analytics setup-orientierte statt analytics-basierte Items. */}
-      {hatAnalytics ? (
-        <BriefingBlock nextStepsItems={nextStepsItems} />
-      ) : (
+      {/* Ohne Analytics: setup-orientierte „nächste Schritte". Im Analytics-Fall
+            ist die volle Box hier entfallen — das dringendste Item steht jetzt
+            schlank oben im Banner („Dein dringendster Schritt"). */}
+      {!hatAnalytics && (
         <BriefingBlockEmpty
           contentCount={contentInhalteRows.length}
           pinsCount={allPinsRows.length}
@@ -1972,11 +2011,12 @@ export default async function DashboardPage() {
 
         {/* Phase 04 */}
         <PhaseSpur nummer={4} position="mitte">
-      {/* Phasen-Header 04 (Status folgt später, jetzt neutral) */}
+      {/* Phasen-Header 04: Status aus der Board-Aktivitätsrate (grün/gelb/rot),
+          neutral wenn keine Boards. */}
       <PhasenHeader
         frage="Wie gut sind deine Boards aufgestellt?"
-        vorschauText="Der Board-Status zeigt dir, welche Boards aktiv sind und welche du wiederbeleben solltest. Darunter siehst du, wie wirksam jedes Board deine Reichweite trägt."
-        vorschauStatus="neutral"
+        vorschauText={phase4Text}
+        vorschauStatus={phase4Status}
       />
 
       {/* 11. Board-Gesundheit.
@@ -2222,224 +2262,6 @@ function BoardGesundheitEmpty() {
   )
 }
 
-// ===========================================================
-// Gesamt-Profil-Performance — Ergebnis · Treiber · Kontext
-// ===========================================================
-function ProfilPerformanceKpiBar({
-  latest,
-  previous,
-}: {
-  latest: ProfilAnalyticsWithGrowth | null
-  previous: ProfilAnalyticsWithGrowth | null
-}) {
-  const prevCtr = previous
-    ? calcCtr(previous.ausgehende_klicks, previous.impressionen)
-    : null
-  const prevEngagement =
-    previous && previous.impressionen > 0
-      ? ((previous.saves + previous.ausgehende_klicks) /
-          previous.impressionen) *
-        100
-      : null
-  const deltaTage =
-    latest && previous ? diffDays(previous.datum, latest.datum) : null
-  const headingTooltip =
-    'Pinterest zeigt rollierende Daten der letzten 31 Tage. Wachstum % basiert auf Vergleich zum vorherigen eingetragenen Monat.'
-
-  const prevDateLabel = previous ? ` (${formatDateDe(previous.datum)})` : ''
-  const prevText = (val: string | null) =>
-    val !== null ? `Vorperiode: ${val}${prevDateLabel}` : undefined
-
-  if (!latest) {
-    return (
-      <section>
-        <h2 className="text-lg font-semibold text-gray-900">
-          <LabelWithTooltip
-            label="Gesamt-Profil-Performance"
-            tooltip={headingTooltip}
-          />
-        </h2>
-        <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
-          {[
-            'Ausgehende Klicks',
-            'Engagement Rate',
-            'Saves',
-            'CTR',
-            'Impressionen',
-            'Gesamte Zielgruppe',
-            'Interagierende Zielgruppe',
-          ].map((label) => (
-            <KpiCardEmpty key={label} label={label} />
-          ))}
-        </div>
-        <p className="mt-2 text-xs text-gray-500">
-          Noch kein Analytics-Update:{' '}
-          →{' '}
-          <Link
-            href="/dashboard/analytics"
-            className="font-medium text-link underline"
-          >
-            jetzt starten
-          </Link>
-          .
-        </p>
-      </section>
-    )
-  }
-
-  return (
-    <section>
-      <h2 className="text-lg font-semibold text-gray-900">
-        <LabelWithTooltip
-          label="Gesamt-Profil-Performance"
-          tooltip={headingTooltip}
-        />
-        {previous && (
-          <span className="ml-2 text-sm font-normal text-gray-500">
-            (Vergleich zu {formatDateDe(previous.datum)}
-            {deltaTage !== null && <>, Δ {deltaTage} Tage</>})
-          </span>
-        )}
-      </h2>
-
-      {/* Drei Sektionen in einer Reihe — getrennt durch Hintergrund, nicht durch Linien. */}
-      <div className="mt-3 flex items-stretch gap-x-4 overflow-x-auto pb-1">
-        <KpiSectionGroup
-          label="Ergebnis"
-          tooltip="Was ist am Ende rausgekommen – die Erfolgs-Metriken deines Profils."
-        >
-          <KpiCard
-            variant="hero"
-            className="w-48"
-            label="Ausgehende Klicks"
-            value={formatZahl(latest.ausgehende_klicks)}
-            fullValue={latest.ausgehende_klicks}
-            growth={latest.klicks_growth}
-            tooltip="Wie oft Nutzer von Pinterest auf deine Website geklickt haben. Das ist deine wichtigste Metrik für echten Traffic."
-            previousValue={prevText(
-              previous ? formatZahl(previous.ausgehende_klicks) : null
-            )}
-          />
-          <KpiCard
-            variant="hero"
-            className="w-48"
-            label="Engagement Rate"
-            value={formatPercent(latest.engagement)}
-            growth={latest.engagement_growth}
-            tooltip="(Saves + Ausgehende Klicks) ÷ Impressionen. Ein Überblickswert: Auf Pinterest sind diese Werte oft klein, das ist normal. Statt auf eine feste Zahl zu schauen, achte darauf, ob er über die Zeit steigt, das siehst du im Tab Profil-Entwicklung."
-            previousValue={prevText(
-              prevEngagement !== null ? formatPercent(prevEngagement) : null
-            )}
-          />
-        </KpiSectionGroup>
-        <KpiSectionGroup
-          label="Treiber"
-          tooltip="Was hat das Ergebnis erzeugt – die Hebel, an denen du drehen kannst."
-        >
-          <KpiCard
-            className="w-48"
-            label="Saves"
-            value={formatZahl(latest.saves)}
-            fullValue={latest.saves}
-            growth={latest.saves_growth}
-            tooltip="Saves sind das stärkste Algorithmus-Signal. Mehr Saves = längere Lebensdauer + mehr Reichweite."
-            previousValue={prevText(
-              previous ? formatZahl(previous.saves) : null
-            )}
-          />
-          <KpiCard
-            className="w-48"
-            label="CTR"
-            value={formatPercent(latest.ctr)}
-            growth={latest.ctr_growth}
-            tooltip="Ausgehende Klicks ÷ Impressionen. Zeigt ob dein Pin-Hook funktioniert. Pinterest organisch: 1,54%."
-            previousValue={prevText(
-              prevCtr !== null ? formatPercent(prevCtr) : null
-            )}
-          />
-          <KpiCard
-            className="w-48"
-            label="Impressionen"
-            value={formatZahl(latest.impressionen)}
-            fullValue={latest.impressionen}
-            growth={latest.impressionen_growth}
-            tooltip="Wie oft deine Pins angezeigt wurden. Zeigt ob deine Keywords und SEO greifen."
-            previousValue={prevText(
-              previous ? formatZahl(previous.impressionen) : null
-            )}
-          />
-        </KpiSectionGroup>
-        <KpiSectionGroup
-          label="Kontext"
-          tooltip="In welchem Umfeld passiert das – wen du erreichst."
-        >
-          <KpiCard
-            variant="context"
-            className="w-48"
-            label="Gesamte Zielgruppe"
-            value={formatZahl(latest.gesamte_zielgruppe)}
-            fullValue={latest.gesamte_zielgruppe}
-            growth={latest.zielgruppe_growth}
-            tooltip="Alle Menschen die deinen Content gesehen haben, auf Pinterest und außerhalb."
-            previousValue={prevText(
-              previous ? formatZahl(previous.gesamte_zielgruppe) : null
-            )}
-          />
-          <KpiCard
-            variant="context"
-            className="w-48"
-            label="Interagierende Zielgruppe"
-            value={formatZahl(latest.interagierende_zielgruppe)}
-            fullValue={latest.interagierende_zielgruppe}
-            growth={latest.interagierend_growth}
-            tooltip="Menschen die aktiv reagiert haben: geklickt, gespeichert oder kommentiert. Qualitativ wertvoller als Gesamtzielgruppe."
-            previousValue={prevText(
-              previous ? formatZahl(previous.interagierende_zielgruppe) : null
-            )}
-          />
-        </KpiSectionGroup>
-      </div>
-    </section>
-  )
-}
-
-function KpiSectionGroup({
-  label,
-  tooltip,
-  children,
-  bgClass = 'bg-marke-kachel',
-}: {
-  label: string
-  tooltip?: string
-  children: React.ReactNode
-  bgClass?: string
-}) {
-  return (
-    <div className={`flex shrink-0 flex-col rounded-lg px-3 py-2 ${bgClass}`}>
-      <h3 className="text-xs font-semibold tracking-wide text-slate-600">
-        <LabelWithTooltip label={label} tooltip={tooltip} />
-      </h3>
-      <div className="mt-2 flex flex-1 items-stretch gap-2">{children}</div>
-    </div>
-  )
-}
-
-// Profil-Gesundheit lebt jetzt komplett in app/dashboard/ProfilGesundheitBlock.tsx
-// (Client-Component) — Status-Berechnung in lib/profil-gesundheit.ts. Die alte
-// Aggregat-CTR/ER-Logik mit hartkodierten Pinterest-Branchen-Schnitten
-// (0,15-0,25 % etc.) wurde entfernt: sie hat account-spezifische Bewertung
-// mit allgemeinen Werten vermischt.
-
-function KpiCardEmpty({ label }: { label: string }) {
-  return (
-    <article className="rounded-lg border border-gray-200 bg-marke-kachel p-3">
-      <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
-        {label}
-      </p>
-      <p className="mt-0.5 text-sm text-gray-400">Noch keine Daten</p>
-    </article>
-  )
-}
 
 // ===========================================================
 // Handlungsbedarf
@@ -4318,64 +4140,6 @@ function avgPinAccent(days: number | null): KpiAccent {
   return 'red'
 }
 
-function PerformanceVerlaufSection({ points }: { points: ChartPoint[] }) {
-  const headingTooltip =
-    'Hier siehst du die Entwicklung deiner wichtigsten Metriken über die letzten 12 Monate (rollierend). Sobald ein neuer Monat hinzukommt, fällt der älteste raus.'
-  const tooLittle = points.length < 3
-  const datapointLabel =
-    points.length === 1 ? '1 Datenpunkt' : `${points.length} Datenpunkte`
-
-  return (
-    <section>
-      <details className="group overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-        <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 hover:bg-marke-kachel-hover [&::-webkit-details-marker]:hidden">
-          <span className="text-2xl leading-none text-gray-400" aria-hidden>
-            <span className="inline group-open:hidden">▸</span>
-            <span className="hidden group-open:inline">▾</span>
-          </span>
-          <h2 className="flex-1 text-lg font-semibold text-gray-900">
-            <LabelWithTooltip
-              label="Performance-Verlauf"
-              tooltip={headingTooltip}
-            />
-          </h2>
-        </summary>
-        <div className="border-t border-gray-200 p-4">
-          {tooLittle ? (
-            <div className="flex h-72 items-center justify-center">
-              <p className="text-center text-sm text-gray-400">
-                Der Verlauf wird ab dem 3. Monat sichtbar.
-                <br />
-                Aktuell verfügbar: {datapointLabel}.
-              </p>
-            </div>
-          ) : (
-            <PerformanceChart data={points} />
-          )}
-        </div>
-      </details>
-    </section>
-  )
-}
-
-// ===========================================================
-// Briefing-Block: weiße Sektion mit „Deine nächsten Schritte".
-// Der Aktualitäts-/Rhythmus-Hinweis steht jetzt in der Dashboard-
-// Einleitung oben, daher hier keine Fußnote mehr.
-// ===========================================================
-function BriefingBlock({
-  nextStepsItems,
-}: {
-  nextStepsItems: BriefingItem[]
-}) {
-  return (
-    // Karte weiß (Core-bg-white, robust) + Rand karte-rand (Marke Blaugrau-
-    // hell), hebt sich vom Creme-Hintergrund ab.
-    <section className="rounded-lg border border-karte-rand bg-white p-4 shadow-sm">
-      <BriefingSection items={nextStepsItems} />
-    </section>
-  )
-}
 
 // ===========================================================
 // Hero-Section: Analytics-Status-Banner auf neutraler Fläche (bg-karte +
@@ -4419,14 +4183,18 @@ function HeroSection({
   const istRot = status.state === 'rot'
 
   return (
-    <section className="grid grid-cols-1 gap-y-2 rounded-lg border border-karte-rand bg-karte px-4 py-3 shadow-sm md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] md:items-center md:gap-x-4 md:gap-y-0">
+    <section className="grid grid-cols-1 gap-y-2 rounded-lg border border-karte-rand bg-karte px-4 py-3 shadow-sm md:grid-cols-[1fr_auto] md:items-center md:gap-x-4 md:gap-y-0">
       {/* Links (kräftig): Status-Punkt + Status-Wort, darunter die zwei
-          Datumszeilen — die dominante Gruppe. Sitzt in der linken 1fr-Spalte. */}
+          Datumszeilen — die dominante Gruppe. Der frühere Erklär-Zweizeiler
+          steckt jetzt im Info-Icon neben dem Status-Wort. */}
       <div className="flex items-start gap-3">
         <StatusDot tone={istRot ? 'schlecht' : 'gut'} size="lg" />
         <div>
           <p className="text-base font-semibold text-haupt">
-            {istRot ? 'Update fällig' : 'Aktuell'}
+            <span className="whitespace-nowrap">
+              {istRot ? 'Update fällig' : 'Aktuell'}
+              <InfoTooltip text="Der Stand deines Dashboards beruht auf deinem letzten Monats-Update. Pflege deine Pinterest-Zahlen einmal im Monat ein, dann ist er wieder aktuell." />
+            </span>
           </p>
           <p className="mt-0.5 text-sm text-sekundaer">
             {istRot ? (
@@ -4452,16 +4220,6 @@ function HeroSection({
           </p>
         </div>
       </div>
-
-      {/* Mitte (leise, klar untergeordnet): kompakter Erklär-Zweizeiler in der
-          zentrierten Auto-Spalte zwischen zwei gleich breiten 1fr-Spalten →
-          exakt über dem „Wo stehst du?"-Trenner darunter. max-w-md hält ihn auf
-          zwei Zeilen. Neutrales Grau, kein Icon, kein Link-Look. */}
-      <p className="mx-auto max-w-md text-center text-xs text-gray-500">
-        Der Stand deines Dashboards beruht auf deinem letzten Monats-Update.
-        Pflege deine Pinterest-Zahlen einmal im Monat ein, dann ist er wieder
-        aktuell.
-      </p>
 
       {/* Rechts: leise Aktion in Blaugrau (nicht Camel). Grün = dezenter
           Outline-Button; Rot = gefüllt und damit etwas präsenter. */}
@@ -4543,7 +4301,7 @@ function ProfilPerformanceSection({
     ? calcCtr(previous.ausgehende_klicks, previous.impressionen)
     : null
   const headingTooltip =
-    'Pinterest zeigt rollierende Daten der letzten 31 Tage. Wachstum % basiert auf Vergleich zum vorherigen eingetragenen Monat.'
+    'Die Werte stammen aus deinem zuletzt eingetragenen Monats-Update deiner Pinterest-Analytics. Das Wachstum in Prozent vergleicht diesen Stand mit deinem vorher eingetragenen Monat.'
 
   const prevDateLabel = previous ? ` (${formatDateDe(previous.datum)})` : ''
   const prevText = (val: string | null) =>

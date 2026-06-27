@@ -272,7 +272,7 @@ export function adjustProportional(
     )
   }
 
-  let sum = result.reduce((a, b) => a + b, 0)
+  const sum = result.reduce((a, b) => a + b, 0)
   let diff = 100 - sum
   if (diff !== 0) {
     for (const i of others) {

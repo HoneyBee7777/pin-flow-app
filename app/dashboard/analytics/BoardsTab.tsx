@@ -272,7 +272,6 @@ function handlungNeuTooltip(
 function BoardAnalyticsTable({
   rows,
   boardHistory,
-  thresholds,
   onDelete,
   onEdit,
   deleteDisabled,
