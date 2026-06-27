@@ -3678,8 +3678,8 @@ function TabAnalytics() {
 
         <H4>Warum das ein echter Vorteil ist</H4>
         <Para>
-          Pinterest zeigt dir die Zahlen eines Pins nur rückwirkend für die
-          letzten rund sechs Monate. Ein Pin, den du im Januar erstellt hast,
+          Pinterest zeigt dir die Zahlen eines Pins nur begrenzt rückwirkend.
+          Ein Pin, den du im Januar erstellt hast,
           lässt sich dort nur bis etwa Anfang Juli vollständig auswerten.
           Wertest du im August aus, gibt es den Pin zwar noch, aber nur mit
           Daten von Februar bis August, der Januar fehlt. Pin-Flow dagegen

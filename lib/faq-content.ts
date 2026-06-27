@@ -100,7 +100,7 @@ Die genaue Klick-für-Klick-Anleitung öffnest du auf der Eingabe-Seite über de
 Begründung:
 - Pinterest-Trends entwickeln sich über Wochen, nicht Tage. Tägliche oder wöchentliche Updates liefern kaum bessere Erkenntnisse, kosten aber Zeit.
 - Pin-Flow nutzt monatliche Snapshots als Datengrundlage für Vergleiche („Vorperiode" = 30 Tage zurück).
-- Wichtigster Grund: **Pinterest speichert Analytics-Daten nur 6 Monate.** Mit monatlichen Snapshots in Pin-Flow baust du dir eine dauerhafte Historie auf, die Pinterest selbst nicht hat.
+- Wichtigster Grund: **Pinterest zeigt Analytics-Daten nur begrenzt rückwirkend, ältere Werte gehen dir sonst verloren.** Mit monatlichen Snapshots in Pin-Flow baust du dir eine dauerhafte Historie auf, die Pinterest selbst nicht hat.
 
 **Empfohlener Rhythmus:** Wähle einen festen Tag im Monat (z. B. der 1. oder der 15.) und blocke dir 15-20 Minuten dafür. Das Dashboard zeigt im Analytics-Status oben, wann dein letztes Update war.`,
       },
@@ -110,7 +110,7 @@ Begründung:
         answer: `Kein Problem, Pin-Flow arbeitet mit den vorhandenen Datenpunkten weiter. Lücken im Verlauf sind nicht kritisch.
 
 **Was du wissen solltest:**
-- Pinterest speichert Analytics-Daten **6 Monate** rückwirkend. Du kannst also Daten nachpflegen, falls du einen oder zwei Monate verpasst hast.
+- Pinterest zeigt mehrere Monate rückwirkend. Du kannst also verpasste Monate meist noch nachpflegen.
 - Je mehr Snapshots, desto präziser werden Trend-Erkennungen und Vergleiche. Bei nur 1-2 Snapshots sind manche Coaching-Hinweise vorsichtiger.
 - Bei längeren Pausen bleibt Pin-Flow funktional, aber die Aussagen über „Erfolge der letzten 30 Tage" basieren dann auf älteren Vergleichswerten.
 

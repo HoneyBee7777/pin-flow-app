@@ -121,44 +121,44 @@ export const ONBOARDING_STEPS: OnboardingStepDef[] = [
     blocks: [
       {
         kind: 'h',
-        text: 'Massive Zeitersparnis durch integrierten Workflow',
+        text: 'Ein System, in dem alles ineinandergreift, statt verstreuter Listen.',
       },
       {
         kind: 'p',
-        text: 'Andere Pinterest-Tools sind reine Scheduler. Excel-Tabellen sind manuell. Pin-Flow ist die zentrale Plattform, die alles miteinander verknüpft: deine Inhalte, Keywords, URLs, Boards und Analytics greifen ineinander.',
+        text: 'Andere Pinterest-Tools sind reine Scheduler. Excel-Tabellen sind manuell und vergesslich. Pin-Flow ist die zentrale Plattform, in der alles zusammenhängt: deine Inhalte, Keywords, Ziel-URLs, Boards und Analytics greifen ineinander, statt nebeneinanderher zu existieren.',
       },
       { kind: 'p', text: 'Was das konkret bedeutet:' },
       {
         kind: 'ul',
         items: [
-          'Du trägst einen Blogartikel einmal ein, und Pin-Flow weiß sofort, welche Keywords er braucht, welches Board passt und wo Pin-Lücken sind',
-          'Du definierst deine Strategie einmal und bekommst automatisch konkrete Empfehlungen für neue Posts',
-          'Monatliches Analytics-Update in 15 Minuten statt stundenlanger Excel-Pflege',
+          'Du trägst einen Blogartikel einmal ein und verknüpfst ihn mit Keywords, Ziel-URL und Board. Pin-Flow weiß dann sofort: Dieser Inhalt braucht Pins mit diesen Keywords, die auf diese URL verlinken, und zeigt dir, wo noch Pin-Lücken sind.',
+          'Du legst deine Strategie einmal fest und bekommst daraus konkrete Empfehlungen für deine nächsten Pins, nicht allgemein, sondern auf deine Inhalte bezogen.',
+          'Dein monatliches Analytics-Update läuft als fester Ablauf: Daten in wenigen Minuten importieren, Pins zuordnen, fertig. Kein verstreutes Excel-Geflicke mehr, das du dir jeden Monat neu zusammensuchst.',
         ],
       },
       {
         kind: 'p',
-        text: 'Für Selbstständige, die Pinterest ernsthaft betreiben: Mehrere Stunden weniger manuelle Arbeit pro Monat. Zeit, die in Content, Kunden oder einfach mehr Leben fließt.',
+        text: 'Pin-Flow nimmt dir die Arbeit nicht ab, aber es sorgt dafür, dass deine Arbeit am Richtigen ansetzt. Keine Stunde mehr, die in Pins fließt, von denen du nicht weißt, ob sie etwas bringen.',
       },
       { kind: 'h', text: 'Alle Pinterest-Daten verknüpft an einem Ort' },
       {
         kind: 'p',
-        text: 'Pin-Flow ist eine vernetzte Datenbank für deine Pinterest-Strategie. Wenn du einen Blogartikel einträgst und ihn mit drei Keywords, einer Ziel-URL und einem Board verknüpfst, weiß die App automatisch: dieser Inhalt braucht Pins, die diese Keywords nutzen und auf diese URL verlinken.',
+        text: 'Pin-Flow ist eine vernetzte Datenbank für deine Pinterest-Strategie. Sobald ein Inhalt mit seinen Keywords, seiner URL und seinem Board verbunden ist, hängt alles zusammen, und du siehst auf einen Blick, was zusammengehört und wo noch etwas fehlt. Statt fünf loser Listen hast du ein Bild.',
       },
       { kind: 'h', text: 'Deine Keyword-Datenbank: das Herzstück' },
       {
         kind: 'p',
-        text: 'Pinterest-Erfolg läuft über Suchworte. Mit jedem monatlichen Analytics-Import lernt deine Keyword-Datenbank dazu: welche Worte bringen Klicks, welche bleiben ohne Wirkung, wo sind Quick Wins. Allein das spart dir Stunden manueller Analyse.',
+        text: 'Pinterest-Erfolg läuft über Suchworte. Mit jedem monatlichen Analytics-Import lernt deine Keyword-Datenbank dazu: Welche Worte bringen Klicks, welche bleiben ohne Wirkung, wo liegen die Quick Wins? So siehst du Schwarz auf Weiß, worauf du setzen solltest, statt es zu raten.',
       },
       { kind: 'h', text: 'Pin-Flow vergisst nicht' },
       {
         kind: 'p',
-        text: 'Pinterest selbst löscht Analytics-Daten nach 6 Monaten. Pin-Flow archiviert deine Werte dauerhaft. Nach 12 Monaten weiß deine App mehr über deine Pinterest-Entwicklung als Pinterest selbst. Du siehst Langzeit-Trends, die sonst verloren wären.',
+        text: 'Pinterest zeigt deine Analytics-Daten nur begrenzt rückwirkend. Pin-Flow archiviert sie dauerhaft. Nach einem Jahr weiß deine App mehr über deine Pinterest-Entwicklung als Pinterest selbst anzeigt, du siehst Langzeit-Trends, die sonst einfach verloren wären. Das kann kein Scheduler und keine Excel-Tabelle.',
       },
       { kind: 'h', text: 'Auf dich personalisiert' },
       {
         kind: 'p',
-        text: 'Jede Diagnose, jede Strategie-Empfehlung, jeder KI-Prompt ist mit deinen echten Daten gefüllt. Keine allgemeinen Tipps.',
+        text: 'Jede Diagnose, jede Strategie-Empfehlung, jeder KI-Prompt ist mit deinen echten Daten gefüllt. Keine allgemeinen Tipps von der Stange, sondern Hinweise, die zu deinem Profil, deinen Inhalten und deinen Zahlen passen.',
       },
     ],
     skippable: false,
@@ -635,7 +635,7 @@ export const ONBOARDING_STEPS: OnboardingStepDef[] = [
       },
       {
         kind: 'callout',
-        text: 'Pinterest speichert deine Analytics nur 6 Monate. Pin-Flow archiviert sie dauerhaft. Nach 12 Monaten kannst du Jahr-zu-Jahr-Vergleiche ziehen: Welche saisonalen Themen liefen letztes Jahr stark? Welche Pins haben sich über Zeit verbessert? Diese Auswertung wäre ohne Pin-Flow nicht möglich.',
+        text: 'Pinterest zeigt deine Analytics nur begrenzt rückwirkend. Pin-Flow archiviert sie dauerhaft, sodass du nach einem Jahr Jahr-zu-Jahr-Vergleiche ziehen kannst, die in Pinterest längst nicht mehr sichtbar wären: Welche saisonalen Themen liefen letztes Jahr stark? Welche Pins haben sich über Zeit verbessert? Diese Auswertung wäre ohne Pin-Flow nicht möglich.',
       },
     ],
     ctas: [
@@ -687,7 +687,7 @@ export const ONBOARDING_STEPS: OnboardingStepDef[] = [
       },
       {
         kind: 'callout',
-        text: 'Pin-Flow ist dein dauerhaftes Archiv. Jeder Datenpunkt den du heute einpflegst, ist in 2 Jahren noch da. Auch wenn Pinterest die Daten längst gelöscht hat. So baust du dir ein Asset auf, das dir niemand nehmen kann.',
+        text: 'Pin-Flow ist dein dauerhaftes Archiv. Jeder Datenpunkt den du heute einpflegst, ist in 2 Jahren noch da. Auch wenn Pinterest die Daten längst nicht mehr anzeigt. So baust du dir ein Asset auf, das dir niemand nehmen kann.',
       },
     ],
     skippable: false,

@@ -587,9 +587,10 @@ function CombinedHowToToggle({
           </ol>
         </div>
         <HinweisBox variant="tipp">
-          Pinterest speichert Analytics nur max. 6 Monate. Dieses System
-          speichert deine historischen Daten dauerhaft: trage monatlich ein
-          damit keine Daten verloren gehen.
+          Pinterest zeigt deine Analytics nur begrenzt rückwirkend, ältere
+          Werte sind irgendwann nicht mehr abrufbar. Dieses System speichert
+          deine historischen Daten dauerhaft: trage monatlich ein damit keine
+          Daten verloren gehen.
         </HinweisBox>
       </div>
     </details>

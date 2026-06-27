@@ -269,7 +269,7 @@ export const CHECKLIST_CATEGORIES: ChecklistCategory[] = [
         id: 'monthly-reminder',
         title: 'Monatlicher Update-Termin im Kalender geblockt',
         description:
-          'Pin-Flow lebt von monatlichen Analytics-Updates. Pinterest selbst löscht nach 6 Monaten. (Extern in deinem Kalender festlegen.)',
+          'Pin-Flow lebt von monatlichen Analytics-Updates. Pinterest zeigt ältere Werte irgendwann nicht mehr. (Extern in deinem Kalender festlegen.)',
         links: [],
       },
       {
