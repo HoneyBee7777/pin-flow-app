@@ -610,7 +610,7 @@ export type BoardAnalyticsRow = {
   lastPinAlterTage: number | null
   // Aktivität (unverändert via diagnoseBoard)
   status: BoardStatus
-  // Neue Wirkungs-Logik (Häppchen 2) — ersetzt die alte ER-basierte Bewertung.
+  // Wirkungs-Einstufung des Boards (löste die frühere ER-basierte Bewertung ab).
   wirkung: BoardWirkung
   outboundClickRate: number
   saveRate: number
@@ -782,7 +782,7 @@ export function boardWirkung(args: {
   return { wirkung, outboundClickRate, saveRate, sammeltSaves }
 }
 
-// Vier-Felder-Handlung: Aktivität (diagnoseBoard) × neue Wirkung.
+// Vier-Felder-Handlung: Aktivität (diagnoseBoard) × Wirkung.
 export type BoardHandlungNeu =
   | 'reaktivieren'
   | 'weiter_so'

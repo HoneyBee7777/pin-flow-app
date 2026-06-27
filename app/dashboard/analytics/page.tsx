@@ -252,7 +252,7 @@ export default async function AnalyticsPage() {
     preBoards.push({ board, latest, lastPinDatum, lastPinAlterTage, status })
   })
 
-  // Neue Wirkungs-Logik (Häppchen 2): Mediane EINMAL über alle Boards
+  // Wirkungs-Einstufung: Mediane EINMAL über alle Boards
   // (latest-Periode) bilden, dann pro Board Wirkung + Handlung ableiten.
   const { medianOutbound, medianSave, anzahlQualifiziert } = boardWirkungMediane(
     preBoards.map((p) => p.latest)

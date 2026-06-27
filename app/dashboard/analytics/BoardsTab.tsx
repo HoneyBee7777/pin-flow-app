@@ -240,7 +240,7 @@ function compareRows(
   return res * sign
 }
 
-// Sichtbare Labels + Tooltips für die neue Handlungs-Spalte (boardHandlungNeu).
+// Sichtbare Labels + Tooltips für die Handlungs-Spalte (boardHandlungNeu).
 const HANDLUNG_NEU_LABEL: Record<BoardHandlungNeu, string> = {
   weiter_so: 'weiter so',
   reaktivieren: 'reaktivieren',
