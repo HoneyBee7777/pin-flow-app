@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase-server'
+import { HinweisBox } from '@/components/HinweisBox'
 import ContentClient, {
   type BoardOption,
   type ContentItem,
@@ -21,7 +22,6 @@ type RawContentRow = {
   }>
   content_boards: Array<{
     board_id: string
-    boards: { id: string; name: string } | null
   }>
   pins: Array<{ id: string }> | null
 }
@@ -37,7 +37,7 @@ export default async function ContentInhaltePage() {
         id, titel, notizen, created_at,
         content_keywords ( keyword_id, keywords ( id, keyword ) ),
         content_urls ( url_id, ziel_urls ( id, titel, url ) ),
-        content_boards ( board_id, boards ( id, name ) ),
+        content_boards ( board_id ),
         pins!content_id ( id )
       `
       )
@@ -56,6 +56,16 @@ export default async function ContentInhaltePage() {
       .order('name', { ascending: true }),
   ])
 
+  const keywords = (keywordsRes.data ?? []) as KeywordOption[]
+  const urls = (urlsRes.data ?? []) as UrlOption[]
+  const boards = (boardsRes.data ?? []) as BoardOption[]
+
+  // Board-Namen aus der direkt geladenen Board-Liste auflösen (per board_id),
+  // statt über ein verschachteltes Supabase-Embed (content_boards → boards).
+  // Das verschachtelte Embed lieferte die Namen nicht zuverlässig zurück,
+  // wodurch die Boards-Spalte „—" zeigte, obwohl die Zuordnung existiert.
+  const boardNameById = new Map(boards.map((b) => [b.id, b.name]))
+
   const rawRows = (contentRes.data ?? []) as unknown as RawContentRow[]
   const items: ContentItem[] = rawRows.map((row) => ({
     id: row.id,
@@ -73,14 +83,13 @@ export default async function ContentInhaltePage() {
         url: cu.ziel_urls!.url,
       })),
     boards: row.content_boards
-      .filter((cb) => cb.boards)
-      .map((cb) => ({ id: cb.boards!.id, name: cb.boards!.name })),
+      .map((cb) => {
+        const name = boardNameById.get(cb.board_id)
+        return name ? { id: cb.board_id, name } : null
+      })
+      .filter((b): b is { id: string; name: string } => b !== null),
     pinCount: row.pins?.length ?? 0,
   }))
-
-  const keywords = (keywordsRes.data ?? []) as KeywordOption[]
-  const urls = (urlsRes.data ?? []) as UrlOption[]
-  const boards = (boardsRes.data ?? []) as BoardOption[]
 
   const loadError =
     contentRes.error?.message ??
@@ -108,6 +117,17 @@ export default async function ContentInhaltePage() {
           Überblick, welche Pins, Keywords und Boards zu welchem Thema gehören,
           statt einzelne Pins lose nebeneinander zu verwalten.
         </p>
+        <div className="mt-4 max-w-3xl">
+          <HinweisBox variant="neutral">
+            Die Reihenfolge ist dir überlassen: Es gibt keine feste,
+            führende Reihenfolge – nur eine empfohlene. Du kannst hier zunächst
+            nur den Titel anlegen und Keywords, Ziel-URLs und Boards jederzeit
+            später ergänzen. Die Zuordnung wirkt über Kreuz in beide Richtungen:
+            Sobald du z. B. in der Keyword-Datenbank ein Keyword einem Inhalt
+            zuordnest, erscheint es automatisch hier beim passenden Content –
+            genauso bei Ziel-URLs und Boards.
+          </HinweisBox>
+        </div>
       </header>
 
       {loadError && (

@@ -406,6 +406,15 @@ export default function EingabeTab({
             ist, kannst du sie weiter unten auch von Hand eintragen.
           </p>
         </div>
+        <HinweisBox variant="tipp">
+          Häufige Stolperstelle: Pinterest liefert für alle drei Uploads{' '}
+          <strong>dieselbe Übersichts-CSV</strong> – ihr Inhalt ändert sich nur
+          mit der Sortierung. Exportiere sie deshalb <strong>dreimal</strong>,
+          je einmal nach Klicks, Impressionen und Saves sortiert. Reihenfolge
+          und Dateiname sind egal, Pin-Flow erkennt die Metrik selbst. Die
+          genaue Klick-für-Klick-Anleitung steht oben unter „So findest du alle
+          Zahlen".
+        </HinweisBox>
         <Schritt2CsvUpload
           expectedZeitraumVon={expectedZeitraumVon}
           expectedZeitraumBis={expectedZeitraumBis}
@@ -454,6 +463,12 @@ export default function EingabeTab({
             Einmal im Monat: zeigt, wer deine Inhalte tatsächlich nutzt.
           </p>
         </div>
+        <HinweisBox variant="tipp">
+          „Audience Insights" hat keinen wählbaren Datumsbereich, sondern zeigt
+          immer nur die rollierenden letzten 30 Tage. Exportiere die CSV daher
+          am besten gleich zu Monatsbeginn – dann decken die letzten 30 Tage
+          möglichst genau den gerade abgeschlossenen Kalendermonat ab.
+        </HinweisBox>
         <AudienceCsvUpload />
       </section>
 
@@ -540,6 +555,11 @@ function CombinedHowToToggle({
         </div>
         <div>
           <p className="font-semibold text-gray-900">Top Pins</p>
+          <p className="mt-1">
+            Wichtig: Es ist immer <strong>dieselbe Übersichts-CSV</strong> – ihr
+            Inhalt richtet sich nach der aktuellen Sortierung. Du exportierst sie
+            deshalb dreimal, je einmal pro Sortierung:
+          </p>
           <ol className="mt-1 list-decimal space-y-1 pl-5">
             <li>Zeitraum ist noch voreingestellt von eben</li>
             <li>Nach unten scrollen zu „Top Pins"</li>
@@ -556,6 +576,12 @@ function CombinedHowToToggle({
             </li>
             <li>Alle 3 CSVs unter Schritt 2 hochladen</li>
           </ol>
+          <p className="mt-2 text-gray-600">
+            Die drei Dateien sehen fast gleich aus (oft mit ähnlichem
+            Dateinamen) – das ist kein Problem: Reihenfolge und Name sind egal,
+            Pin-Flow erkennt die Metrik selbst und warnt, falls eine CSV im
+            falschen Feld landet.
+          </p>
         </div>
         <div>
           <p className="font-semibold text-gray-900">Top Boards</p>
@@ -585,7 +611,23 @@ function CombinedHowToToggle({
               hochladen
             </li>
           </ol>
+          <p className="mt-2 text-gray-600">
+            <strong>Hinweis:</strong> „Audience Insights" hat keinen wählbaren
+            Datumsbereich, sondern zeigt immer nur die rollierenden letzten 30
+            Tage. Exportiere die CSV daher am besten gleich zu Monatsbeginn –
+            dann decken die letzten 30 Tage möglichst genau den gerade
+            abgeschlossenen Kalendermonat ab.
+          </p>
         </div>
+        <p className="text-gray-600">
+          <strong>Gut zu wissen:</strong> Bei noch kleinen Accounts verweigert
+          Pinterest den Export einzelner Metriken (z. B. bei 0 Saves) oder der
+          Zielgruppe manchmal selbst mit „nicht genügend Daten". Das ist normal
+          und kein Fehler von Pin-Flow. Lade dann einfach die verfügbaren CSVs
+          hoch – die Slots sind unabhängig, Teil-Importe funktionieren
+          problemlos und der Rest ergänzt sich in späteren Monaten.
+        </p>
+
         <HinweisBox variant="tipp">
           Pinterest zeigt deine Analytics nur begrenzt rückwirkend, ältere
           Werte sind irgendwann nicht mehr abrufbar. Dieses System speichert

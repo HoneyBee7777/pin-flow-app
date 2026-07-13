@@ -12,10 +12,13 @@ import {
   ONBOARDING_LAST_STEP,
   type OnboardingState,
 } from '@/lib/onboarding-state'
+import { syncChecklistForCompletedStep } from '@/lib/onboarding-checklist-sync'
 
 function revalidate() {
   revalidatePath('/dashboard')
   revalidatePath('/dashboard/onboarding')
+  // Die Checkliste kann durch das „Mitlaufen" mit betroffen sein.
+  revalidatePath('/dashboard/checkliste')
 }
 
 async function mutate(
@@ -37,25 +40,51 @@ async function mutate(
 
 // Schritt-Wechsel: setzt currentStep und merkt den verlassenen Schritt
 // als erledigt vor (für die Übersicht bei abgeschlossenem Onboarding).
+//
+// Zusätzlich lässt es die Checkliste „mitlaufen": Wird ein zugeordneter
+// Schritt zum ERSTEN Mal abgeschlossen, wird der passende Checklisten-Punkt
+// automatisch abgehakt — aber nur, wenn dessen Daten-Bedingung erfüllt ist
+// (siehe lib/onboarding-checklist-sync.ts). „Erstmalig" (Prüfung gegen
+// completedSteps) sorgt dafür, dass ein späteres manuelles Abwählen bestehen
+// bleibt.
 export async function goToOnboardingStep(
   step: number,
   markStepDone?: number
 ) {
-  return mutate((cur) => {
-    const completedSteps =
-      typeof markStepDone === 'number' &&
-      !cur.completedSteps.includes(markStepDone)
-        ? [...cur.completedSteps, markStepDone].sort((a, b) => a - b)
-        : cur.completedSteps
-    return {
-      ...cur,
-      currentStep: Math.min(
-        ONBOARDING_LAST_STEP,
-        Math.max(0, Math.floor(step))
-      ),
-      completedSteps,
+  const supabase = createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { error: 'Nicht angemeldet.' }
+
+  const cur = await loadOnboardingState(supabase, user.id)
+
+  const isNewlyCompleted =
+    typeof markStepDone === 'number' &&
+    !cur.completedSteps.includes(markStepDone)
+
+  if (isNewlyCompleted) {
+    try {
+      await syncChecklistForCompletedStep(supabase, user.id, markStepDone!)
+    } catch {
+      /* best effort — die Onboarding-Navigation nie blockieren */
     }
-  })
+  }
+
+  const completedSteps = isNewlyCompleted
+    ? [...cur.completedSteps, markStepDone!].sort((a, b) => a - b)
+    : cur.completedSteps
+
+  const next: OnboardingState = {
+    ...cur,
+    currentStep: Math.min(ONBOARDING_LAST_STEP, Math.max(0, Math.floor(step))),
+    completedSteps,
+    lastUpdated: new Date().toISOString(),
+  }
+
+  const res = await saveOnboardingState(supabase, user.id, next)
+  if (!res.error) revalidate()
+  return res
 }
 
 export async function skipOnboarding() {

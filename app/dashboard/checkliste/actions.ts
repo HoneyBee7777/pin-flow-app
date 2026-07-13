@@ -3,6 +3,7 @@
 // V3.6 — Server-Action zum Umschalten eines Checklisten-Punkts.
 // Optimistic im Client, hier nur Persistenz (best effort).
 
+import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase-server'
 import {
   loadChecklistState,
@@ -28,8 +29,17 @@ export async function toggleChecklistItem(
   if (done) set.add(itemId)
   else set.delete(itemId)
 
-  return saveChecklistState(supabase, user.id, {
+  const res = await saveChecklistState(supabase, user.id, {
     completedItems: Array.from(set),
     lastUpdated: new Date().toISOString(),
   })
+
+  // Router-Cache der Checklisten-Seite invalidieren, damit die Haken auch
+  // nach Weg-Navigation + Browser-Zurück frisch aus Supabase geladen werden
+  // (sonst zeigt der veraltete RSC-Payload den Stand vor dem Abhaken).
+  if (!res.error) {
+    revalidatePath('/dashboard/checkliste')
+  }
+
+  return res
 }

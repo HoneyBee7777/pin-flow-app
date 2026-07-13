@@ -54,8 +54,8 @@ const DOMAIN_VERIF =
   '/dashboard/strategie?tab=grundlagen&accordion=domain-verifizierung'
 const GEHEIME_BOARDS =
   '/dashboard/strategie?tab=grundlagen&accordion=geheime-boards'
-const MULTI_BOARD =
-  '/dashboard/strategie?tab=grundlagen&accordion=multi-board-pinning'
+const FRISCHE_PINS_VERTEILEN =
+  '/dashboard/strategie?tab=design&accordion=frische-pins-verteilen'
 const RANKING_FAKTOREN =
   '/dashboard/strategie?tab=faktoren&accordion=9-ranking-faktoren'
 const SAISONALITAET =
@@ -134,7 +134,7 @@ export const CHECKLIST_CATEGORIES: ChecklistCategory[] = [
         id: 'search-visibility',
         title: 'Suchmaschinen-Sichtbarkeit aktiviert',
         description:
-          '„Profil vor Suchmaschinen verbergen" muss in Pinterest deaktiviert sein.',
+          '„Datenschutz bei Suchvorgängen" (früher „Profil vor Suchmaschinen verbergen") muss in Pinterest deaktiviert sein. Du findest die Einstellung unter Einstellungen → Datenschutz und Daten.',
         links: [K('Profil-Setup', PROFIL_SETUP)],
       },
     ],
@@ -148,7 +148,7 @@ export const CHECKLIST_CATEGORIES: ChecklistCategory[] = [
         id: 'strategy-onboarding',
         title: 'Strategie-Onboarding durchlaufen',
         description:
-          'Definiert dein Business-Modell, Conversion-Ziele und Pin-Format-Mix.',
+          'Definiert dein Business-Modell, deine Zielflächen (Conversion-Ziele), deine thematischen Schwerpunkte und deine Pinning-Frequenz.',
         links: [
           A('Strategie-Onboarding starten', '/dashboard/strategie?tab=meine'),
         ],
@@ -214,7 +214,7 @@ export const CHECKLIST_CATEGORIES: ChecklistCategory[] = [
         title: 'Tailwind oder Pinterest-Scheduler eingerichtet (optional)',
         description:
           'Für automatisches Pin-Scheduling. Spart Zeit bei der Routine.',
-        links: [K('Multi-Board-Pinning', MULTI_BOARD)],
+        links: [K('Wie oft dasselbe Bild pinnen?', FRISCHE_PINS_VERTEILEN)],
       },
     ],
   },

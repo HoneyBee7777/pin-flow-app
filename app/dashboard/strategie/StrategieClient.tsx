@@ -913,7 +913,19 @@ function TabGrundlagen() {
             In Pinterest oben rechts auf den Pfeil nach unten klicken und
             „Einstellungen" wählen.
           </li>
-          <li>In der linken Navigation auf „Verifizierte Konten" klicken.</li>
+          <li>
+            In der linken Navigation auf „Profil bearbeiten" klicken. Dort
+            siehst du eine Möglichkeit, deine Website zu verifizieren. Alternativ
+            erreichst du dies direkt unter diesem Link:{' '}
+            <a
+              href="https://de.pinterest.com/settings/claim/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="break-all text-link underline"
+            >
+              https://de.pinterest.com/settings/claim/
+            </a>
+          </li>
           <li>Neben „Webseiten" auf „Verifizieren" klicken.</li>
           <li>
             Eine der angebotenen Methoden wählen (HTML-Tag, HTML-Datei oder
