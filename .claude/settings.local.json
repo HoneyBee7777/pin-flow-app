@@ -170,7 +170,9 @@
       "Bash(grep -E \"^[A-Za-z]:\\\\\\\\\\\\\\\\\")",
       "Bash(grep -oE \"[a-z-]+/[a-z-]+$|prefer-const$\")",
       "Bash(cp app/dashboard/page.tsx /tmp/page.bak.tsx)",
-      "Bash(sed -i -e '4361,4399d' -e '2265,2482d' app/dashboard/page.tsx)"
+      "Bash(sed -i -e '4361,4399d' -e '2265,2482d' app/dashboard/page.tsx)",
+      "PowerShell(npx tsc --noEmit -p tsconfig.json2)",
+      "PowerShell(Select-String *)"
     ]
   }
 }

@@ -65,6 +65,51 @@ const TYP_BADGE: Record<KeywordTyp, string> = {
   longtail: 'bg-gray-100 text-gray-700',
 }
 
+// CSV-Export im deutschen Excel-Format: Semikolon als Trenner, Komma als
+// Dezimaltrenner, UTF-8-BOM damit Excel Umlaute korrekt liest.
+const BOM = '﻿'
+
+function csvCell(value: string | number | null): string {
+  if (value === null) return ''
+  const s = String(value)
+  return /[";\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+}
+
+function buildKeywordsCsv(rows: Keyword[]): string {
+  const header = [
+    'Keyword',
+    'Typ',
+    'Pins',
+    'Ø CTR (%)',
+    'Ø Ausg. Klicks',
+    'Inhalte',
+    'Notizen',
+  ]
+  const lines = [header.map(csvCell).join(';')]
+  for (const kw of rows) {
+    lines.push(
+      [
+        csvCell(kw.keyword),
+        csvCell(TYP_LABEL[kw.typ]),
+        csvCell(kw.stats.pinsCount),
+        csvCell(
+          kw.stats.avgCtr === null
+            ? ''
+            : kw.stats.avgCtr.toFixed(1).replace('.', ',')
+        ),
+        csvCell(
+          kw.stats.avgKlicks === null
+            ? ''
+            : kw.stats.avgKlicks.toFixed(1).replace('.', ',')
+        ),
+        csvCell(kw.contents.map((c) => c.titel).join(', ')),
+        csvCell(kw.notizen ?? ''),
+      ].join(';')
+    )
+  }
+  return lines.join('\r\n')
+}
+
 function PencilIcon() {
   return (
     <svg
@@ -166,6 +211,24 @@ export default function KeywordsClient({
     } finally {
       setMatching(false)
     }
+  }
+
+  // Exportiert genau das, was in der Tabelle steht — inklusive der aktuell
+  // aktiven Sortierung.
+  function onExport() {
+    const csv = buildKeywordsCsv(sortedKeywords)
+    // BOM voranstellen, damit Excel die Datei als UTF-8 erkennt (Umlaute).
+    const blob = new Blob([BOM + csv], {
+      type: 'text/csv;charset=utf-8;',
+    })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `keywords-${new Date().toISOString().slice(0, 10)}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
   }
 
   const formOpen = showAddForm || editing !== null
@@ -286,6 +349,15 @@ export default function KeywordsClient({
           className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
         >
           {showImport ? 'Abbrechen' : 'Keywords importieren'}
+        </button>
+        <button
+          type="button"
+          onClick={onExport}
+          disabled={keywords.length === 0}
+          className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+          title="Lädt alle Keywords als CSV-Datei herunter (in Excel und Google Sheets direkt lesbar)."
+        >
+          Keywords exportieren
         </button>
         {importMessage && !showImport && (
           <span className="self-center text-sm text-green-700">
