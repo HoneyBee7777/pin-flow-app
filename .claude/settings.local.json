@@ -172,7 +172,10 @@
       "Bash(cp app/dashboard/page.tsx /tmp/page.bak.tsx)",
       "Bash(sed -i -e '4361,4399d' -e '2265,2482d' app/dashboard/page.tsx)",
       "PowerShell(npx tsc --noEmit -p tsconfig.json2)",
-      "PowerShell(Select-String *)"
+      "PowerShell(Select-String *)",
+      "Bash(rm -rf .tmp-ipn)",
+      "Bash(rm -f /tmp/pinflow-dev.log)",
+      "Bash(git check-ignore *)"
     ]
   }
 }
